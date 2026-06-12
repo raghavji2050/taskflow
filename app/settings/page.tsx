@@ -17,7 +17,12 @@ type PasswordInput = z.infer<typeof passwordSchema>;
 
 export default function SettingsPage() {
   const { update: updateSession } = useSession();
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{
+    name: string;
+    email: string;
+    hasPassword?: boolean;
+    oauthProviders?: string[];
+  } | null>(null);
 
   const profileForm = useForm<ProfileInput>({ resolver: zodResolver(profileSchema) });
   const passwordForm = useForm<PasswordInput>({ resolver: zodResolver(passwordSchema) });
@@ -66,14 +71,25 @@ export default function SettingsPage() {
         <PushSubscribe />
       </Card>
 
-      <Card className="p-6">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">Change Password</h2>
-        <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
-          <Input label="Current Password" type="password" error={passwordForm.formState.errors.currentPassword?.message} {...passwordForm.register("currentPassword")} />
-          <Input label="New Password" type="password" error={passwordForm.formState.errors.newPassword?.message} {...passwordForm.register("newPassword")} />
-          <Button type="submit">Update Password</Button>
-        </form>
-      </Card>
+      {user?.hasPassword ? (
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">Change Password</h2>
+          <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+            <Input label="Current Password" type="password" error={passwordForm.formState.errors.currentPassword?.message} {...passwordForm.register("currentPassword")} />
+            <Input label="New Password" type="password" error={passwordForm.formState.errors.newPassword?.message} {...passwordForm.register("newPassword")} />
+            <Button type="submit">Update Password</Button>
+          </form>
+        </Card>
+      ) : user?.oauthProviders && user.oauthProviders.length > 0 ? (
+        <Card className="p-6">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-500">Sign-in method</h2>
+          <p className="text-sm text-zinc-500">
+            You sign in with{" "}
+            {user.oauthProviders.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" or ")}.
+            Password login is not used for this account.
+          </p>
+        </Card>
+      ) : null}
     </div>
   );
 }

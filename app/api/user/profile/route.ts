@@ -10,10 +10,32 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: sessionUser.id },
-      select: { id: true, name: true, email: true, role: true, emailVerified: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        emailVerified: true,
+        createdAt: true,
+        password: true,
+        accounts: { select: { provider: true } },
+      },
     });
 
-    return NextResponse.json({ user });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+    const { password, accounts, ...profile } = user;
+    const oauthProviders = accounts
+      .map((a) => a.provider)
+      .filter((p) => p !== "credentials");
+
+    return NextResponse.json({
+      user: {
+        ...profile,
+        hasPassword: !!password,
+        oauthProviders,
+      },
+    });
   } catch (error) {
     return handleApiError(error);
   }

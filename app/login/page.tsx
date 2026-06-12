@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,10 +11,25 @@ import { loginSchema, type LoginInput } from "@/lib/validations";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { OAuthButtons } from "@/components/OAuthButtons";
 
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const error = new URLSearchParams(window.location.search).get("error");
+    if (!error) return;
+    const messages: Record<string, string> = {
+      Configuration: "Google/GitHub login is not configured. Add OAuth keys to your environment.",
+      AccessDenied: "Access denied. You may not have permission to sign in.",
+      OAuthSignin: "Could not start OAuth sign in. Check your OAuth app settings.",
+      OAuthCallback: "OAuth callback failed. Verify redirect URI in Google Cloud Console.",
+      OAuthAccountNotLinked: "This email is already linked to another sign-in method.",
+      Default: "Sign in failed. Please try again.",
+    };
+    toast.error(messages[error] ?? messages.Default);
+  }, []);
 
   const {
     register,
@@ -96,15 +111,7 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-700" /></div>
-          <div className="relative flex justify-center text-xs"><span className="bg-white px-2 text-zinc-400 dark:bg-zinc-900">or continue with</span></div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <Button type="button" variant="secondary" onClick={() => signIn("google", { callbackUrl: "/dashboard" })}>Google</Button>
-          <Button type="button" variant="secondary" onClick={() => signIn("github", { callbackUrl: "/dashboard" })}>GitHub</Button>
-        </div>
+        <OAuthButtons callbackUrl="/dashboard" />
 
         <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Don&apos;t have an account?{" "}

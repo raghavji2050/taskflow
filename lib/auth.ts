@@ -1,10 +1,11 @@
-import NextAuth, { type NextAuthConfig } from "next-auth";
+import NextAuth, { type Account, type NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
+import { getGitHubOAuthConfig, getGoogleOAuthConfig } from "@/lib/oauth";
 
 const providers: NextAuthConfig["providers"] = [
   Credentials({
@@ -28,30 +29,49 @@ const providers: NextAuthConfig["providers"] = [
   }),
 ];
 
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+const googleOAuth = getGoogleOAuthConfig();
+if (googleOAuth.enabled) {
   providers.unshift(
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: googleOAuth.clientId!,
+      clientSecret: googleOAuth.clientSecret!,
       allowDangerousEmailAccountLinking: true,
     })
   );
 }
 
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+const githubOAuth = getGitHubOAuthConfig();
+if (githubOAuth.enabled) {
   providers.unshift(
     GitHub({
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      clientId: githubOAuth.clientId!,
+      clientSecret: githubOAuth.clientSecret!,
       allowDangerousEmailAccountLinking: true,
     })
   );
+}
+
+function oauthAccountData(account: Account) {
+  return {
+    type: account.type,
+    provider: account.provider,
+    providerAccountId: account.providerAccountId,
+    refresh_token: account.refresh_token ?? null,
+    access_token: account.access_token ?? null,
+    expires_at: account.expires_at ?? null,
+    token_type: account.token_type ?? null,
+    scope: account.scope ?? null,
+    id_token: account.id_token ?? null,
+    session_state: typeof account.session_state === "string" ? account.session_state : null,
+  };
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
+  trustHost: true,
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "credentials") return true;
@@ -70,9 +90,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         user.id = created.id;
       } else {
         user.id = existing.id;
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            emailVerified: existing.emailVerified ?? new Date(),
+            image: existing.image ?? user.image,
+          },
+        });
       }
 
       if (account) {
+        const data = oauthAccountData(account);
         await prisma.account.upsert({
           where: {
             provider_providerAccountId: {
@@ -80,12 +108,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               providerAccountId: account.providerAccountId,
             },
           },
-          update: {},
+          update: data,
           create: {
             userId: user.id,
-            type: account.type,
-            provider: account.provider,
-            providerAccountId: account.providerAccountId,
+            ...data,
           },
         });
       }
@@ -126,5 +152,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
 });

@@ -11,6 +11,7 @@ import { registerSchema, type RegisterInput } from "@/lib/validations";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { OAuthButtons } from "@/components/OAuthButtons";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -100,6 +101,8 @@ export default function RegisterPage() {
             Create Account
           </Button>
         </form>
+
+        <OAuthButtons callbackUrl="/dashboard" />
 
         <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Already have an account?{" "}
