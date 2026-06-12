@@ -15,7 +15,7 @@ export function OAuthButtons({ callbackUrl = "/dashboard" }: OAuthButtonsProps) 
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/providers")
+    fetch("/api/auth/oauth-providers")
       .then((res) => res.json())
       .then((data) => {
         setProviders(data.providers ?? []);

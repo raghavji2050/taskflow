@@ -13,7 +13,7 @@ const protectedApiPrefixes = [
 ];
 
 export default auth((req) => {
-  const isLoggedIn = !!req.auth;
+  const isLoggedIn = !!req.auth?.user?.id;
   const { pathname } = req.nextUrl;
 
   const isAuthPage =

@@ -1,4 +1,4 @@
-export type TaskEventType = "task:created" | "task:updated" | "task:deleted" | "task:bulk";
+export type TaskEventType = "task:created" | "task:updated" | "task:deleted" | "task:bulk" | "comment:created";
 
 export interface TaskEvent {
   type: TaskEventType;
@@ -8,6 +8,37 @@ export interface TaskEvent {
   taskId?: string;
   at: string;
 }
+
+export interface NotificationEvent {
+  type: "notification:new";
+  userId: string;
+  at: string;
+}
+
+export type WorkspaceUpdateReason =
+  | "invite_sent"
+  | "invite_accepted"
+  | "invite_declined"
+  | "invite_revoked"
+  | "member_removed"
+  | "permissions_updated";
+
+export interface WorkspaceEvent {
+  type: "workspace:updated";
+  workspaceId: string;
+  reason: WorkspaceUpdateReason;
+  actorId: string;
+  at: string;
+}
+
+export interface WorkspaceMembershipEvent {
+  type: "workspace:membership_changed";
+  workspaceId: string;
+  userId: string;
+  at: string;
+}
+
+export type RealtimeEvent = TaskEvent | NotificationEvent | WorkspaceEvent | WorkspaceMembershipEvent;
 
 interface RealtimeClient {
   userId: string;
@@ -29,6 +60,22 @@ class RealtimeHub {
   publish(event: TaskEvent) {
     for (const client of this.clients.values()) {
       if (this.shouldReceive(client, event)) {
+        client.send(event);
+      }
+    }
+  }
+
+  publishToUser(userId: string, event: object) {
+    for (const client of this.clients.values()) {
+      if (client.userId === userId) {
+        client.send(event);
+      }
+    }
+  }
+
+  publishToWorkspace(workspaceId: string, event: object) {
+    for (const client of this.clients.values()) {
+      if (client.workspaceIds.includes(workspaceId)) {
         client.send(event);
       }
     }
@@ -57,4 +104,37 @@ export function broadcastTaskEvent(
     ...event,
     at: event.at ?? new Date().toISOString(),
   });
+}
+
+export function broadcastNotification(userId: string) {
+  realtimeHub.publishToUser(userId, {
+    type: "notification:new",
+    userId,
+    at: new Date().toISOString(),
+  });
+}
+
+export function broadcastWorkspaceUpdate(params: {
+  workspaceId: string;
+  reason: WorkspaceUpdateReason;
+  actorId: string;
+  notifyUserIds?: string[];
+}) {
+  const at = new Date().toISOString();
+  realtimeHub.publishToWorkspace(params.workspaceId, {
+    type: "workspace:updated",
+    workspaceId: params.workspaceId,
+    reason: params.reason,
+    actorId: params.actorId,
+    at,
+  } satisfies WorkspaceEvent);
+
+  for (const userId of params.notifyUserIds ?? []) {
+    realtimeHub.publishToUser(userId, {
+      type: "workspace:membership_changed",
+      workspaceId: params.workspaceId,
+      userId,
+      at,
+    } satisfies WorkspaceMembershipEvent);
+  }
 }

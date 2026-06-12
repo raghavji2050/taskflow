@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
@@ -14,7 +13,6 @@ import { Card } from "@/components/ui/Card";
 import { OAuthButtons } from "@/components/OAuthButtons";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -43,31 +41,25 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Login failed");
-      }
-
       const signInResult = await signIn("credentials", {
         email: data.email,
         password: data.password,
         redirect: false,
+        callbackUrl: "/dashboard",
       });
 
       if (signInResult?.error) {
-        throw new Error("Failed to create session");
+        if (signInResult.error === "CredentialsSignin") {
+          throw new Error("Invalid email or password");
+        }
+        throw new Error("Sign in failed. Please try again.");
       }
 
-      toast.success("Welcome back!");
-      router.push("/dashboard");
-      router.refresh();
+      if (!signInResult?.ok) {
+        throw new Error("Sign in failed. Please try again.");
+      }
+
+      window.location.href = "/dashboard";
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Login failed");
     } finally {

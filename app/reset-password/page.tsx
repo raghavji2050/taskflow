@@ -26,14 +26,33 @@ function ResetForm() {
 
   const onSubmit = async (data: FormInput) => {
     setIsLoading(true);
-    const res = await fetch("/api/auth/reset-password", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (res.ok) { toast.success(result.message); router.push("/login"); }
-    else toast.error(result.error);
-    setIsLoading(false);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Reset failed");
+      router.push("/login");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Reset failed");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  if (!token) {
+    return (
+      <Card className="w-full max-w-sm p-8 text-center">
+        <h1 className="mb-2 text-xl font-bold">Invalid link</h1>
+        <p className="mb-4 text-sm text-zinc-500">This reset link is missing or expired.</p>
+        <a href="/forgot-password" className="text-sm text-indigo-500 hover:underline">
+          Request a new link
+        </a>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-sm p-8">

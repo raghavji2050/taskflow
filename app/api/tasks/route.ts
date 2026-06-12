@@ -4,20 +4,25 @@ import { prisma } from "@/lib/prisma";
 import { taskSchema, taskQuerySchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { logTaskActivity } from "@/lib/activity";
-import { isWorkspaceMember } from "@/lib/workspace";
+import { isWorkspaceMember, canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
 import { broadcastTaskEvent } from "@/lib/realtime";
 import { archiveStaleCompletedTasks } from "@/lib/auto-archive";
 import { getDailyUpdatesByCategory } from "@/lib/daily-update";
+import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
+import { runAutomationsForTrigger } from "@/lib/automations";
+import { taskListInclude } from "@/lib/tasks";
 
-const taskInclude = {
-  category: true,
-  tags: { include: { tag: true } },
-  subtasks: { orderBy: { position: "asc" as const } },
-  assignee: { select: { id: true, name: true, email: true } },
-  user: { select: { id: true, name: true } },
-  workspace: { select: { id: true, name: true } },
-  _count: { select: { comments: true, attachments: true } },
-};
+function applyAssigneeFilter(
+  where: Prisma.TaskWhereInput,
+  assignee: string,
+  userId: string
+) {
+  if (assignee === "me") {
+    where.assignees = { some: { userId } };
+  } else if (assignee === "unassigned") {
+    where.assignees = { none: {} };
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -37,6 +42,7 @@ export async function GET(request: Request) {
       categoryId: searchParams.get("categoryId") ?? undefined,
       tagId: searchParams.get("tagId") ?? undefined,
       workspaceId: searchParams.get("workspaceId") ?? undefined,
+      assignee: searchParams.get("assignee") ?? undefined,
       page: searchParams.get("page") ?? undefined,
       limit: searchParams.get("limit") ?? undefined,
     });
@@ -59,6 +65,8 @@ export async function GET(request: Request) {
     if (query.priority && query.priority !== "ALL") where.priority = query.priority;
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.tagId) where.tags = { some: { tagId: query.tagId } };
+    if (query.workspaceId) applyAssigneeFilter(where, query.assignee, user.id);
+
     if (query.search) {
       where.AND = [
         ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
@@ -82,7 +90,7 @@ export async function GET(request: Request) {
 
     const [tasks, filteredTotal, breakdown, completed, inProgress, pending, highPriority, recentTasks, dailyUpdates] =
       await Promise.all([
-        prisma.task.findMany({ where, orderBy, skip, take: query.limit, include: taskInclude }),
+        prisma.task.findMany({ where, orderBy, skip, take: query.limit, include: taskListInclude }),
         prisma.task.count({ where }),
         prisma.task.groupBy({ by: ["status", "priority"], where: statsWhere, _count: true }),
         prisma.task.count({ where: { ...statsWhere, status: "COMPLETED" } }),
@@ -93,7 +101,11 @@ export async function GET(request: Request) {
           where: statsWhere,
           orderBy: { createdAt: "desc" },
           take: 5,
-          include: { category: true, user: { select: { name: true } }, assignee: { select: { name: true } } },
+          include: {
+            category: true,
+            user: { select: { name: true } },
+            assignees: { include: { user: { select: { name: true } } } },
+          },
         }),
         query.workspaceId ? Promise.resolve([]) : getDailyUpdatesByCategory(user.id),
       ]);
@@ -132,18 +144,15 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const data = taskSchema.parse(body);
-    const { tagIds, ...taskData } = data;
+    const { tagIds, assigneeIds, primaryAssigneeId, ...taskData } = data;
 
-    if (taskData.workspaceId && !(await isWorkspaceMember(user.id, taskData.workspaceId))) {
-      return NextResponse.json({ error: "Not a member of this workspace" }, { status: 403 });
-    }
-
-    if (taskData.assigneeId && taskData.workspaceId) {
-      const assigneeIsMember = await prisma.workspaceMember.findFirst({
-        where: { workspaceId: taskData.workspaceId, userId: taskData.assigneeId },
-      });
-      if (!assigneeIsMember) {
-        return NextResponse.json({ error: "Assignee must be a workspace member" }, { status: 400 });
+    if (taskData.workspaceId) {
+      const membership = await getWorkspaceMembership(user.id, taskData.workspaceId);
+      if (!membership) {
+        return NextResponse.json({ error: "Not a member of this workspace" }, { status: 403 });
+      }
+      if (!canEditWorkspaceTasks(membership)) {
+        return NextResponse.json({ error: "Viewers cannot create tasks" }, { status: 403 });
       }
     }
 
@@ -163,16 +172,39 @@ export async function POST(request: Request) {
         completedAt: taskData.status === "COMPLETED" ? new Date() : null,
         dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
         categoryId: taskData.categoryId || null,
-        assigneeId: taskData.assigneeId || null,
         workspaceId: taskData.workspaceId || null,
         recurrenceRule: taskData.recurrenceRule || null,
         position: (maxPos._max.position ?? 0) + 1,
         userId: user.id,
         tags: tagIds?.length ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,
       },
-      include: taskInclude,
     });
 
+    if (taskData.workspaceId && assigneeIds?.length) {
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: taskData.workspaceId },
+        select: { name: true },
+      });
+      await syncTaskAssignees({
+        taskId: task.id,
+        workspaceId: taskData.workspaceId,
+        assigneeIds,
+        primaryAssigneeId,
+        actorId: user.id,
+        taskTitle: task.title,
+        workspaceName: workspace?.name,
+      });
+      if (taskData.workspaceId) {
+        await runAutomationsForTrigger(taskData.workspaceId, "task_assigned", {
+          taskId: task.id,
+          taskTitle: task.title,
+          workspaceId: taskData.workspaceId,
+          assigneeIds,
+        });
+      }
+    }
+
+    const fullTask = await getTaskWithAssignees(task.id);
     await logTaskActivity(task.id, "created", `Task "${task.title}" created`);
     broadcastTaskEvent({
       type: "task:created",
@@ -181,7 +213,7 @@ export async function POST(request: Request) {
       actorId: user.id,
       taskId: task.id,
     });
-    return NextResponse.json({ task }, { status: 201 });
+    return NextResponse.json({ task: fullTask }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }

@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
-import { LayoutList, Columns3, Calendar } from "lucide-react";
+import { LayoutList, Columns3, Calendar, UserCircle, GanttChart } from "lucide-react";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
-import { RealtimeProvider } from "@/components/RealtimeProvider";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { RealtimeIndicator } from "@/components/RealtimeIndicator";
 import { cn } from "@/lib/utils";
@@ -14,6 +13,8 @@ const viewTabs = [
   { href: "/dashboard", label: "List", icon: LayoutList, match: (p: string) => p === "/dashboard" },
   { href: "/dashboard/board", label: "Board", icon: Columns3, match: (p: string) => p.startsWith("/dashboard/board") },
   { href: "/dashboard/calendar", label: "Calendar", icon: Calendar, match: (p: string) => p.startsWith("/dashboard/calendar") },
+  { href: "/dashboard/my-work", label: "My Work", icon: UserCircle, match: (p: string) => p.startsWith("/dashboard/my-work") },
+  { href: "/dashboard/timeline", label: "Timeline", icon: GanttChart, match: (p: string) => p.startsWith("/dashboard/timeline") },
 ];
 
 function DashboardNav() {
@@ -26,7 +27,7 @@ function DashboardNav() {
           <WorkspaceSwitcher />
           <RealtimeIndicator />
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {viewTabs.map(({ href, label, icon: Icon, match }) => (
             <Link
               key={href}
@@ -51,12 +52,10 @@ function DashboardNav() {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <WorkspaceProvider>
-      <RealtimeProvider>
-        <Suspense fallback={null}>
-          <DashboardNav />
-        </Suspense>
-        {children}
-      </RealtimeProvider>
+      <Suspense fallback={null}>
+        <DashboardNav />
+      </Suspense>
+      {children}
     </WorkspaceProvider>
   );
 }

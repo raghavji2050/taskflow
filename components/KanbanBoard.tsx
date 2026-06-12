@@ -12,6 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { cn, getPriorityColor } from "@/lib/utils";
 import type { Task } from "@/components/TaskCard";
+import { AssigneeChips } from "@/components/AssigneeChips";
 
 const columns = [
   { id: "PENDING", label: "To Do", color: "border-sky-500/30" },
@@ -35,9 +36,14 @@ function DraggableTask({ task, onEdit }: { task: Task; onEdit: (t: Task) => void
       )}
     >
       <p className="text-sm font-medium">{task.title}</p>
-      <span className={cn("mt-2 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase", getPriorityColor(task.priority))}>
-        {task.priority}
-      </span>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className={cn("inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase", getPriorityColor(task.priority))}>
+          {task.priority}
+        </span>
+        {task.assignees && task.assignees.length > 0 && (
+          <AssigneeChips assignees={task.assignees} compact />
+        )}
+      </div>
     </div>
   );
 }
@@ -55,12 +61,14 @@ interface KanbanBoardProps {
   tasks: Task[];
   onStatusChange: (taskId: string, status: Task["status"]) => void;
   onEdit: (task: Task) => void;
+  readOnly?: boolean;
 }
 
-export function KanbanBoard({ tasks, onStatusChange, onEdit }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, onStatusChange, onEdit, readOnly = false }: KanbanBoardProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (readOnly) return;
     const { active, over } = event;
     if (!over) return;
 

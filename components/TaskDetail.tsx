@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquare, Paperclip, Bell, ListChecks } from "lucide-react";
+import { MessageSquare, Paperclip, Bell, ListChecks, Users, Activity } from "lucide-react";
+import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
+import { renderCommentBody } from "@/lib/mentions";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 
 interface Subtask { id: string; title: string; completed: boolean }
-interface Comment { id: string; body: string; user: { name: string }; createdAt: string }
+interface Comment { id: string; body: string; user: { name: string }; createdAt: string; replies?: Comment[] }
+interface Activity { id: string; action: string; details: string | null; createdAt: string }
 interface Attachment { id: string; filename: string; url: string }
 
 interface TaskDetailProps {
   taskId: string;
+  readOnly?: boolean;
 }
 
 function Section({
@@ -35,10 +39,12 @@ function Section({
   );
 }
 
-export function TaskDetail({ taskId }: TaskDetailProps) {
+export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [assignees, setAssignees] = useState<TaskAssigneeUser[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
   const [newComment, setNewComment] = useState("");
   const [remindAt, setRemindAt] = useState("");
@@ -50,6 +56,8 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
       setSubtasks(data.task.subtasks ?? []);
       setComments(data.task.comments ?? []);
       setAttachments(data.task.attachments ?? []);
+      setAssignees(data.task.assignees ?? []);
+      setActivities(data.task.activities ?? []);
     }
   };
 
@@ -106,6 +114,12 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
+      {assignees.length > 0 && (
+        <Section icon={Users} title="Responsible">
+          <AssigneeChips assignees={assignees} />
+        </Section>
+      )}
+
       <Section icon={ListChecks} title="Subtasks">
         <div className="space-y-2">
           {subtasks.length === 0 && (
@@ -119,6 +133,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
               <input
                 type="checkbox"
                 checked={sub.completed}
+                disabled={readOnly}
                 onChange={() => toggleSubtask(sub)}
                 className="h-4 w-4 rounded border-zinc-300 text-indigo-500"
               />
@@ -126,6 +141,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
             </label>
           ))}
         </div>
+        {!readOnly && (
         <div className="mt-3 flex gap-2">
           <Input
             hideLabel
@@ -137,6 +153,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           />
           <Button size="sm" onClick={addSubtask} className="h-9 shrink-0">Add</Button>
         </div>
+        )}
       </Section>
 
       <Section icon={MessageSquare} title="Comments">
@@ -147,14 +164,27 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           {comments.map((c) => (
             <div key={c.id} className="rounded-lg bg-zinc-50 px-3 py-2.5 dark:bg-zinc-800/80">
               <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{c.user.name}</span>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{c.body}</p>
+              <p
+                className="mt-1 text-sm text-zinc-600 dark:text-zinc-400"
+                dangerouslySetInnerHTML={{ __html: renderCommentBody(c.body) }}
+              />
+              {c.replies?.map((r) => (
+                <div key={r.id} className="ml-3 mt-2 border-l-2 border-zinc-200 pl-2 dark:border-zinc-700">
+                  <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">{r.user.name}</span>
+                  <p
+                    className="text-xs text-zinc-500"
+                    dangerouslySetInnerHTML={{ __html: renderCommentBody(r.body) }}
+                  />
+                </div>
+              ))}
             </div>
           ))}
         </div>
+        {!readOnly && (
         <div className="mt-3 flex gap-2">
           <Input
             hideLabel
-            placeholder="Write a comment..."
+            placeholder="Write a comment... Use @Name to mention"
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addComment()}
@@ -162,6 +192,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           />
           <Button size="sm" onClick={addComment} className="h-9 shrink-0">Post</Button>
         </div>
+        )}
       </Section>
 
       <Section icon={Paperclip} title="Attachments">
@@ -182,15 +213,31 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
             ))}
           </div>
         )}
+        {!readOnly && (
         <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-200 px-3 py-2 text-xs text-zinc-500 transition-colors hover:border-indigo-300 hover:text-indigo-500 dark:border-zinc-700">
           <Paperclip className="h-3.5 w-3.5" />
           Upload file
           <input type="file" onChange={uploadFile} className="hidden" />
         </label>
+        )}
       </Section>
+
+      {activities.length > 0 && (
+        <Section icon={Activity} title="Activity">
+          <div className="max-h-32 space-y-1 overflow-y-auto text-xs text-zinc-500">
+            {activities.map((a) => (
+              <p key={a.id}>
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">{a.action}</span>
+                {a.details ? ` — ${a.details}` : ""}
+              </p>
+            ))}
+          </div>
+        </Section>
+      )}
 
       <Section icon={Bell} title="Reminder">
         <p className="mb-3 text-xs text-zinc-400">Get notified before this task is due</p>
+        {!readOnly ? (
         <div className="flex gap-2">
           <Input
             hideLabel
@@ -201,6 +248,9 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           />
           <Button size="sm" onClick={setReminder} className="h-9 shrink-0">Set</Button>
         </div>
+        ) : (
+          <p className="text-xs text-zinc-400">View only — you cannot set reminders</p>
+        )}
       </Section>
     </div>
   );

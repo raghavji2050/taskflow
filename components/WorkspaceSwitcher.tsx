@@ -24,12 +24,14 @@ export function WorkspaceSwitcher() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    const ws = await createWorkspace(newName.trim());
-    if (ws) {
-      toast.success(`Workspace "${ws.name}" created`);
+    const result = await createWorkspace(newName.trim());
+    if (result.ok && result.workspace) {
+      toast.success(`Workspace "${result.workspace.name}" created`);
       setNewName("");
       setShowCreate(false);
       setOpen(false);
+    } else {
+      toast.error(result.error ?? "Could not create workspace");
     }
   };
 

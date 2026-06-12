@@ -52,6 +52,21 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
             return;
           }
           if (data.type === "heartbeat") return;
+          if (data.type === "notification:new") {
+            window.dispatchEvent(new CustomEvent("taskflow:notification"));
+            return;
+          }
+          if (
+            data.type === "workspace:updated" ||
+            data.type === "workspace:membership_changed"
+          ) {
+            window.dispatchEvent(
+              new CustomEvent("taskflow:workspace", {
+                detail: { workspaceId: data.workspaceId, type: data.type },
+              })
+            );
+            return;
+          }
           if (data.type?.startsWith("task:")) {
             handlersRef.current.forEach((handler) =>
               handler(data as TaskEvent)

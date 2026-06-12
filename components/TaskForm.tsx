@@ -3,18 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { taskSchema, type TaskInput } from "@/lib/validations";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import type { Task } from "@/components/TaskCard";
+import { MemberAssignSelect } from "@/components/MemberAssignSelect";
+import { getAssigneePayloadFromTask } from "@/lib/task-ui";
 import { toDateInputValue } from "@/lib/utils";
 
 interface Category { id: string; name: string; color: string }
 interface Tag { id: string; name: string }
 
 interface Member { id: string; name: string; email: string }
+
+const taskFormSchema = taskSchema.omit({ assigneeIds: true, primaryAssigneeId: true });
+type TaskFormValues = z.infer<typeof taskFormSchema>;
 
 interface TaskFormProps {
   initialData?: Task | null;
@@ -26,6 +32,7 @@ interface TaskFormProps {
   lockWorkspace?: boolean;
   defaultDueDate?: string;
   defaultCategoryId?: string | null;
+  readOnly?: boolean;
 }
 
 function toTimeInputValue(date: string | null | undefined) {
@@ -35,17 +42,19 @@ function toTimeInputValue(date: string | null | undefined) {
 }
 
 export function TaskForm({
-  initialData, onSubmit, onCancel, isSubmitting, workspaceId, members, lockWorkspace, defaultDueDate, defaultCategoryId,
+  initialData, onSubmit, onCancel, isSubmitting, workspaceId, members, lockWorkspace, defaultDueDate, defaultCategoryId, readOnly = false,
 }: TaskFormProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [primaryAssigneeId, setPrimaryAssigneeId] = useState<string | null>(null);
   const [dueTime, setDueTime] = useState("");
   const titleInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<TaskInput>({
-    resolver: zodResolver(taskSchema),
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<TaskFormValues>({
+    resolver: zodResolver(taskFormSchema),
     defaultValues: {
       title: "", description: "", priority: "MEDIUM", status: "PENDING",
       dueDate: "", categoryId: null, recurrenceRule: null,
@@ -76,9 +85,11 @@ export function TaskForm({
         dueDate: toDateInputValue(initialData.dueDate),
         categoryId: (initialData as Task & { categoryId?: string }).categoryId ?? null,
         workspaceId: workspaceId ?? (initialData as Task & { workspaceId?: string }).workspaceId ?? null,
-        assigneeId: (initialData as Task & { assigneeId?: string }).assigneeId ?? null,
         recurrenceRule: ((initialData as Task & { recurrenceRule?: string }).recurrenceRule ?? null) as TaskInput["recurrenceRule"],
       });
+      const { assigneeIds: ids, primaryAssigneeId: primary } = getAssigneePayloadFromTask(initialData);
+      setAssigneeIds(ids);
+      setPrimaryAssigneeId(primary);
       setDueTime(toTimeInputValue(initialData.dueDate));
       setSelectedTags(
         ((initialData as Task & { tags?: { tag: Tag }[] }).tags ?? []).map((t) => t.tag.id)
@@ -88,8 +99,10 @@ export function TaskForm({
         title: "", description: "", priority: "MEDIUM", status: "PENDING",
         dueDate: defaultDueDate ?? "",
         categoryId: defaultCategoryId ?? null,
-        recurrenceRule: null, workspaceId: workspaceId ?? null, assigneeId: null,
+        recurrenceRule: null, workspaceId: workspaceId ?? null,
       });
+      setAssigneeIds([]);
+      setPrimaryAssigneeId(null);
       setDueTime("");
       setSelectedTags([]);
     }
@@ -112,12 +125,18 @@ export function TaskForm({
     return () => clearTimeout(timer);
   }, [initialData]);
 
-  const handleFormSubmit = async (data: TaskInput) => {
+  const handleFormSubmit = async (data: TaskFormValues) => {
     let finalDueDate = data.dueDate;
     if (data.dueDate && dueTime) {
       finalDueDate = `${data.dueDate}T${dueTime}:00`;
     }
-    await onSubmit({ ...data, dueDate: finalDueDate, tagIds: selectedTags });
+    await onSubmit({
+      ...data,
+      dueDate: finalDueDate,
+      tagIds: selectedTags,
+      assigneeIds: workspaceId || members?.length ? assigneeIds : [],
+      primaryAssigneeId,
+    });
   };
 
   const toggleTag = (tagId: string) => {
@@ -127,7 +146,8 @@ export function TaskForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+    <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit(handleFormSubmit)} className="space-y-4">
+      <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-4 border-0 p-0">
       <Input
         label="Title"
         placeholder="Enter task title"
@@ -176,11 +196,16 @@ export function TaskForm({
         ]} {...register("workspaceId")} />
       )}
 
-      {(members?.length || workspaceId) && (
-        <Select label="Assign To" options={[
-          { value: "", label: "Unassigned" },
-          ...(members ?? []).map((m) => ({ value: m.id, label: m.name })),
-        ]} {...register("assigneeId")} />
+      {(members?.length || workspaceId) && members && members.length > 0 && (
+        <MemberAssignSelect
+          members={members}
+          selectedIds={assigneeIds}
+          primaryId={primaryAssigneeId}
+          onChange={(ids, primary) => {
+            setAssigneeIds(ids);
+            setPrimaryAssigneeId(primary);
+          }}
+        />
       )}
 
       <Select label="Recurrence" options={[
@@ -212,11 +237,15 @@ export function TaskForm({
         </div>
       )}
 
+      </fieldset>
+
       <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" isLoading={isSubmitting}>
-          {initialData ? "Update Task" : "Create Task"}
-        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>{readOnly ? "Close" : "Cancel"}</Button>
+        {!readOnly && (
+          <Button type="submit" isLoading={isSubmitting}>
+            {initialData ? "Update Task" : "Create Task"}
+          </Button>
+        )}
       </div>
     </form>
   );

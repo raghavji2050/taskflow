@@ -11,6 +11,14 @@ export async function GET() {
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
       take: 20,
+      include: {
+        invite: {
+          include: {
+            workspace: { select: { id: true, name: true } },
+            inviter: { select: { id: true, name: true } },
+          },
+        },
+      },
     });
 
     const unreadCount = await prisma.notification.count({

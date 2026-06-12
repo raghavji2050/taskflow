@@ -22,7 +22,8 @@ export const taskSchema = z.object({
     .nullable()
     .refine((v) => !v || !Number.isNaN(Date.parse(v)), "Invalid due date"),
   categoryId: z.string().optional().nullable(),
-  assigneeId: z.string().optional().nullable(),
+  assigneeIds: z.array(z.string()).default([]),
+  primaryAssigneeId: z.string().optional().nullable(),
   workspaceId: z.string().optional().nullable(),
   recurrenceRule: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional().nullable(),
   tagIds: z.array(z.string()).optional(),
@@ -39,6 +40,7 @@ export const taskQuerySchema = z.object({
   categoryId: z.string().optional(),
   tagId: z.string().optional(),
   workspaceId: z.string().optional(),
+  assignee: z.enum(["all", "me", "unassigned"]).optional().default("all"),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(10),
 });
@@ -60,6 +62,15 @@ export const subtaskSchema = z.object({
 
 export const commentSchema = z.object({
   body: z.string().min(1).max(2000),
+  parentId: z.string().optional().nullable(),
+});
+
+export const automationRuleSchema = z.object({
+  name: z.string().min(1).max(100),
+  trigger: z.enum(["task_overdue", "task_assigned", "status_changed", "due_date_approaching"]),
+  action: z.enum(["notify_user", "notify_assignees", "set_status", "add_tag"]),
+  config: z.record(z.string(), z.string()).default({}),
+  enabled: z.boolean().default(true),
 });
 
 export const reminderSchema = z.object({
@@ -85,7 +96,7 @@ export const resetPasswordSchema = z.object({
 });
 
 export const workspaceSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().trim().min(1, "Workspace name is required").max(100),
 });
 
 export const bulkTaskSchema = z.object({

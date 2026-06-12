@@ -118,32 +118,44 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return true;
     },
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user?.id) {
         token.id = user.id;
+        token.sub = user.id;
         token.name = user.name;
         token.email = user.email;
-        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-        if (dbUser) {
-          token.name = dbUser.name;
-          token.email = dbUser.email;
-          token.role = dbUser.role;
-        }
+        delete token.deleted;
       }
 
-      if (trigger === "update" && token.id) {
-        const dbUser = await prisma.user.findUnique({ where: { id: token.id as string } });
-        if (dbUser) {
-          token.name = dbUser.name;
-          token.email = dbUser.email;
-          token.role = dbUser.role;
-        }
+      if (!token.id) return token;
+
+      // Prisma cannot run in Edge middleware — skip DB checks there.
+      if (process.env.NEXT_RUNTIME === "edge") return token;
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: token.id as string },
+        select: { id: true, name: true, email: true, role: true },
+      });
+
+      if (!dbUser) {
+        return { ...token, id: undefined, sub: undefined, deleted: true };
       }
+
+      token.id = dbUser.id;
+      token.sub = dbUser.id;
+      token.name = dbUser.name;
+      token.email = dbUser.email;
+      token.role = dbUser.role;
+      delete token.deleted;
 
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.id) {
+      if (token.deleted || !token.id) {
+        return { ...session, user: undefined };
+      }
+
+      if (session.user) {
         session.user.id = token.id as string;
         session.user.role = (token.role as string) ?? "USER";
         if (token.name) session.user.name = token.name as string;

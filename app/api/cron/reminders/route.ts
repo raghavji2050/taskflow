@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail, digestEmail } from "@/lib/email";
 import { configureWebPush, sendPushToSubscription } from "@/lib/push";
 import { archiveStaleCompletedTasks } from "@/lib/auto-archive";
+import { runOverdueAutomations } from "@/lib/automations";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const archivedCount = await archiveStaleCompletedTasks();
+  await runOverdueAutomations();
 
   const dueReminders = await prisma.reminder.findMany({
     where: { remindAt: { lte: now }, sent: false },

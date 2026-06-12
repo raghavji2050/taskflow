@@ -17,7 +17,7 @@ import type { TaskInput } from "@/lib/validations";
 export default function CalendarPage() {
   const router = useRouter();
   const { status } = useSession();
-  const { selectedWorkspaceId, selectedWorkspace, isPersonal, members } = useWorkspace();
+  const { selectedWorkspaceId, selectedWorkspace, isPersonal, members, canEditTasks } = useWorkspace();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [month, setMonth] = useState(() => new Date());
@@ -127,9 +127,11 @@ export default function CalendarPage() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+          {canEditTasks && (
           <Button size="sm" onClick={() => openCreate()}>
             <Plus className="h-4 w-4" />New Task
           </Button>
+          )}
           </div>
         }
       />
@@ -145,7 +147,7 @@ export default function CalendarPage() {
             setDefaultDueDate(undefined);
             setIsFormOpen(true);
           }}
-          onDayClick={(day) => openCreate(format(day, "yyyy-MM-dd"))}
+          onDayClick={canEditTasks ? (day) => openCreate(format(day, "yyyy-MM-dd")) : undefined}
         />
       )}
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Download, Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { WorkspacePanel } from "@/components/WorkspacePanel";
@@ -22,12 +22,13 @@ import { TaskEditModal } from "@/components/TaskEditModal";
 import type { TaskInput } from "@/lib/validations";
 import { PageHeader } from "@/components/PageHeader";
 import { cn, getTimeGreeting } from "@/lib/utils";
+import { toTaskInput } from "@/lib/task-ui";
 import { format } from "date-fns";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
 
 const defaultFilters: TaskFiltersState = {
   search: "", status: "ALL", priority: "ALL", sort: "dueDate", order: "asc",
-  archived: "false", categoryId: "",
+  archived: "false", categoryId: "", assignee: "all",
 };
 
 const defaultStats: DashboardStatsData = {
@@ -38,7 +39,7 @@ interface DashboardClientProps { userName: string; }
 
 export function DashboardClient({ userName }: DashboardClientProps) {
   const { data: session } = useSession();
-  const { selectedWorkspaceId, selectedWorkspace, isPersonal, members } = useWorkspace();
+  const { selectedWorkspaceId, selectedWorkspace, isPersonal, members, canEditTasks } = useWorkspace();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<DashboardStatsData>(defaultStats);
@@ -79,7 +80,10 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       params.set("page", String(currentPage));
       params.set("limit", "10");
       if (catId) params.set("categoryId", catId);
-      if (wsId) params.set("workspaceId", wsId);
+      if (wsId) {
+        params.set("workspaceId", wsId);
+        if (currentFilters.assignee !== "all") params.set("assignee", currentFilters.assignee);
+      }
 
       const response = await fetch(`/api/tasks?${params.toString()}`);
       const data = await response.json();
@@ -125,7 +129,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
         if (e.key === "Escape") { setIsFormOpen(false); setEditingTask(null); }
         return;
       }
-      if (e.key === "n" || e.key === "N") { setEditingTask(null); setIsFormOpen(true); }
+      if (canEditTasks && (e.key === "n" || e.key === "N")) { setEditingTask(null); setIsFormOpen(true); }
       if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); }
       if (e.key === "Escape") { setIsFormOpen(false); setEditingTask(null); }
     };
@@ -192,15 +196,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       const response = await fetch(`/api/tasks/${task.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(withWorkspace({
-          title: task.title,
-          description: task.description,
-          priority: task.priority,
-          status: nextStatus,
-          dueDate: task.dueDate,
-          categoryId: task.categoryId,
-          assigneeId: task.assigneeId,
-        })),
+        body: JSON.stringify(withWorkspace(toTaskInput(task, { status: nextStatus }))),
       });
       if (!response.ok) throw new Error((await response.json()).error);
       await fetchTasks(filters, page, categoryId, selectedWorkspaceId);
@@ -221,19 +217,6 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       setBulkMode(false);
       await fetchTasks(filters, page, categoryId, selectedWorkspaceId);
     }
-  };
-
-  const handleExport = async () => {
-    const params = selectedWorkspaceId ? `?workspaceId=${selectedWorkspaceId}` : "";
-    const res = await fetch(`/api/tasks/export${params}`);
-    const data = await res.json();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${isPersonal ? "personal" : selectedWorkspace?.name}-tasks.json`;
-    a.click();
-    toast.success("Exported tasks");
   };
 
   const openEdit = (task: Task) => { setEditingTask(task); setIsFormOpen(true); };
@@ -268,11 +251,14 @@ export function DashboardClient({ userName }: DashboardClientProps) {
         subtitle={pageSubtitle}
         actions={
           <>
-            <Button variant="secondary" size="sm" onClick={handleExport}><Download className="h-4 w-4" />Export</Button>
-            <Button variant="secondary" size="sm" onClick={() => setBulkMode(!bulkMode)}>{bulkMode ? "Cancel" : "Select"}</Button>
-            <Button onClick={() => { setEditingTask(null); setIsFormOpen(true); }}>
-              <Plus className="h-4 w-4" />New Task
-            </Button>
+            {canEditTasks && (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setBulkMode(!bulkMode)}>{bulkMode ? "Cancel" : "Select"}</Button>
+                <Button onClick={() => { setEditingTask(null); setIsFormOpen(true); }}>
+                  <Plus className="h-4 w-4" />New Task
+                </Button>
+              </>
+            )}
           </>
         }
       />
@@ -311,7 +297,13 @@ export function DashboardClient({ userName }: DashboardClientProps) {
 
         <Card className={cn("overflow-hidden", isPersonal ? "" : "lg:col-span-2")}>
           <div className="border-b border-zinc-100 px-4 py-3 dark:border-zinc-800 sm:px-5">
-            <TaskFilters filters={filters} onChange={(f) => { setFilters(f); setPage(1); }} taskCount={tasks.length} searchRef={searchRef} />
+            <TaskFilters
+              filters={filters}
+              onChange={(f) => { setFilters(f); setPage(1); }}
+              taskCount={tasks.length}
+              searchRef={searchRef}
+              showAssigneeFilter={!isPersonal}
+            />
           </div>
           <div className="p-3 sm:p-4">
             {isLoading ? (
@@ -341,8 +333,9 @@ export function DashboardClient({ userName }: DashboardClientProps) {
                       onArchive={handleArchive}
                       onToggleStatus={handleToggleStatus}
                       isUpdating={updatingTaskId === task.id}
-                      bulkMode={bulkMode}
+                      bulkMode={bulkMode && canEditTasks}
                       showMeta={!isPersonal}
+                      readOnly={!canEditTasks}
                       selected={selectedIds.has(task.id)}
                       onSelect={(id, sel) => setSelectedIds((prev) => {
                         const next = new Set(prev);

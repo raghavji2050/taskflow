@@ -13,11 +13,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/Button";
 import type { Task } from "@/components/TaskCard";
 import type { TaskInput } from "@/lib/validations";
+import { toTaskInput } from "@/lib/task-ui";
 
 export default function BoardPage() {
   const router = useRouter();
   const { status } = useSession();
-  const { selectedWorkspaceId, selectedWorkspace, isPersonal, members } = useWorkspace();
+  const { selectedWorkspaceId, selectedWorkspace, isPersonal, members, canEditTasks } = useWorkspace();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -49,24 +50,13 @@ export default function BoardPage() {
     workspaceId: selectedWorkspaceId,
   });
 
-  const toTaskInput = (task: Task, status?: Task["status"]): TaskInput => ({
-    title: task.title,
-    description: task.description,
-    priority: task.priority,
-    status: status ?? task.status,
-    dueDate: task.dueDate,
-    categoryId: task.categoryId ?? null,
-    assigneeId: task.assigneeId ?? null,
-    recurrenceRule: (task.recurrenceRule ?? null) as TaskInput["recurrenceRule"],
-  });
-
   const handleStatusChange = async (taskId: string, newStatus: Task["status"]) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
     const res = await fetch(`/api/tasks/${taskId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(withWorkspace(toTaskInput(task, newStatus))),
+      body: JSON.stringify(withWorkspace(toTaskInput(task, { status: newStatus }))),
     });
     if (res.ok) { toast.success("Status updated"); fetchTasks(selectedWorkspaceId); }
   };
@@ -96,16 +86,17 @@ export default function BoardPage() {
         className="mb-6"
         title={pageTitle}
         subtitle={pageSubtitle}
-        actions={
+        actions={canEditTasks ? (
           <Button onClick={() => { setEditingTask(null); setIsFormOpen(true); }}>
             <Plus className="h-4 w-4" />New Task
           </Button>
-        }
+        ) : undefined}
       />
       <KanbanBoard
         tasks={tasks}
         onStatusChange={handleStatusChange}
         onEdit={(t) => { setEditingTask(t); setIsFormOpen(true); }}
+        readOnly={!canEditTasks}
       />
       <TaskEditModal
         isOpen={isFormOpen}

@@ -13,6 +13,7 @@ export interface TaskFiltersState {
   order: "asc" | "desc";
   archived: "false" | "true" | "all";
   categoryId: string;
+  assignee: "all" | "me" | "unassigned";
 }
 
 interface TaskFiltersProps {
@@ -20,11 +21,12 @@ interface TaskFiltersProps {
   onChange: (filters: TaskFiltersState) => void;
   taskCount: number;
   searchRef?: React.RefObject<HTMLInputElement | null>;
+  showAssigneeFilter?: boolean;
 }
 
 const filterSelectClass = "h-8 min-w-[7.5rem] text-xs";
 
-export function TaskFilters({ filters, onChange, taskCount, searchRef }: TaskFiltersProps) {
+export function TaskFilters({ filters, onChange, taskCount, searchRef, showAssigneeFilter }: TaskFiltersProps) {
   const internalRef = useRef<HTMLInputElement>(null);
   const ref = searchRef ?? internalRef;
 
@@ -91,6 +93,20 @@ export function TaskFilters({ filters, onChange, taskCount, searchRef }: TaskFil
               { value: "LOW", label: "Low" },
             ]}
           />
+
+          {showAssigneeFilter && (
+            <Select
+              hideLabel
+              className={filterSelectClass}
+              value={filters.assignee}
+              onChange={(e) => update({ assignee: e.target.value as TaskFiltersState["assignee"] })}
+              options={[
+                { value: "all", label: "All assignees" },
+                { value: "me", label: "Assigned to me" },
+                { value: "unassigned", label: "Unassigned" },
+              ]}
+            />
+          )}
 
           <Select
             hideLabel

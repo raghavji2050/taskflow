@@ -2,6 +2,7 @@
 
 import { Calendar, Clock, Pencil, Trash2, Archive, ArchiveRestore } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
 import {
   cn, formatDueDateTime, formatRelativeDate, getPriorityClass,
   getPriorityColor, getStatusColor, isOverdue,
@@ -21,8 +22,7 @@ export interface Task {
   updatedAt: string;
   category?: { id: string; name: string; color: string } | null;
   workspaceId?: string | null;
-  assigneeId?: string | null;
-  assignee?: { id: string; name: string } | null;
+  assignees?: TaskAssigneeUser[];
   user?: { id: string; name: string } | null;
   workspace?: { id: string; name: string } | null;
   tags?: { tag: { id: string; name: string } }[];
@@ -41,11 +41,12 @@ interface TaskCardProps {
   onSelect?: (taskId: string, selected: boolean) => void;
   bulkMode?: boolean;
   showMeta?: boolean;
+  readOnly?: boolean;
 }
 
 export function TaskCard({
   task, onEdit, onDelete, onArchive, onToggleStatus,
-  isUpdating = false, selected, onSelect, bulkMode, showMeta = false,
+  isUpdating = false, selected, onSelect, bulkMode, showMeta = false, readOnly = false,
 }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate, task.status);
   const isCompleted = task.status === "COMPLETED";
@@ -68,7 +69,7 @@ export function TaskCard({
             className="mt-1 h-4 w-4 rounded border-zinc-300" />
         )}
 
-        <button type="button" onClick={() => onToggleStatus({ ...task, status: nextStatus() })} disabled={isUpdating}
+        <button type="button" onClick={() => !readOnly && onToggleStatus({ ...task, status: nextStatus() })} disabled={isUpdating || readOnly}
           className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all sm:mt-0",
             isCompleted ? "border-emerald-500 bg-emerald-500 text-white" : task.status === "IN_PROGRESS" ? "border-violet-500 bg-violet-500/20" : "border-zinc-300 hover:border-indigo-500 dark:border-zinc-600")}
           aria-label="Cycle status">
@@ -97,8 +98,12 @@ export function TaskCard({
             {subtaskTotal > 0 && <span>{subtaskDone}/{subtaskTotal} subtasks</span>}
             {task.recurrenceRule && <span className="text-indigo-400">↻ {task.recurrenceRule.toLowerCase()}</span>}
             {showMeta && task.user && <span>by {task.user.name}</span>}
-            {showMeta && task.assignee && <span>→ {task.assignee.name}</span>}
           </div>
+          {showMeta && task.assignees && task.assignees.length > 0 && (
+            <div className="mt-1.5">
+              <AssigneeChips assignees={task.assignees} compact />
+            </div>
+          )}
 
           {task.tags && task.tags.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1">
@@ -109,13 +114,15 @@ export function TaskCard({
           )}
         </div>
 
-        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
-          <Button variant="ghost" size="sm" onClick={() => onEdit(task)} className="h-7 w-7 p-0"><Pencil className="h-3.5 w-3.5" /></Button>
-          <Button variant="ghost" size="sm" onClick={() => onArchive(task)} className="h-7 w-7 p-0" aria-label={task.archived ? "Unarchive" : "Archive"}>
-            {task.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => onDelete(task)} className="h-7 w-7 p-0 text-red-500 hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></Button>
-        </div>
+        {!readOnly && (
+          <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
+            <Button variant="ghost" size="sm" onClick={() => onEdit(task)} className="h-7 w-7 p-0"><Pencil className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="sm" onClick={() => onArchive(task)} className="h-7 w-7 p-0" aria-label={task.archived ? "Unarchive" : "Archive"}>
+              {task.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onDelete(task)} className="h-7 w-7 p-0 text-red-500 hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></Button>
+          </div>
+        )}
       </div>
     </div>
   );

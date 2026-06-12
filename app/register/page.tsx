@@ -45,17 +45,16 @@ export default function RegisterPage() {
         email: data.email,
         password: data.password,
         redirect: false,
+        callbackUrl: "/dashboard",
       });
 
-      if (signInResult?.error) {
+      if (signInResult?.error || !signInResult?.ok) {
         toast.success("Account created. Please sign in.");
         router.push("/login");
         return;
       }
 
-      toast.success("Account created successfully!");
-      router.push("/dashboard");
-      router.refresh();
+      window.location.href = "/dashboard";
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Registration failed");
     } finally {

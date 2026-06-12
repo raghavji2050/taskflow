@@ -4,26 +4,14 @@ import { taskSchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { logTaskActivity } from "@/lib/activity";
 import { getNextDueDate } from "@/lib/recurrence";
-import { canAccessTask } from "@/lib/workspace";
+import { canAccessTask, canEditTask } from "@/lib/workspace";
 import { broadcastTaskEvent } from "@/lib/realtime";
 import { completedAtForStatusChange } from "@/lib/auto-archive";
+import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
+import { runAutomationsForTrigger } from "@/lib/automations";
+import { taskDetailInclude } from "@/lib/tasks";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-const taskInclude = {
-  category: true,
-  tags: { include: { tag: true } },
-  subtasks: { orderBy: { position: "asc" as const } },
-  comments: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" as const } },
-  attachments: true,
-  activities: { orderBy: { createdAt: "desc" as const }, take: 20 },
-  reminders: true,
-  assignee: { select: { id: true, name: true, email: true } },
-};
-
-async function getOwnedTask(taskId: string, userId: string) {
-  return prisma.task.findFirst({ where: { id: taskId, userId } });
-}
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
@@ -36,7 +24,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const task = await prisma.task.findFirst({
       where: { id },
-      include: taskInclude,
+      include: taskDetailInclude,
     });
 
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -54,10 +42,13 @@ export async function PUT(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const existing = await canAccessTask(user.id, id);
     if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    if (!(await canEditTask(user.id, id))) {
+      return NextResponse.json({ error: "You do not have permission to edit this task" }, { status: 403 });
+    }
 
     const body = await request.json();
     const data = taskSchema.parse(body);
-    const { tagIds, ...taskData } = data;
+    const { tagIds, assigneeIds, primaryAssigneeId, ...taskData } = data;
 
     if (tagIds) {
       await prisma.taskTag.deleteMany({ where: { taskId: id } });
@@ -69,8 +60,9 @@ export async function PUT(request: Request, context: RouteContext) {
     }
 
     const completedAt = completedAtForStatusChange(taskData.status, existing.status);
+    const statusChanged = taskData.status !== existing.status;
 
-    const task = await prisma.task.update({
+    await prisma.task.update({
       where: { id },
       data: {
         title: taskData.title,
@@ -79,20 +71,50 @@ export async function PUT(request: Request, context: RouteContext) {
         status: taskData.status,
         dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
         categoryId: taskData.categoryId || null,
-        assigneeId: taskData.assigneeId || null,
         recurrenceRule: taskData.recurrenceRule || null,
         position: taskData.position,
         ...(completedAt !== undefined && { completedAt }),
       },
-      include: taskInclude,
     });
 
-    await logTaskActivity(id, "updated", `Status: ${task.status}`);
+    const workspaceId = existing.workspaceId ?? taskData.workspaceId ?? null;
+    if (workspaceId && assigneeIds !== undefined) {
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { name: true },
+      });
+      await syncTaskAssignees({
+        taskId: id,
+        workspaceId,
+        assigneeIds: assigneeIds ?? [],
+        primaryAssigneeId,
+        actorId: user.id,
+        taskTitle: taskData.title,
+        workspaceName: workspace?.name,
+      });
+    }
+
+    const task = await prisma.task.findFirst({
+      where: { id },
+      include: taskDetailInclude,
+    });
+
+    await logTaskActivity(id, "updated", `Status: ${taskData.status}`);
+
+    if (statusChanged && workspaceId) {
+      await runAutomationsForTrigger(workspaceId, "status_changed", {
+        taskId: id,
+        taskTitle: taskData.title,
+        workspaceId,
+        status: taskData.status,
+        assigneeIds: assigneeIds ?? [],
+      });
+    }
 
     if (
-      task.status === "COMPLETED" &&
+      taskData.status === "COMPLETED" &&
       existing.status !== "COMPLETED" &&
-      task.recurrenceRule &&
+      task?.recurrenceRule &&
       task.dueDate
     ) {
       await prisma.task.create({
@@ -105,6 +127,7 @@ export async function PUT(request: Request, context: RouteContext) {
           recurrenceRule: task.recurrenceRule,
           categoryId: task.categoryId,
           userId: user.id,
+          workspaceId: task.workspaceId,
           position: task.position + 1,
         },
       });
@@ -112,10 +135,10 @@ export async function PUT(request: Request, context: RouteContext) {
 
     broadcastTaskEvent({
       type: "task:updated",
-      workspaceId: task.workspaceId,
+      workspaceId: existing.workspaceId,
       ownerId: existing.userId,
       actorId: user.id,
-      taskId: task.id,
+      taskId: id,
     });
     return NextResponse.json({ task });
   } catch (error) {
@@ -131,6 +154,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const existing = await canAccessTask(user.id, id);
     if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    if (!(await canEditTask(user.id, id))) {
+      return NextResponse.json({ error: "You do not have permission to delete this task" }, { status: 403 });
+    }
 
     await prisma.task.delete({ where: { id } });
     broadcastTaskEvent({
@@ -154,6 +180,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const existing = await canAccessTask(user.id, id);
     if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    if (!(await canEditTask(user.id, id))) {
+      return NextResponse.json({ error: "You do not have permission to edit this task" }, { status: 403 });
+    }
 
     const body = await request.json();
 
@@ -161,7 +190,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       const task = await prisma.task.update({
         where: { id },
         data: { archived: Boolean(body.archived) },
-        include: taskInclude,
+        include: taskDetailInclude,
       });
       await logTaskActivity(id, body.archived ? "archived" : "unarchived");
       broadcastTaskEvent({

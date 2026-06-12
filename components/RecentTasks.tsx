@@ -30,7 +30,9 @@ export function RecentTasks({ tasks, onSelect, showMeta = false }: RecentTasksPr
                 <p className={cn("truncate text-sm font-medium text-zinc-800 dark:text-zinc-200", task.status === "COMPLETED" && "line-through opacity-60")}>{task.title}</p>
                 <p className="mt-0.5 flex items-center gap-1 text-[11px] text-zinc-400">
                   <Clock className="h-3 w-3" />{formatRelativeDate(task.createdAt)}
-                  {showMeta && task.assignee && <span>· {task.assignee.name}</span>}
+                  {showMeta && task.assignees && task.assignees.length > 0 && (
+                    <span>· {task.assignees.map((a) => a.user.name).join(", ")}</span>
+                  )}
                 </p>
               </div>
               <span className={cn("shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase", getPriorityColor(task.priority))}>{task.priority}</span>

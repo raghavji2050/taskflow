@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="TaskFlow">
+  <defs>
+    <linearGradient id="tf" x1="6" y1="4" x2="26" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#tf)"/>
+  <rect x="9" y="9" width="14" height="14" rx="2.5" fill="none" stroke="#fff" stroke-width="2"/>
+  <path d="M12.5 16.2 15.2 19 20.5 13" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

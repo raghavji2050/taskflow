@@ -6,6 +6,7 @@ import { CheckSquare, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { clearWorkspaceSelection } from "@/components/WorkspaceProvider";
 import { NotificationBell } from "@/components/NotificationBell";
 import { getInitials } from "@/lib/utils";
 
@@ -51,7 +52,15 @@ export function Navbar() {
                 </div>
                 <span className="text-sm text-zinc-600 dark:text-zinc-300">{session.user?.name}</span>
               </div>
-              <Button variant="secondary" size="sm" onClick={() => signOut({ callbackUrl: "/login" })} className="h-8">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  clearWorkspaceSelection();
+                  signOut({ callbackUrl: "/login" });
+                }}
+                className="h-8"
+              >
                 <LogOut className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Logout</span>
               </Button>

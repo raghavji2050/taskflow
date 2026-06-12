@@ -34,9 +34,6 @@ const spec = {
     "/api/tasks/bulk": {
       post: { summary: "Bulk complete/archive/delete", tags: ["Tasks"] },
     },
-    "/api/tasks/export": {
-      get: { summary: "Export tasks as JSON", tags: ["Tasks"] },
-    },
     "/api/tasks/import": {
       post: { summary: "Import tasks from JSON", tags: ["Tasks"] },
     },

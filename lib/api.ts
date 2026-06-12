@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -23,5 +24,12 @@ export async function getAuthenticatedUser() {
   if (!session?.user?.id) {
     return null;
   }
-  return session.user;
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, name: true, email: true, role: true },
+  });
+
+  if (!dbUser) return null;
+  return { ...session.user, ...dbUser };
 }

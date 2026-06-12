@@ -24,11 +24,27 @@ export async function POST(request: Request) {
       });
 
       const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-      await sendEmail(
-        user.email,
-        "Reset your TaskFlow password",
-        passwordResetEmail(user.name, `${baseUrl}/reset-password?token=${token}`)
-      );
+      const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+      try {
+        const result = await sendEmail(
+          user.email,
+          "Reset your TaskFlow password",
+          passwordResetEmail(user.name, resetUrl)
+        );
+
+        if (result.dev) {
+          return NextResponse.json({
+            message: "If that email exists, a reset link was sent",
+            devResetUrl: resetUrl,
+          });
+        }
+      } catch {
+        return NextResponse.json(
+          { error: "Could not send email. Check SMTP settings and try again." },
+          { status: 503 }
+        );
+      }
     }
 
     return NextResponse.json({ message: "If that email exists, a reset link was sent" });

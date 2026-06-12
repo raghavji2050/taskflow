@@ -11,7 +11,10 @@ export async function GET() {
     const workspaces = await prisma.workspace.findMany({
       where: { members: { some: { userId: user.id } } },
       include: {
-        members: { include: { user: { select: { id: true, name: true, email: true } } } },
+        members: {
+          include: { user: { select: { id: true, name: true, email: true } } },
+          orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
+        },
         _count: { select: { tasks: true } },
       },
     });
@@ -28,10 +31,25 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const data = workspaceSchema.parse(await request.json());
+    const name = data.name.trim();
+
+    const normalized = name.toLowerCase();
+    const userWorkspaces = await prisma.workspace.findMany({
+      where: { members: { some: { userId: user.id } } },
+      select: { id: true, name: true },
+    });
+    const existing = userWorkspaces.find((w) => w.name.trim().toLowerCase() === normalized);
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `You already have a workspace named "${existing.name}"` },
+        { status: 409 }
+      );
+    }
 
     const workspace = await prisma.workspace.create({
       data: {
-        name: data.name,
+        name,
         members: { create: { userId: user.id, role: "OWNER" } },
       },
       include: { members: { include: { user: { select: { id: true, name: true } } } } },

@@ -5,6 +5,7 @@ import { FileText, Layers } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { TaskForm } from "@/components/TaskForm";
 import { TaskDetail } from "@/components/TaskDetail";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 import type { Task } from "@/components/TaskCard";
 import type { TaskInput } from "@/lib/validations";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,8 @@ export function TaskEditModal({
   defaultCategoryId,
 }: TaskEditModalProps) {
   const [tab, setTab] = useState<"details" | "more">("details");
+  const { canEditTasks } = useWorkspace();
+  const readOnly = !canEditTasks;
 
   const handleClose = () => {
     setTab("details");
@@ -112,11 +115,12 @@ export function TaskEditModal({
           onSubmit={onSubmit}
           onCancel={handleClose}
           isSubmitting={isSubmitting}
+          readOnly={readOnly}
         />
       )}
 
       {showTabs && tab === "more" && editingTask && (
-        <TaskDetail taskId={editingTask.id} />
+        <TaskDetail taskId={editingTask.id} readOnly={readOnly} />
       )}
     </Modal>
   );
