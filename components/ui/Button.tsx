@@ -8,6 +8,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   isLoading?: boolean;
+  /** Shown beside the spinner when loading. Omit for icon-only buttons. */
+  loadingText?: string;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -34,12 +36,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       variant = "primary",
       size = "md",
       isLoading = false,
+      loadingText,
       disabled,
       children,
       ...props
     },
     ref
   ) => {
+    const spinnerSize =
+      size === "sm" ? "h-3.5 w-3.5" : size === "lg" ? "h-4 w-4" : "h-4 w-4";
+
     return (
       <button
         ref={ref}
@@ -50,12 +56,19 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           className
         )}
         disabled={disabled || isLoading}
+        aria-busy={isLoading}
         {...props}
       >
         {isLoading ? (
           <>
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            Loading...
+            <span
+              className={cn(
+                "shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent",
+                spinnerSize
+              )}
+              aria-hidden="true"
+            />
+            {loadingText ? <span>{loadingText}</span> : null}
           </>
         ) : (
           children

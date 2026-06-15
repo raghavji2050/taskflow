@@ -21,6 +21,7 @@ import {
   Menu,
   ChevronUp,
   Shield,
+  MessageSquare,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/dashboard/calendar", label: "Calendar", icon: Calendar, match: (p: string) => p.startsWith("/dashboard/calendar") },
   { href: "/dashboard/my-work", label: "My Work", icon: UserCircle, match: (p: string) => p.startsWith("/dashboard/my-work") },
   { href: "/dashboard/timeline", label: "Timeline", icon: GanttChart, match: (p: string) => p.startsWith("/dashboard/timeline") },
+  { href: "/dashboard/messages", label: "Messages", icon: MessageSquare, match: (p: string) => p.startsWith("/dashboard/messages") },
 ];
 
 function SidebarUserMenu() {
@@ -140,16 +142,26 @@ function SidebarUserMenu() {
   );
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({
+  onNavigate,
+  onClose,
+}: {
+  onNavigate?: () => void;
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
   const { connected } = useRealtime();
 
   return (
     <div className="flex h-full flex-col">
       {/* Brand */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--sidebar-border)] px-4">
-        <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2.5">
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--sidebar-border)] px-3">
+        <Link
+          href="/dashboard"
+          onClick={onNavigate}
+          className="flex min-w-0 flex-1 items-center gap-2.5"
+        >
+          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
             <CheckSquare className="h-4 w-4" strokeWidth={2.5} />
             {connected && (
               <span
@@ -158,9 +170,23 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               />
             )}
           </div>
-          <span className="text-[15px] font-bold tracking-tight text-[var(--foreground)]">TaskFlow</span>
+          <span className="truncate text-[15px] font-bold tracking-tight text-[var(--foreground)]">
+            TaskFlow
+          </span>
         </Link>
-        <NotificationBell />
+        <div className="flex shrink-0 items-center gap-0.5">
+          <NotificationBell placement="sidebar" />
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]"
+              aria-label="Close menu"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Workspace */}
@@ -183,7 +209,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 className={cn("sidebar-nav-item", active && "active")}
               >
                 <Icon className={cn("sidebar-nav-icon h-[18px] w-[18px] shrink-0", active ? "text-[var(--accent)]" : "text-[var(--muted)]")} strokeWidth={active ? 2.25 : 2} />
-                {label}
+                <span className="min-w-0 flex-1 truncate">{label}</span>
               </Link>
             );
           })}
@@ -204,21 +230,22 @@ export function AppSidebar() {
   return (
     <>
       {/* Mobile header */}
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--sidebar-border)] bg-[var(--sidebar)] px-4 lg:hidden">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--sidebar-border)] bg-[var(--sidebar)] px-3 lg:hidden">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--sidebar-hover)]"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--sidebar-hover)]"
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent)] text-white">
+        <Link href="/dashboard" className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-white">
             <CheckSquare className="h-3.5 w-3.5" strokeWidth={2.5} />
           </div>
-          <span className="text-sm font-bold">TaskFlow</span>
+          <span className="truncate text-sm font-bold">TaskFlow</span>
         </Link>
+        <NotificationBell placement="sidebar" />
       </div>
 
       {/* Mobile drawer */}
@@ -226,15 +253,10 @@ export function AppSidebar() {
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-[280px] flex-col bg-[var(--sidebar)] shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setMobileOpen(false)}
-              className="absolute right-3 top-3.5 z-10 flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--sidebar-hover)]"
-              aria-label="Close menu"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <SidebarContent onNavigate={() => setMobileOpen(false)} />
+            <SidebarContent
+              onNavigate={() => setMobileOpen(false)}
+              onClose={() => setMobileOpen(false)}
+            />
           </aside>
         </div>
       )}

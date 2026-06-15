@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `Conversation` MODIFY `type` ENUM('DIRECT', 'WORKSPACE', 'GROUP', 'PERSONAL') NOT NULL;

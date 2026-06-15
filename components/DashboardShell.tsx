@@ -4,10 +4,12 @@ import { Suspense } from "react";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
 import { AppSidebar } from "@/components/AppSidebar";
 import { TeamContextBar } from "@/components/TeamContextBar";
+import { NotificationListener } from "@/components/NotificationListener";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <WorkspaceProvider>
+      <NotificationListener />
       <div className="flex min-h-[calc(100dvh)] flex-col lg:flex-row">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">

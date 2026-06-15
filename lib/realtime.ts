@@ -12,6 +12,11 @@ export interface TaskEvent {
 export interface NotificationEvent {
   type: "notification:new";
   userId: string;
+  title?: string;
+  body?: string;
+  notificationType?: string;
+  conversationId?: string;
+  messageId?: string;
   at: string;
 }
 
@@ -38,7 +43,57 @@ export interface WorkspaceMembershipEvent {
   at: string;
 }
 
-export type RealtimeEvent = TaskEvent | NotificationEvent | WorkspaceEvent | WorkspaceMembershipEvent;
+export interface MessageEvent {
+  type: "message:created" | "message:updated";
+  conversationId: string;
+  messageId: string;
+  senderId: string;
+  preview: string;
+  recipientId: string;
+  message?: Record<string, unknown>;
+  at: string;
+}
+
+export interface PresenceSyncEvent {
+  type: "presence:sync";
+  onlineUserIds: string[];
+  at: string;
+}
+
+export interface PresenceChangedEvent {
+  type: "presence:changed";
+  userId: string;
+  online: boolean;
+  at: string;
+}
+
+export interface ConversationReceiptEvent {
+  type: "conversation:receipt";
+  conversationId: string;
+  userId: string;
+  lastReadAt?: string;
+  lastReceivedAt?: string;
+  at: string;
+}
+
+export interface TypingChangedEvent {
+  type: "typing:changed";
+  conversationId: string;
+  userId: string;
+  typing: boolean;
+  at: string;
+}
+
+export type RealtimeEvent =
+  | TaskEvent
+  | NotificationEvent
+  | WorkspaceEvent
+  | WorkspaceMembershipEvent
+  | MessageEvent
+  | PresenceSyncEvent
+  | PresenceChangedEvent
+  | ConversationReceiptEvent
+  | TypingChangedEvent;
 
 interface RealtimeClient {
   userId: string;
@@ -48,13 +103,99 @@ interface RealtimeClient {
 
 class RealtimeHub {
   private clients = new Map<string, RealtimeClient>();
+  private presenceSyncTimer: ReturnType<typeof setInterval> | null = null;
+  private typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   subscribe(id: string, client: RealtimeClient) {
+    const wasOnline = this.isUserOnline(client.userId);
     this.clients.set(id, client);
+
+    client.send({
+      type: "presence:sync",
+      onlineUserIds: this.getOnlineUserIds(),
+      at: new Date().toISOString(),
+    } satisfies PresenceSyncEvent);
+
+    if (!wasOnline) {
+      this.broadcastPresenceChanged(client.userId, true);
+    }
+    this.ensurePresenceSyncTimer();
   }
 
   unsubscribe(id: string) {
+    const client = this.clients.get(id);
+    if (!client) return;
+    const { userId } = client;
     this.clients.delete(id);
+    if (!this.isUserOnline(userId)) {
+      this.broadcastPresenceChanged(userId, false);
+    }
+    if (this.clients.size === 0) {
+      this.clearPresenceSyncTimer();
+    }
+  }
+
+  private ensurePresenceSyncTimer() {
+    if (this.presenceSyncTimer) return;
+    this.presenceSyncTimer = setInterval(() => {
+      if (this.clients.size > 0) this.broadcastPresenceSync();
+    }, 120_000);
+  }
+
+  private clearPresenceSyncTimer() {
+    if (!this.presenceSyncTimer) return;
+    clearInterval(this.presenceSyncTimer);
+    this.presenceSyncTimer = null;
+  }
+
+  isUserOnline(userId: string) {
+    for (const client of this.clients.values()) {
+      if (client.userId === userId) return true;
+    }
+    return false;
+  }
+
+  getOnlineUserIds() {
+    return [...new Set([...this.clients.values()].map((c) => c.userId))];
+  }
+
+  getOnlineStatus(userIds: string[]) {
+    const online: Record<string, boolean> = {};
+    for (const id of userIds) {
+      online[id] = this.isUserOnline(id);
+    }
+    return online;
+  }
+
+  private broadcastPresenceChanged(userId: string, online: boolean) {
+    const event: PresenceChangedEvent = {
+      type: "presence:changed",
+      userId,
+      online,
+      at: new Date().toISOString(),
+    };
+    for (const client of this.clients.values()) {
+      try {
+        client.send(event);
+      } catch {
+        // send wrapper handles cleanup
+      }
+    }
+  }
+
+  broadcastPresenceSync() {
+    const event: PresenceSyncEvent = {
+      type: "presence:sync",
+      onlineUserIds: this.getOnlineUserIds(),
+      at: new Date().toISOString(),
+    };
+    for (const client of this.clients.values()) {
+      try {
+        client.send(event);
+      } catch {
+        // send wrapper handles cleanup
+      }
+    }
   }
 
   publish(event: TaskEvent) {
@@ -81,6 +222,32 @@ class RealtimeHub {
     }
   }
 
+  setTyping(userId: string, conversationId: string, typing: boolean, participantIds: string[]) {
+    const key = `${conversationId}:${userId}`;
+    const existing = this.typingTimers.get(key);
+    if (existing) clearTimeout(existing);
+    if (!typing) {
+      this.typingTimers.delete(key);
+    } else {
+      this.typingTimers.set(
+        key,
+        setTimeout(() => this.setTyping(userId, conversationId, false, participantIds), 4000)
+      );
+    }
+    const event: TypingChangedEvent = {
+      type: "typing:changed",
+      conversationId,
+      userId,
+      typing,
+      at: new Date().toISOString(),
+    };
+    for (const participantId of participantIds) {
+      if (participantId !== userId) {
+        this.publishToUser(participantId, event);
+      }
+    }
+  }
+
   private shouldReceive(client: RealtimeClient, event: TaskEvent) {
     if (event.workspaceId) {
       return client.workspaceIds.includes(event.workspaceId);
@@ -94,24 +261,63 @@ declare global {
   var __taskflowRealtimeHub: RealtimeHub | undefined;
 }
 
-export const realtimeHub = globalThis.__taskflowRealtimeHub ?? new RealtimeHub();
-globalThis.__taskflowRealtimeHub = realtimeHub;
+function getRealtimeHub(): RealtimeHub {
+  if (!globalThis.__taskflowRealtimeHub) {
+    globalThis.__taskflowRealtimeHub = new RealtimeHub();
+  }
+  return globalThis.__taskflowRealtimeHub;
+}
+
+/** @deprecated Prefer getRealtimeHub() — kept for server.ts and existing imports */
+export const realtimeHub = new Proxy({} as RealtimeHub, {
+  get(_target, prop: keyof RealtimeHub) {
+    const hub = getRealtimeHub();
+    const value = hub[prop];
+    return typeof value === "function" ? value.bind(hub) : value;
+  },
+});
+
+export function getOnlineUserIds() {
+  return getRealtimeHub().getOnlineUserIds();
+}
+
+export function getOnlineStatus(userIds: string[]) {
+  return getRealtimeHub().getOnlineStatus(userIds);
+}
+
+export function broadcastPresenceSync() {
+  getRealtimeHub().broadcastPresenceSync();
+}
 
 export function broadcastTaskEvent(
   event: Omit<TaskEvent, "at"> & { at?: string }
 ) {
-  realtimeHub.publish({
+  getRealtimeHub().publish({
     ...event,
     at: event.at ?? new Date().toISOString(),
   });
 }
 
-export function broadcastNotification(userId: string) {
-  realtimeHub.publishToUser(userId, {
+export function broadcastNotification(
+  userId: string,
+  payload?: {
+    title?: string;
+    body?: string;
+    notificationType?: string;
+    conversationId?: string;
+    messageId?: string;
+  }
+) {
+  getRealtimeHub().publishToUser(userId, {
     type: "notification:new",
     userId,
+    title: payload?.title,
+    body: payload?.body,
+    notificationType: payload?.notificationType,
+    conversationId: payload?.conversationId,
+    messageId: payload?.messageId,
     at: new Date().toISOString(),
-  });
+  } satisfies NotificationEvent);
 }
 
 export function broadcastWorkspaceUpdate(params: {
@@ -121,7 +327,7 @@ export function broadcastWorkspaceUpdate(params: {
   notifyUserIds?: string[];
 }) {
   const at = new Date().toISOString();
-  realtimeHub.publishToWorkspace(params.workspaceId, {
+  getRealtimeHub().publishToWorkspace(params.workspaceId, {
     type: "workspace:updated",
     workspaceId: params.workspaceId,
     reason: params.reason,
@@ -130,11 +336,81 @@ export function broadcastWorkspaceUpdate(params: {
   } satisfies WorkspaceEvent);
 
   for (const userId of params.notifyUserIds ?? []) {
-    realtimeHub.publishToUser(userId, {
+    getRealtimeHub().publishToUser(userId, {
       type: "workspace:membership_changed",
       workspaceId: params.workspaceId,
       userId,
       at,
     } satisfies WorkspaceMembershipEvent);
   }
+}
+
+export function broadcastMessageEvent(
+  params: Omit<MessageEvent, "type" | "at"> & { at?: string; type?: MessageEvent["type"] }
+) {
+  getRealtimeHub().publishToUser(params.recipientId, {
+    type: params.type ?? "message:created",
+    conversationId: params.conversationId,
+    messageId: params.messageId,
+    senderId: params.senderId,
+    preview: params.preview,
+    recipientId: params.recipientId,
+    message: params.message,
+    at: params.at ?? new Date().toISOString(),
+  } satisfies MessageEvent);
+}
+
+export function broadcastMessageToConversation(
+  participantIds: string[],
+  params: Omit<MessageEvent, "type" | "at" | "recipientId" | "senderId"> & {
+    at?: string;
+    type?: MessageEvent["type"];
+    actorId: string;
+  }
+) {
+  const at = params.at ?? new Date().toISOString();
+  const type = params.type ?? "message:updated";
+  for (const recipientId of participantIds) {
+    getRealtimeHub().publishToUser(recipientId, {
+      type,
+      conversationId: params.conversationId,
+      messageId: params.messageId,
+      senderId: params.actorId,
+      preview: params.preview,
+      recipientId,
+      message: params.message,
+      at,
+    } satisfies MessageEvent);
+  }
+}
+
+export function broadcastConversationReceipt(
+  participantIds: string[],
+  conversationId: string,
+  userId: string,
+  payload: { lastReadAt?: string; lastReceivedAt?: string }
+) {
+  const at = new Date().toISOString();
+  const event: ConversationReceiptEvent = {
+    type: "conversation:receipt",
+    conversationId,
+    userId,
+    lastReadAt: payload.lastReadAt,
+    lastReceivedAt: payload.lastReceivedAt,
+    at,
+  };
+  for (const recipientId of participantIds) {
+    if (recipientId !== userId) {
+      getRealtimeHub().publishToUser(recipientId, event);
+    }
+  }
+}
+
+export function setConversationTyping(
+  userId: string,
+  conversationId: string,
+  typing: boolean,
+  participantIds: string[]
+) {
+  getRealtimeHub().setTyping(userId, conversationId, typing, participantIds);
 }

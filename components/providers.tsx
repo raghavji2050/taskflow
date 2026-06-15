@@ -8,7 +8,7 @@ import { RealtimeProvider } from "@/components/RealtimeProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider refetchInterval={30} refetchOnWindowFocus>
+    <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus={false}>
       <SessionGuard>
         <RealtimeProvider>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

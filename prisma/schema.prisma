@@ -37,6 +37,13 @@ enum InvitationStatus {
   DECLINED
 }
 
+enum ConversationType {
+  DIRECT
+  WORKSPACE
+  GROUP
+  PERSONAL
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String
@@ -45,6 +52,7 @@ model User {
   role          UserRole  @default(USER)
   emailVerified DateTime?
   image         String?
+  lastSeenAt    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -63,6 +71,11 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
   accounts                Account[]
+  conversationsCreated    Conversation[]            @relation("ConversationsCreated")
+  conversationParticipants ConversationParticipant[]
+  messages                Message[]
+  messageReactions        MessageReaction[]
+  pinnedMessages          Message[]                 @relation("PinnedMessages")
 }
 
 model Account {
@@ -259,19 +272,24 @@ model Reminder {
 }
 
 model Notification {
-  id        String               @id @default(cuid())
-  title     String
-  body      String
-  read      Boolean              @default(false)
-  type      String               @default("general")
-  inviteId  String?
-  invite    WorkspaceInvitation? @relation(fields: [inviteId], references: [id], onDelete: SetNull)
-  userId    String
-  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime             @default(now())
+  id             String               @id @default(cuid())
+  title          String
+  body           String
+  read           Boolean              @default(false)
+  archivedAt     DateTime?
+  type           String               @default("general")
+  inviteId       String?
+  conversationId String?
+  messageId      String?
+  invite         WorkspaceInvitation? @relation(fields: [inviteId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime             @default(now())
 
   @@index([userId, read])
+  @@index([userId, archivedAt])
   @@index([inviteId])
+  @@index([conversationId])
 }
 
 model PushSubscription {
@@ -297,6 +315,7 @@ model Workspace {
   tasks              Task[]
   automationRules    AutomationRule[]
   boardColumns       BoardColumn[]
+  conversation       Conversation?
 }
 
 model AutomationRule {
@@ -361,4 +380,95 @@ model EmailVerificationToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
+}
+
+model Conversation {
+  id          String           @id @default(cuid())
+  type        ConversationType
+  name        String?
+  workspaceId String?          @unique
+  createdById String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  workspace    Workspace?                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User                      @relation("ConversationsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([createdById])
+  @@index([type])
+}
+
+model ConversationParticipant {
+  id             String    @id @default(cuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+  lastReceivedAt DateTime?
+  archivedAt     DateTime?
+  clearedAt      DateTime?
+  mutedUntil     DateTime?
+  joinedAt       DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String
+  userId         String
+  body           String    @default("") @db.Text
+  parentId       String?
+  pinnedAt       DateTime?
+  pinnedById     String?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent       Message?            @relation("MessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies      Message[]           @relation("MessageReplies")
+  pinnedBy     User?               @relation("PinnedMessages", fields: [pinnedById], references: [id], onDelete: SetNull)
+  attachments  MessageAttachment[]
+  reactions    MessageReaction[]
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, pinnedAt])
+  @@index([userId])
+  @@index([parentId])
+}
+
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  filename  String
+  url       String
+  mimeType  String
+  size      Int
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }

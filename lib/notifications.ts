@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { broadcastNotification } from "@/lib/realtime";
+import { sendPushToUser } from "@/lib/push";
+
+function chatPushUrl(conversationId?: string, messageId?: string) {
+  if (!conversationId) return "/dashboard/messages";
+  const base = `/dashboard/messages?c=${conversationId}`;
+  return messageId ? `${base}#msg-${messageId}` : base;
+}
 
 export async function createNotification(params: {
   userId: string;
@@ -7,6 +14,8 @@ export async function createNotification(params: {
   body: string;
   type?: string;
   inviteId?: string;
+  conversationId?: string;
+  messageId?: string;
 }) {
   const notification = await prisma.notification.create({
     data: {
@@ -15,9 +24,29 @@ export async function createNotification(params: {
       body: params.body,
       type: params.type ?? "general",
       inviteId: params.inviteId,
+      conversationId: params.conversationId,
+      messageId: params.messageId,
     },
   });
 
-  broadcastNotification(params.userId);
+  broadcastNotification(params.userId, {
+    title: params.title,
+    body: params.body,
+    notificationType: params.type ?? "general",
+    conversationId: params.conversationId,
+    messageId: params.messageId,
+  });
+
+  const type = params.type ?? "general";
+  if (type === "message" || type === "mention") {
+    await sendPushToUser(params.userId, {
+      title: params.title,
+      body: params.body,
+      url: chatPushUrl(params.conversationId, params.messageId),
+      conversationId: params.conversationId,
+      messageId: params.messageId,
+    });
+  }
+
   return notification;
 }

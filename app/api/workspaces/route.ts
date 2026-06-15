@@ -55,6 +55,9 @@ export async function POST(request: Request) {
       include: { members: { include: { user: { select: { id: true, name: true } } } } },
     });
 
+    const { createWorkspaceChannelOnCreate } = await import("@/lib/conversations");
+    await createWorkspaceChannelOnCreate(workspace.id, user.id);
+
     return NextResponse.json({ workspace }, { status: 201 });
   } catch (error) {
     return handleApiError(error);

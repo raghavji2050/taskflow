@@ -1,4 +1,5 @@
 import webpush from "web-push";
+import { prisma } from "@/lib/prisma";
 
 export function getVapidPublicKey(): string | null {
   return (
@@ -27,7 +28,13 @@ export function configureWebPush(): boolean {
 
 export async function sendPushToSubscription(
   subscription: { endpoint: string; p256dh: string; auth: string },
-  payload: { title: string; body: string; url?: string }
+  payload: {
+    title: string;
+    body: string;
+    url?: string;
+    conversationId?: string;
+    messageId?: string;
+  }
 ) {
   if (!configureWebPush()) {
     throw new Error("Push notifications are not configured on the server");
@@ -40,4 +47,27 @@ export async function sendPushToSubscription(
     },
     JSON.stringify(payload)
   );
+}
+
+export async function sendPushToUser(
+  userId: string,
+  payload: {
+    title: string;
+    body: string;
+    url?: string;
+    conversationId?: string;
+    messageId?: string;
+  }
+) {
+  if (!configureWebPush()) return;
+
+  const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+
+  for (const sub of subs) {
+    try {
+      await sendPushToSubscription(sub, payload);
+    } catch {
+      await prisma.pushSubscription.delete({ where: { id: sub.id } });
+    }
+  }
 }

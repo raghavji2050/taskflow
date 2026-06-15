@@ -72,6 +72,58 @@ export const commentSchema = z.object({
   parentId: z.string().optional().nullable(),
 });
 
+export const messageSchema = z.object({
+  body: z.string().max(4000).default(""),
+  parentId: z.string().optional().nullable(),
+});
+
+export const messageReactionSchema = z.object({
+  emoji: z.string().min(1).max(16),
+});
+
+export const updateMessageSchema = z.object({
+  body: z.string().min(1).max(4000),
+});
+
+export const conversationPatchSchema = z.object({
+  archived: z.boolean(),
+});
+
+export const conversationsQuerySchema = z.object({
+  archived: z.enum(["true", "false"]).optional().default("false"),
+});
+
+export const createConversationSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("DIRECT"),
+    userId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("GROUP"),
+    name: z.string().min(1).max(100).optional(),
+    memberIds: z.array(z.string()).min(1).max(50),
+  }),
+]);
+
+export const userSearchSchema = z.object({
+  q: z.string().trim().min(2).max(100),
+});
+
+export const messagesQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  search: z.string().trim().min(1).max(200).optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
+    .optional(),
+});
+
+export const messageSearchSchema = z.object({
+  q: z.string().trim().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(30),
+});
+
 export const automationRuleSchema = z.object({
   name: z.string().min(1).max(100),
   trigger: z.enum(["task_overdue", "task_assigned", "status_changed", "due_date_approaching"]),

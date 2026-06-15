@@ -115,13 +115,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const onWorkspaceChange = () => void refreshWorkspaces();
-    const onFocus = () => void refreshWorkspaces();
-
     window.addEventListener("taskflow:workspace", onWorkspaceChange);
-    window.addEventListener("focus", onFocus);
     return () => {
       window.removeEventListener("taskflow:workspace", onWorkspaceChange);
-      window.removeEventListener("focus", onFocus);
     };
   }, [refreshWorkspaces]);
 

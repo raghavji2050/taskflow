@@ -52,6 +52,9 @@ export async function removeWorkspaceMember(params: {
     type: "general",
   });
 
+  const { removeUserFromWorkspaceChannel } = await import("@/lib/conversations");
+  await removeUserFromWorkspaceChannel(workspaceId, target.userId);
+
   broadcastWorkspaceUpdate({
     workspaceId,
     reason: "member_removed",
