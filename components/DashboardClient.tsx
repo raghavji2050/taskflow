@@ -16,6 +16,7 @@ import { DailyUpdateCard } from "@/components/DailyUpdateCard";
 import type { DailyUpdateGroup } from "@/lib/daily-update-format";
 import { Pagination } from "@/components/Pagination";
 import { CategorySidebar } from "@/components/CategorySidebar";
+import { BoardListsPanel } from "@/components/BoardListsPanel";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { TaskEditModal } from "@/components/TaskEditModal";
@@ -59,6 +60,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
   const [categoryRefreshKey, setCategoryRefreshKey] = useState(0);
+  const [boardListsKey, setBoardListsKey] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const fetchTasks = useCallback(async (
@@ -276,7 +278,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       )}
 
       {bulkMode && selectedIds.size > 0 && (
-        <div className="flex flex-wrap gap-2 rounded-xl border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-800 dark:bg-indigo-950/30">
+        <div className="flex flex-wrap gap-2 rounded-xl border border-[var(--accent)]/20 bg-[var(--accent-soft)] p-3">
           <span className="text-sm font-medium">{selectedIds.size} selected</span>
           <Button size="sm" variant="secondary" onClick={() => handleBulk("complete")}>Complete</Button>
           <Button size="sm" variant="secondary" onClick={() => handleBulk("archive")}>Archive</Button>
@@ -285,18 +287,27 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       )}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(11rem,13rem)_1fr_minmax(14rem,16rem)]">
-        {isPersonal && (
-          <Card className="hidden p-4 lg:block">
-            <CategorySidebar
-              selectedId={categoryId}
-              onSelect={(id) => { setCategoryId(id); setPage(1); }}
-              refreshKey={categoryRefreshKey}
-            />
-          </Card>
-        )}
+        <div className="hidden space-y-4 lg:block">
+          {isPersonal && (
+            <Card className="p-4">
+              <CategorySidebar
+                selectedId={categoryId}
+                onSelect={(id) => { setCategoryId(id); setPage(1); }}
+                refreshKey={categoryRefreshKey}
+              />
+            </Card>
+          )}
+          <BoardListsPanel
+            workspaceId={selectedWorkspaceId}
+            readOnly={!canEditTasks}
+            variant="sidebar"
+            onChange={() => setBoardListsKey((k) => k + 1)}
+            key={boardListsKey}
+          />
+        </div>
 
-        <Card className={cn("overflow-hidden", isPersonal ? "" : "lg:col-span-2")}>
-          <div className="border-b border-zinc-100 px-4 py-3 dark:border-zinc-800 sm:px-5">
+        <Card className="overflow-hidden">
+          <div className="border-b border-[var(--card-border)] px-4 py-3 sm:px-5">
             <TaskFilters
               filters={filters}
               onChange={(f) => { setFilters(f); setPage(1); }}
@@ -312,11 +323,11 @@ export function DashboardClient({ userName }: DashboardClientProps) {
               ))}</div>
             ) : tasks.length === 0 ? (
               <div className="flex flex-col items-center py-16 text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10">
-                  <Sparkles className="h-7 w-7 text-indigo-500" />
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-soft)]">
+                  <Sparkles className="h-7 w-7 text-[var(--accent)]" />
                 </div>
-                <p className="text-base font-semibold">No tasks in this workspace</p>
-                <p className="mt-1 max-w-xs text-sm text-zinc-500">
+                <p className="text-base font-semibold text-[var(--foreground)]">No tasks in this workspace</p>
+                <p className="mt-1 max-w-xs text-sm text-[var(--muted)]">
                   {isPersonal
                     ? "Press N or use New Task above to get started"
                     : "Create a team task or invite members from the panel above"}
@@ -362,7 +373,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       <TaskEditModal
         isOpen={isFormOpen}
         onClose={() => { setIsFormOpen(false); setEditingTask(null); }}
-        title={editingTask ? "Edit Task" : isPersonal ? "New Personal Task" : `New Task in ${selectedWorkspace?.name}`}
+        title={editingTask ? (canEditTasks ? "Edit Task" : "View Task") : isPersonal ? "New Personal Task" : `New Task in ${selectedWorkspace?.name}`}
         editingTask={editingTask}
         workspaceId={selectedWorkspaceId ?? undefined}
         members={!isPersonal ? members.map((m) => m.user) : undefined}
@@ -370,6 +381,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
         isPersonal={isPersonal}
         workspaceName={selectedWorkspace?.name}
         defaultCategoryId={!editingTask ? categoryId : undefined}
+        readOnly={!canEditTasks}
         onSubmit={handleCreateOrUpdate}
         isSubmitting={isSubmitting}
       />

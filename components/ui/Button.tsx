@@ -12,19 +12,19 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-indigo-600 text-white shadow-sm shadow-indigo-600/25 hover:bg-indigo-500 focus-visible:ring-indigo-500 dark:bg-indigo-500 dark:shadow-indigo-500/20 dark:hover:bg-indigo-400",
+    "bg-[var(--accent)] text-white shadow-sm hover:bg-[var(--accent-hover)] focus-visible:ring-[var(--accent)]",
   secondary:
-    "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-zinc-200 dark:hover:bg-zinc-800",
+    "border border-[var(--card-border)] bg-[var(--card)] text-[var(--foreground)] shadow-sm hover:bg-[var(--surface-hover)]",
   danger:
-    "bg-red-600 text-white shadow-sm shadow-red-600/25 hover:bg-red-500 focus-visible:ring-red-500 dark:bg-red-500 dark:hover:bg-red-400",
+    "bg-red-600 text-white shadow-sm hover:bg-red-500 focus-visible:ring-red-500",
   ghost:
-    "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800/80",
+    "text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-xs",
-  md: "h-9 px-4 text-sm",
-  lg: "h-10 px-5 text-sm",
+  sm: "h-8 px-3 text-xs rounded-md",
+  md: "h-9 px-4 text-sm rounded-lg",
+  lg: "h-10 px-5 text-sm rounded-lg",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -44,7 +44,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 dark:focus-visible:ring-offset-zinc-950",
+          "inline-flex items-center justify-center gap-1.5 font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
           variantClasses[variant],
           sizeClasses[size],
           className

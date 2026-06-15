@@ -11,6 +11,7 @@ interface UseRealtimeSyncOptions {
   onRefresh: () => void;
   enabled?: boolean;
   notifyOnRemote?: boolean;
+  refreshOnAnyTaskEvent?: boolean;
 }
 
 export function useRealtimeSync({
@@ -18,6 +19,7 @@ export function useRealtimeSync({
   onRefresh,
   enabled = true,
   notifyOnRemote = true,
+  refreshOnAnyTaskEvent = false,
 }: UseRealtimeSyncOptions) {
   const { data: session } = useSession();
   const { subscribe } = useRealtime();
@@ -28,6 +30,10 @@ export function useRealtimeSync({
     if (!enabled || !session?.user) return;
 
     return subscribe((data: TaskEvent) => {
+      if (refreshOnAnyTaskEvent) {
+        onRefreshRef.current();
+        return;
+      }
       const eventWorkspace = data.workspaceId ?? null;
       if (eventWorkspace !== workspaceId) return;
 
@@ -44,5 +50,5 @@ export function useRealtimeSync({
         );
       }
     });
-  }, [enabled, session?.user, workspaceId, notifyOnRemote, subscribe]);
+  }, [enabled, session?.user, workspaceId, notifyOnRemote, subscribe, refreshOnAnyTaskEvent]);
 }

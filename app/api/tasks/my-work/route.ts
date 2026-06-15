@@ -2,6 +2,22 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { taskListInclude } from "@/lib/tasks";
+import { canEditWorkspaceTasks } from "@/lib/workspace-permissions";
+import type { WorkspaceRole } from "@prisma/client";
+
+function attachCanEdit<T extends { workspaceId: string | null }>(
+  tasks: T[],
+  roleByWorkspace: Map<string, WorkspaceRole>
+) {
+  return tasks.map((task) => ({
+    ...task,
+    canEdit: !task.workspaceId || canEditWorkspaceTasks(
+      roleByWorkspace.has(task.workspaceId)
+        ? { role: roleByWorkspace.get(task.workspaceId)!, canInviteMembers: false }
+        : null
+    ),
+  }));
+}
 
 export async function GET() {
   try {
@@ -10,7 +26,13 @@ export async function GET() {
 
     const now = new Date();
 
-    const [assigned, overdue] = await Promise.all([
+    const memberships = await prisma.workspaceMember.findMany({
+      where: { userId: user.id },
+      select: { workspaceId: true, role: true },
+    });
+    const roleByWorkspace = new Map(memberships.map((m) => [m.workspaceId, m.role as WorkspaceRole]));
+
+    const [assignedRaw, overdueRaw] = await Promise.all([
       prisma.task.findMany({
         where: {
           archived: false,
@@ -35,6 +57,9 @@ export async function GET() {
         take: 20,
       }),
     ]);
+
+    const assigned = attachCanEdit(assignedRaw, roleByWorkspace);
+    const overdue = attachCanEdit(overdueRaw, roleByWorkspace);
 
     const byWorkspace = assigned.reduce<Record<string, typeof assigned>>((acc, task) => {
       const key = task.workspace?.name ?? "Personal";

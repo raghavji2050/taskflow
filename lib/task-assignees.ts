@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { createNotification } from "@/lib/notifications";
+import { logTaskActivity } from "@/lib/activity";
 import { taskListInclude } from "@/lib/tasks";
 
 export async function validateWorkspaceAssignees(
@@ -26,6 +27,7 @@ export async function syncTaskAssignees(params: {
   assigneeIds: string[];
   primaryAssigneeId?: string | null;
   actorId: string;
+  actorName?: string;
   taskTitle?: string;
   workspaceName?: string;
 }) {
@@ -81,6 +83,14 @@ export async function syncTaskAssignees(params: {
         type: "task_assigned",
       });
     }
+  }
+
+  if (newIds.length || removedIds.length) {
+    const parts: string[] = [];
+    if (newIds.length) parts.push(`${newIds.length} added`);
+    if (removedIds.length) parts.push(`${removedIds.length} removed`);
+    const prefix = params.actorName ? `${params.actorName} updated assignees` : "Assignees updated";
+    await logTaskActivity(taskId, "assignees_updated", `${prefix}: ${parts.join(", ")}`);
   }
 
   return { newIds, removedIds };

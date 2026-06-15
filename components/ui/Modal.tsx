@@ -66,7 +66,7 @@ export function Modal({
       role="presentation"
     >
       <div
-        className="absolute inset-0 bg-zinc-950/60 backdrop-blur-[3px] transition-opacity"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -77,24 +77,23 @@ export function Modal({
         className={cn(
           "relative z-10 flex w-full flex-col",
           "max-h-[92dvh] sm:max-h-[min(90vh,860px)]",
-          "rounded-t-2xl border border-zinc-200 bg-white shadow-2xl",
-          "dark:border-zinc-700/80 dark:bg-zinc-900",
+          "rounded-t-2xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl",
           "sm:m-4 sm:rounded-2xl",
           "modal-enter",
           sizeClasses[size],
           className
         )}
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-zinc-100 px-5 py-4 dark:border-zinc-800 sm:px-6">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--card-border)] px-5 py-4 sm:px-6">
           <div className="min-w-0">
             <h2
               id="modal-title"
-              className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+              className="text-lg font-semibold tracking-tight text-[var(--foreground)]"
             >
               {title}
             </h2>
             {description && (
-              <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+              <p className="mt-0.5 text-sm text-[var(--muted)]">{description}</p>
             )}
           </div>
           <Button
@@ -102,7 +101,7 @@ export function Modal({
             size="sm"
             onClick={onClose}
             aria-label="Close"
-            className="h-8 w-8 shrink-0 rounded-lg p-0 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="h-8 w-8 shrink-0 rounded-lg p-0"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -118,7 +117,7 @@ export function Modal({
         </div>
 
         {footer && (
-          <div className="shrink-0 border-t border-zinc-100 px-5 py-4 dark:border-zinc-800 sm:px-6">
+          <div className="shrink-0 border-t border-[var(--card-border)] px-5 py-4 sm:px-6">
             {footer}
           </div>
         )}

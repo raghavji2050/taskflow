@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MessageSquare, Paperclip, Bell, ListChecks, Users, Activity } from "lucide-react";
+import { toast } from "sonner";
 import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
 import { renderCommentBody } from "@/lib/mentions";
-import { toast } from "sonner";
+import { useRealtime } from "@/components/RealtimeProvider";
+import type { TaskEvent } from "@/lib/realtime";
+import { MentionInput } from "@/components/MentionInput";
+import { formatActivityAction } from "@/lib/activity-labels";
+import { formatRelativeDate } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -17,6 +22,7 @@ interface Attachment { id: string; filename: string; url: string }
 interface TaskDetailProps {
   taskId: string;
   readOnly?: boolean;
+  members?: { id: string; name: string }[];
 }
 
 function Section({
@@ -39,7 +45,7 @@ function Section({
   );
 }
 
-export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
+export function TaskDetail({ taskId, readOnly = false, members = [] }: TaskDetailProps) {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -47,9 +53,12 @@ export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState("");
   const [remindAt, setRemindAt] = useState("");
+  const { subscribe } = useRealtime();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const res = await fetch(`/api/tasks/${taskId}`);
     const data = await res.json();
     if (res.ok) {
@@ -59,37 +68,70 @@ export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
       setAssignees(data.task.assignees ?? []);
       setActivities(data.task.activities ?? []);
     }
-  };
+  }, [taskId]);
 
-  useEffect(() => { load(); }, [taskId]);
+  useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    return subscribe((event: TaskEvent) => {
+      if (
+        (event.type === "comment:created" || event.type === "task:updated") &&
+        event.taskId === taskId
+      ) {
+        void load();
+      }
+    });
+  }, [subscribe, taskId, load]);
 
   const addSubtask = async () => {
     if (!newSubtask.trim()) return;
     const res = await fetch(`/api/tasks/${taskId}/subtasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newSubtask }),
+      body: JSON.stringify({ title: newSubtask.trim() }),
     });
-    if (res.ok) { setNewSubtask(""); load(); }
+    if (res.ok) {
+      setNewSubtask("");
+      await load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error ?? "Could not add subtask");
+    }
   };
 
   const toggleSubtask = async (sub: Subtask) => {
-    await fetch(`/api/tasks/${taskId}/subtasks/${sub.id}`, {
+    const res = await fetch(`/api/tasks/${taskId}/subtasks/${sub.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: sub.title, completed: !sub.completed }),
     });
-    load();
+    if (res.ok) await load();
+    else toast.error("Could not update subtask");
   };
 
-  const addComment = async () => {
-    if (!newComment.trim()) return;
+  const postComment = async (body: string, parentId?: string | null) => {
+    if (!body.trim()) return false;
     const res = await fetch(`/api/tasks/${taskId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: newComment }),
+      body: JSON.stringify({ body, parentId: parentId ?? null }),
     });
-    if (res.ok) { setNewComment(""); load(); }
+    if (res.ok) {
+      await load();
+      return true;
+    }
+    return false;
+  };
+
+  const addComment = async () => {
+    if (await postComment(newComment)) setNewComment("");
+  };
+
+  const addReply = async (parentId: string) => {
+    if (await postComment(replyBody, parentId)) {
+      setReplyBody("");
+      setReplyingToId(null);
+    }
   };
 
   const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,8 +140,14 @@ export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
     const form = new FormData();
     form.append("file", file);
     const res = await fetch(`/api/tasks/${taskId}/attachments`, { method: "POST", body: form });
-    if (res.ok) { toast.success("File uploaded"); load(); }
-    else toast.error("Upload failed");
+    if (res.ok) {
+      toast.success("File uploaded");
+      await load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error ?? "Upload failed");
+    }
+    e.target.value = "";
   };
 
   const setReminder = async () => {
@@ -109,7 +157,14 @@ export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ remindAt }),
     });
-    if (res.ok) { toast.success("Reminder set"); setRemindAt(""); }
+    if (res.ok) {
+      toast.success("Reminder set");
+      setRemindAt("");
+      await load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error ?? "Could not set reminder");
+    }
   };
 
   return (
@@ -148,7 +203,12 @@ export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
             placeholder="Add subtask..."
             value={newSubtask}
             onChange={(e) => setNewSubtask(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addSubtask()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void addSubtask();
+              }
+            }}
             className="h-9 text-sm"
           />
           <Button size="sm" onClick={addSubtask} className="h-9 shrink-0">Add</Button>
@@ -163,11 +223,39 @@ export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
           )}
           {comments.map((c) => (
             <div key={c.id} className="rounded-lg bg-zinc-50 px-3 py-2.5 dark:bg-zinc-800/80">
-              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{c.user.name}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{c.user.name}</span>
+                {!readOnly && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-1.5 text-[10px]"
+                    onClick={() => {
+                      setReplyingToId(replyingToId === c.id ? null : c.id);
+                      setReplyBody("");
+                    }}
+                  >
+                    Reply
+                  </Button>
+                )}
+              </div>
               <p
                 className="mt-1 text-sm text-zinc-600 dark:text-zinc-400"
                 dangerouslySetInnerHTML={{ __html: renderCommentBody(c.body) }}
               />
+              {replyingToId === c.id && !readOnly && (
+                <div className="mt-2 flex gap-2">
+                  <MentionInput
+                    value={replyBody}
+                    onChange={setReplyBody}
+                    onSubmit={() => void addReply(c.id)}
+                    members={members}
+                    placeholder={`Reply to ${c.user.name}... Use @Name`}
+                    className="h-8 text-xs"
+                  />
+                  <Button size="sm" className="h-8 shrink-0" onClick={() => void addReply(c.id)}>Post</Button>
+                </div>
+              )}
               {c.replies?.map((r) => (
                 <div key={r.id} className="ml-3 mt-2 border-l-2 border-zinc-200 pl-2 dark:border-zinc-700">
                   <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">{r.user.name}</span>
@@ -182,13 +270,12 @@ export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
         </div>
         {!readOnly && (
         <div className="mt-3 flex gap-2">
-          <Input
-            hideLabel
-            placeholder="Write a comment... Use @Name to mention"
+          <MentionInput
             value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addComment()}
-            className="h-9 text-sm"
+            onChange={setNewComment}
+            onSubmit={addComment}
+            members={members}
+            placeholder="Write a comment... Use @Name to mention"
           />
           <Button size="sm" onClick={addComment} className="h-9 shrink-0">Post</Button>
         </div>
@@ -222,18 +309,20 @@ export function TaskDetail({ taskId, readOnly = false }: TaskDetailProps) {
         )}
       </Section>
 
-      {activities.length > 0 && (
-        <Section icon={Activity} title="Activity">
-          <div className="max-h-32 space-y-1 overflow-y-auto text-xs text-zinc-500">
+      <Section icon={Activity} title="Activity">
+          <div className="max-h-32 space-y-2 overflow-y-auto text-xs text-zinc-500">
+            {activities.length === 0 && (
+              <p className="text-zinc-400">No activity yet — changes will appear here.</p>
+            )}
             {activities.map((a) => (
               <p key={a.id}>
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">{a.action}</span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">{formatActivityAction(a.action)}</span>
                 {a.details ? ` — ${a.details}` : ""}
+                <span className="ml-1 text-zinc-400">· {formatRelativeDate(a.createdAt)}</span>
               </p>
             ))}
           </div>
         </Section>
-      )}
 
       <Section icon={Bell} title="Reminder">
         <p className="mb-3 text-xs text-zinc-400">Get notified before this task is due</p>

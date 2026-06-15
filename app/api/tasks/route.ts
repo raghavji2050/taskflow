@@ -172,6 +172,7 @@ export async function POST(request: Request) {
         completedAt: taskData.status === "COMPLETED" ? new Date() : null,
         dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
         categoryId: taskData.categoryId || null,
+        boardColumnId: taskData.boardColumnId ?? null,
         workspaceId: taskData.workspaceId || null,
         recurrenceRule: taskData.recurrenceRule || null,
         position: (maxPos._max.position ?? 0) + 1,
@@ -191,6 +192,7 @@ export async function POST(request: Request) {
         assigneeIds,
         primaryAssigneeId,
         actorId: user.id,
+        actorName: user.name,
         taskTitle: task.title,
         workspaceName: workspace?.name,
       });

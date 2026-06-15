@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Navbar } from "@/components/Navbar";
+import { ConditionalNavbar } from "@/components/ConditionalNavbar";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
@@ -33,9 +33,9 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full`}
     >
-      <body className="app-bg min-h-full font-sans text-zinc-900 antialiased dark:text-zinc-50">
+      <body className="app-bg min-h-full font-sans text-[var(--foreground)] antialiased">
         <Providers>
-          <Navbar />
+          <ConditionalNavbar />
           <main className="flex-1">{children}</main>
         </Providers>
       </body>

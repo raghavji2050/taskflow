@@ -16,6 +16,7 @@ import { toDateInputValue } from "@/lib/utils";
 
 interface Category { id: string; name: string; color: string }
 interface Tag { id: string; name: string }
+interface BoardColumnOption { id: string; name: string; color: string; status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | null }
 
 interface Member { id: string; name: string; email: string }
 
@@ -46,6 +47,7 @@ export function TaskForm({
 }: TaskFormProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [boardColumns, setBoardColumns] = useState<BoardColumnOption[]>([]);
   const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
@@ -57,11 +59,25 @@ export function TaskForm({
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
       title: "", description: "", priority: "MEDIUM", status: "PENDING",
-      dueDate: "", categoryId: null, recurrenceRule: null,
+      dueDate: "", categoryId: null, boardColumnId: null, recurrenceRule: null,
     },
   });
 
   const dueDate = watch("dueDate");
+  const selectedCategoryId = watch("categoryId");
+  const selectedBoardColumnId = watch("boardColumnId");
+  const selectedStatus = watch("status");
+  const selectedWorkspaceId = watch("workspaceId");
+
+  const effectiveWorkspaceId = workspaceId ?? selectedWorkspaceId ?? null;
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (effectiveWorkspaceId) params.set("workspaceId", effectiveWorkspaceId);
+    fetch(`/api/board-columns?${params}`)
+      .then((r) => r.json())
+      .then((data) => setBoardColumns(data.columns ?? []));
+  }, [effectiveWorkspaceId]);
 
   useEffect(() => {
     Promise.all([
@@ -84,6 +100,7 @@ export function TaskForm({
         status: initialData.status,
         dueDate: toDateInputValue(initialData.dueDate),
         categoryId: (initialData as Task & { categoryId?: string }).categoryId ?? null,
+        boardColumnId: initialData.boardColumnId ?? null,
         workspaceId: workspaceId ?? (initialData as Task & { workspaceId?: string }).workspaceId ?? null,
         recurrenceRule: ((initialData as Task & { recurrenceRule?: string }).recurrenceRule ?? null) as TaskInput["recurrenceRule"],
       });
@@ -99,6 +116,7 @@ export function TaskForm({
         title: "", description: "", priority: "MEDIUM", status: "PENDING",
         dueDate: defaultDueDate ?? "",
         categoryId: defaultCategoryId ?? null,
+        boardColumnId: null,
         recurrenceRule: null, workspaceId: workspaceId ?? null,
       });
       setAssigneeIds([]);
@@ -116,7 +134,22 @@ export function TaskForm({
     }
   }, [categories, defaultCategoryId, initialData, setValue]);
 
-  const selectedCategoryId = watch("categoryId");
+  useEffect(() => {
+    if (boardColumns.length === 0) return;
+
+    const resolved =
+      selectedBoardColumnId && boardColumns.some((c) => c.id === selectedBoardColumnId)
+        ? selectedBoardColumnId
+        : boardColumns.find((c) => c.status === selectedStatus)?.id
+          ?? boardColumns.find((c) => c.status === "PENDING")?.id
+          ?? boardColumns[0]?.id
+          ?? null;
+
+    if (resolved && resolved !== selectedBoardColumnId) {
+      setValue("boardColumnId", resolved, { shouldDirty: false });
+    }
+  }, [boardColumns, selectedBoardColumnId, selectedStatus, setValue]);
+
   const titleField = register("title");
 
   useEffect(() => {
@@ -145,6 +178,22 @@ export function TaskForm({
     );
   };
 
+  const handleBoardListChange = (columnId: string | null) => {
+    setValue("boardColumnId", columnId, { shouldDirty: true });
+    const column = boardColumns.find((c) => c.id === columnId);
+    if (column?.status) {
+      setValue("status", column.status, { shouldDirty: true });
+    }
+  };
+
+  const handleStatusChange = (status: TaskFormValues["status"]) => {
+    setValue("status", status, { shouldDirty: true });
+    const currentColumn = boardColumns.find((c) => c.id === selectedBoardColumnId);
+    if (currentColumn && currentColumn.status === null) return;
+    const match = boardColumns.find((c) => c.status === status);
+    if (match) setValue("boardColumnId", match.id, { shouldDirty: true });
+  };
+
   return (
     <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit(handleFormSubmit)} className="space-y-4">
       <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-4 border-0 p-0">
@@ -165,12 +214,30 @@ export function TaskForm({
           { value: "LOW", label: "Low" }, { value: "MEDIUM", label: "Medium" }, { value: "HIGH", label: "High" },
         ]} error={errors.priority?.message} {...register("priority")} />
 
-        <Select label="Status" options={[
-          { value: "PENDING", label: "Pending" },
-          { value: "IN_PROGRESS", label: "In Progress" },
-          { value: "COMPLETED", label: "Completed" },
-        ]} error={errors.status?.message} {...register("status")} />
+        <Select
+          label="Status"
+          value={selectedStatus}
+          onChange={(e) => handleStatusChange(e.target.value as TaskFormValues["status"])}
+          options={[
+            { value: "PENDING", label: "Pending" },
+            { value: "IN_PROGRESS", label: "In Progress" },
+            { value: "COMPLETED", label: "Completed" },
+          ]}
+          error={errors.status?.message}
+        />
       </div>
+
+      {boardColumns.length > 0 && (
+        <Select
+          label="Board list"
+          value={selectedBoardColumnId ?? ""}
+          onChange={(e) =>
+            handleBoardListChange(e.target.value === "" ? null : e.target.value)
+          }
+          options={boardColumns.map((c) => ({ value: c.id, label: c.name }))}
+          error={errors.boardColumnId?.message}
+        />
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Input label="Due Date" type="date" error={errors.dueDate?.message} {...register("dueDate")} />

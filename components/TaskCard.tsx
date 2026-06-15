@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, Clock, Pencil, Trash2, Archive, ArchiveRestore } from "lucide-react";
+import { Calendar, Clock, Pencil, Trash2, Archive, ArchiveRestore, MessageSquare, Eye } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
 import {
@@ -17,11 +17,13 @@ export interface Task {
   dueDate: string | null;
   archived?: boolean;
   categoryId?: string | null;
+  boardColumnId?: string | null;
   recurrenceRule?: string | null;
   createdAt: string;
   updatedAt: string;
   category?: { id: string; name: string; color: string } | null;
   workspaceId?: string | null;
+  canEdit?: boolean;
   assignees?: TaskAssigneeUser[];
   user?: { id: string; name: string } | null;
   workspace?: { id: string; name: string } | null;
@@ -42,25 +44,20 @@ interface TaskCardProps {
   bulkMode?: boolean;
   showMeta?: boolean;
   readOnly?: boolean;
+  showWorkspace?: boolean;
 }
 
 export function TaskCard({
   task, onEdit, onDelete, onArchive, onToggleStatus,
-  isUpdating = false, selected, onSelect, bulkMode, showMeta = false, readOnly = false,
+  isUpdating = false, selected, onSelect, bulkMode, showMeta = false, readOnly = false, showWorkspace = false,
 }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate, task.status);
   const isCompleted = task.status === "COMPLETED";
   const subtaskDone = task.subtasks?.filter((s) => s.completed).length ?? 0;
   const subtaskTotal = task.subtasks?.length ?? 0;
 
-  const nextStatus = (): Task["status"] => {
-    if (task.status === "PENDING") return "IN_PROGRESS";
-    if (task.status === "IN_PROGRESS") return "COMPLETED";
-    return "PENDING";
-  };
-
   return (
-    <div className={cn("task-row group flex gap-0 overflow-hidden rounded-xl", getPriorityClass(task.priority), isCompleted && "opacity-75", selected && "ring-2 ring-indigo-500")}>
+    <div className={cn("task-row group flex gap-0 overflow-hidden rounded-xl", getPriorityClass(task.priority), isCompleted && "opacity-70", selected && "ring-2 ring-[var(--accent)]")}>
       <div className="task-priority-bar my-3 ml-3" />
 
       <div className="flex flex-1 items-start gap-3 p-3 pl-2 sm:items-center sm:p-4 sm:pl-3">
@@ -69,12 +66,12 @@ export function TaskCard({
             className="mt-1 h-4 w-4 rounded border-zinc-300" />
         )}
 
-        <button type="button" onClick={() => !readOnly && onToggleStatus({ ...task, status: nextStatus() })} disabled={isUpdating || readOnly}
-          className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all sm:mt-0",
-            isCompleted ? "border-emerald-500 bg-emerald-500 text-white" : task.status === "IN_PROGRESS" ? "border-violet-500 bg-violet-500/20" : "border-zinc-300 hover:border-indigo-500 dark:border-zinc-600")}
+        <button type="button" onClick={() => !readOnly && onToggleStatus(task)} disabled={isUpdating || readOnly}
+          className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all sm:mt-0",
+            isCompleted ? "border-emerald-500 bg-emerald-500 text-white" : task.status === "IN_PROGRESS" ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-[var(--card-border)] hover:border-[var(--accent)]")}
           aria-label="Cycle status">
           {isCompleted && <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-          {task.status === "IN_PROGRESS" && <span className="h-2 w-2 rounded-full bg-violet-500" />}
+          {task.status === "IN_PROGRESS" && <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />}
         </button>
 
         <div className="min-w-0 flex-1">
@@ -84,6 +81,11 @@ export function TaskCard({
             <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", getStatusColor(task.status))}>{task.status.replace("_", " ")}</span>
             {task.category && (
               <span className="rounded-md px-1.5 py-0.5 text-[10px] font-medium" style={{ background: `${task.category.color}20`, color: task.category.color }}>{task.category.name}</span>
+            )}
+            {showWorkspace && task.workspace && (
+              <span className="rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400">
+                {task.workspace.name}
+              </span>
             )}
           </div>
 
@@ -96,6 +98,11 @@ export function TaskCard({
             </span>
             <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{formatRelativeDate(task.createdAt)}</span>
             {subtaskTotal > 0 && <span>{subtaskDone}/{subtaskTotal} subtasks</span>}
+            {(task._count?.comments ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5">
+                <MessageSquare className="h-3 w-3" />{task._count?.comments}
+              </span>
+            )}
             {task.recurrenceRule && <span className="text-indigo-400">↻ {task.recurrenceRule.toLowerCase()}</span>}
             {showMeta && task.user && <span>by {task.user.name}</span>}
           </div>
@@ -114,15 +121,19 @@ export function TaskCard({
           )}
         </div>
 
-        {!readOnly && (
-          <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
-            <Button variant="ghost" size="sm" onClick={() => onEdit(task)} className="h-7 w-7 p-0"><Pencil className="h-3.5 w-3.5" /></Button>
+        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
+          <Button variant="ghost" size="sm" onClick={() => onEdit(task)} className="h-7 w-7 p-0" aria-label={readOnly ? "View task" : "Edit task"}>
+            {readOnly ? <Eye className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+          </Button>
+          {!readOnly && (
+            <>
             <Button variant="ghost" size="sm" onClick={() => onArchive(task)} className="h-7 w-7 p-0" aria-label={task.archived ? "Unarchive" : "Archive"}>
               {task.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => onDelete(task)} className="h-7 w-7 p-0 text-red-500 hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></Button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

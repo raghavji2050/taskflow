@@ -67,7 +67,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
             );
             return;
           }
-          if (data.type?.startsWith("task:")) {
+          if (data.type?.startsWith("task:") || data.type === "comment:created") {
             handlersRef.current.forEach((handler) =>
               handler(data as TaskEvent)
             );

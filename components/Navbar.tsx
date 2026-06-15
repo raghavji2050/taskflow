@@ -18,39 +18,39 @@ export function Navbar() {
   useEffect(() => setMounted(true), []);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-200/60 bg-white/70 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-950/70">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 border-b border-[var(--card-border)] bg-[var(--card)]/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href={session ? "/dashboard" : "/"} className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/30">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-white shadow-sm">
             <CheckSquare className="h-4 w-4" strokeWidth={2.5} />
           </div>
-          <span className="text-base font-semibold tracking-tight">TaskFlow</span>
+          <span className="text-base font-bold tracking-tight">TaskFlow</span>
         </Link>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {mounted && (
             <Button variant="ghost" size="sm" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="h-8 w-8 p-0" aria-label="Toggle theme">
+              className="h-9 w-9 p-0" aria-label="Toggle theme">
               {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
           )}
 
           {session ? (
-            <div className="ml-1 flex items-center gap-1.5">
+            <div className="ml-1 flex items-center gap-1">
               <NotificationBell />
               <Link href="/settings">
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Settings">
+                <Button variant="ghost" size="sm" className="h-9 w-9 p-0" aria-label="Settings">
                   <Settings className="h-4 w-4" />
                 </Button>
               </Link>
               {session.user?.role === "ADMIN" && (
                 <Link href="/admin"><Button variant="ghost" size="sm" className="text-xs">Admin</Button></Link>
               )}
-              <div className="hidden items-center gap-2 sm:flex">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-[10px] font-bold text-white">
+              <div className="hidden items-center gap-2 pl-1 sm:flex">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-bold text-white">
                   {getInitials(session.user?.name ?? "U")}
                 </div>
-                <span className="text-sm text-zinc-600 dark:text-zinc-300">{session.user?.name}</span>
+                <span className="text-sm text-[var(--muted)]">{session.user?.name}</span>
               </div>
               <Button
                 variant="secondary"
@@ -59,7 +59,7 @@ export function Navbar() {
                   clearWorkspaceSelection();
                   signOut({ callbackUrl: "/login" });
                 }}
-                className="h-8"
+                className="h-9"
               >
                 <LogOut className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Logout</span>

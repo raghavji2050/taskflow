@@ -71,6 +71,7 @@ export async function PUT(request: Request, context: RouteContext) {
         status: taskData.status,
         dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
         categoryId: taskData.categoryId || null,
+        boardColumnId: taskData.boardColumnId ?? null,
         recurrenceRule: taskData.recurrenceRule || null,
         position: taskData.position,
         ...(completedAt !== undefined && { completedAt }),
@@ -89,6 +90,7 @@ export async function PUT(request: Request, context: RouteContext) {
         assigneeIds: assigneeIds ?? [],
         primaryAssigneeId,
         actorId: user.id,
+        actorName: user.name,
         taskTitle: taskData.title,
         workspaceName: workspace?.name,
       });

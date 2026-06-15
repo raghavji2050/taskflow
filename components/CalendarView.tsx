@@ -13,6 +13,7 @@ import {
 } from "date-fns";
 import { cn, getPriorityColor, isSameCalendarDay } from "@/lib/utils";
 import type { Task } from "@/components/TaskCard";
+import { AssigneeChips } from "@/components/AssigneeChips";
 import { Card } from "@/components/ui/Card";
 
 interface CalendarViewProps {
@@ -20,11 +21,12 @@ interface CalendarViewProps {
   month: Date;
   onEdit: (task: Task) => void;
   onDayClick?: (day: Date) => void;
+  showCreateHint?: boolean;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function CalendarView({ tasks, month, onEdit, onDayClick }: CalendarViewProps) {
+export function CalendarView({ tasks, month, onEdit, onDayClick, showCreateHint = true }: CalendarViewProps) {
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(month);
     const monthEnd = endOfMonth(month);
@@ -105,11 +107,16 @@ export function CalendarView({ tasks, month, onEdit, onDayClick }: CalendarViewP
                         }
                       }}
                       className={cn(
-                        "block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium",
+                        "block w-full rounded px-1 py-0.5 text-left text-[10px] font-medium",
                         getPriorityColor(task.priority)
                       )}
                     >
-                      {task.title}
+                      <span className="block truncate">{task.title}</span>
+                      {task.assignees && task.assignees.length > 0 && (
+                        <span className="mt-0.5 block" onClick={(e) => e.stopPropagation()}>
+                          <AssigneeChips assignees={task.assignees} compact />
+                        </span>
+                      )}
                     </span>
                   ))}
                   {dayTasks.length > 3 && (
@@ -123,9 +130,11 @@ export function CalendarView({ tasks, month, onEdit, onDayClick }: CalendarViewP
           })}
         </div>
 
+        {showCreateHint && (
         <p className="mt-3 text-center text-xs text-zinc-400">
           Click a day to add a task with that due date
         </p>
+        )}
       </Card>
 
       {unscheduled.length > 0 && (
@@ -140,11 +149,16 @@ export function CalendarView({ tasks, month, onEdit, onDayClick }: CalendarViewP
                 type="button"
                 onClick={() => onEdit(task)}
                 className={cn(
-                  "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-opacity hover:opacity-80",
+                  "rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-opacity hover:opacity-80",
                   getPriorityColor(task.priority)
                 )}
               >
-                {task.title}
+                <span className="block truncate">{task.title}</span>
+                {task.assignees && task.assignees.length > 0 && (
+                  <span className="mt-1 block" onClick={(e) => e.stopPropagation()}>
+                    <AssigneeChips assignees={task.assignees} compact />
+                  </span>
+                )}
               </button>
             ))}
           </div>

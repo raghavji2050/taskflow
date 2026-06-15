@@ -52,6 +52,7 @@ model User {
   taskAssignments         TaskAssignee[]
   taskAssignmentsMade     TaskAssignee[]            @relation("TaskAssignmentsMade")
   categories              Category[]
+  boardColumns            BoardColumn[]
   tags                    Tag[]
   comments                Comment[]
   notifications           Notification[]
@@ -131,12 +132,14 @@ model Task {
   recurrenceRule String?
   userId         String
   categoryId     String?
+  boardColumnId  String?
   workspaceId    String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
   user        User           @relation("TaskOwner", fields: [userId], references: [id], onDelete: Cascade)
   category    Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  boardColumn BoardColumn?   @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
   workspace   Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   assignees   TaskAssignee[]
   subtasks    Subtask[]
@@ -152,7 +155,28 @@ model Task {
   @@index([dueDate])
   @@index([archived])
   @@index([categoryId])
+  @@index([boardColumnId])
   @@index([workspaceId])
+}
+
+model BoardColumn {
+  id          String      @id @default(cuid())
+  name        String
+  color       String      @default("#6366f1")
+  position    Int         @default(0)
+  status      TaskStatus?
+  userId      String?
+  workspaceId String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user      User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([userId, workspaceId])
 }
 
 model Subtask {
@@ -272,6 +296,7 @@ model Workspace {
   invitations        WorkspaceInvitation[]
   tasks              Task[]
   automationRules    AutomationRule[]
+  boardColumns       BoardColumn[]
 }
 
 model AutomationRule {

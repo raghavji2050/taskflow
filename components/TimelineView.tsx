@@ -73,9 +73,12 @@ export function TimelineView({ tasks, onEdit }: TimelineViewProps) {
                 key={t.id}
                 type="button"
                 onClick={() => onEdit(t)}
-                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
+                className="inline-flex flex-col items-center gap-2 rounded-lg border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700"
               >
-                {t.title}
+                <span>{t.title}</span>
+                {t.assignees && t.assignees.length > 0 && (
+                  <AssigneeChips assignees={t.assignees} compact />
+                )}
               </button>
             ))}
           </div>

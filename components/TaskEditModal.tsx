@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Layers } from "lucide-react";
+import { FileText, MessageSquare } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { TaskForm } from "@/components/TaskForm";
 import { TaskDetail } from "@/components/TaskDetail";
@@ -30,6 +30,7 @@ interface TaskEditModalProps {
   isSubmitting?: boolean;
   defaultDueDate?: string;
   defaultCategoryId?: string | null;
+  readOnly?: boolean;
 }
 
 export function TaskEditModal({
@@ -46,10 +47,12 @@ export function TaskEditModal({
   isSubmitting,
   defaultDueDate,
   defaultCategoryId,
+  readOnly: readOnlyProp,
 }: TaskEditModalProps) {
   const [tab, setTab] = useState<"details" | "more">("details");
   const { canEditTasks } = useWorkspace();
-  const readOnly = !canEditTasks;
+  const readOnly = readOnlyProp ?? !canEditTasks;
+  const commentCount = editingTask?._count?.comments ?? 0;
 
   const handleClose = () => {
     setTab("details");
@@ -57,31 +60,34 @@ export function TaskEditModal({
   };
 
   const showTabs = !!editingTask;
+  const modalTitle = readOnly && editingTask ? "View Task" : title;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={title}
+      title={modalTitle}
       description={
-        editingTask
-          ? "Update task fields or manage subtasks, comments, and attachments."
-          : isPersonal
-            ? "Add a task to your personal workspace."
-            : `This task will be shared with everyone in ${workspaceName}.`
+        readOnly && editingTask
+          ? "You can view this task but cannot make changes in this workspace."
+          : editingTask
+            ? "Update task fields or collaborate with your team."
+            : isPersonal
+              ? "Add a task to your personal workspace."
+              : `This task will be shared with everyone in ${workspaceName}.`
       }
       size={editingTask ? "xl" : "lg"}
     >
       {showTabs && (
-        <div className="mb-4 flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800/80">
+        <div className="mb-4 flex gap-1 rounded-lg border border-[var(--card-border)] bg-[var(--background)] p-1">
           <button
             type="button"
             onClick={() => setTab("details")}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               tab === "details"
-                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-50"
-                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+                : "text-[var(--muted)] hover:text-[var(--foreground)]"
             )}
           >
             <FileText className="h-4 w-4" />
@@ -91,14 +97,19 @@ export function TaskEditModal({
             type="button"
             onClick={() => setTab("more")}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "relative flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               tab === "more"
-                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-50"
-                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+                : "text-[var(--muted)] hover:text-[var(--foreground)]"
             )}
           >
-            <Layers className="h-4 w-4" />
-            Subtasks & More
+            <MessageSquare className="h-4 w-4" />
+            Collaboration
+            {commentCount > 0 && (
+              <span className="ml-0.5 rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {commentCount}
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -120,7 +131,11 @@ export function TaskEditModal({
       )}
 
       {showTabs && tab === "more" && editingTask && (
-        <TaskDetail taskId={editingTask.id} readOnly={readOnly} />
+        <TaskDetail
+          taskId={editingTask.id}
+          readOnly={readOnly}
+          members={members?.map((m) => ({ id: m.id, name: m.name })) ?? []}
+        />
       )}
     </Modal>
   );

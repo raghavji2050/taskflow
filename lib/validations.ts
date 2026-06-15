@@ -22,6 +22,7 @@ export const taskSchema = z.object({
     .nullable()
     .refine((v) => !v || !Number.isNaN(Date.parse(v)), "Invalid due date"),
   categoryId: z.string().optional().nullable(),
+  boardColumnId: z.string().optional().nullable(),
   assigneeIds: z.array(z.string()).default([]),
   primaryAssigneeId: z.string().optional().nullable(),
   workspaceId: z.string().optional().nullable(),
@@ -48,6 +49,12 @@ export const taskQuerySchema = z.object({
 export const categorySchema = z.object({
   name: z.string().min(1).max(50),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+});
+
+export const boardColumnSchema = z.object({
+  name: z.string().min(1).max(50),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED"]).optional().nullable(),
 });
 
 export const tagSchema = z.object({

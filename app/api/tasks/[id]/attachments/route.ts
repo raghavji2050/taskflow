@@ -3,6 +3,8 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
+import { canAccessTask, canEditTask } from "@/lib/workspace";
+import { broadcastTaskEvent } from "@/lib/realtime";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -12,8 +14,11 @@ export async function POST(request: Request, context: RouteContext) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await context.params;
-    const task = await prisma.task.findFirst({ where: { id, userId: user.id } });
+    const task = await canAccessTask(user.id, id);
     if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!(await canEditTask(user.id, id))) {
+      return NextResponse.json({ error: "You do not have permission to edit this task" }, { status: 403 });
+    }
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -36,6 +41,14 @@ export async function POST(request: Request, context: RouteContext) {
         size: buffer.length,
         taskId: id,
       },
+    });
+
+    broadcastTaskEvent({
+      type: "task:updated",
+      workspaceId: task.workspaceId,
+      ownerId: task.userId,
+      actorId: user.id,
+      taskId: id,
     });
 
     return NextResponse.json({ attachment }, { status: 201 });

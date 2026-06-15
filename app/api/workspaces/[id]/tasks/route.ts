@@ -76,6 +76,7 @@ export async function POST(request: Request, context: RouteContext) {
         assigneeIds,
         primaryAssigneeId,
         actorId: user.id,
+        actorName: user.name,
         taskTitle: task.title,
         workspaceName: workspace?.name,
       });

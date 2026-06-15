@@ -2,6 +2,7 @@
 
 import { Clock } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { AssigneeChips } from "@/components/AssigneeChips";
 import { cn, formatRelativeDate, getPriorityColor } from "@/lib/utils";
 import type { Task } from "@/components/TaskCard";
 
@@ -30,10 +31,12 @@ export function RecentTasks({ tasks, onSelect, showMeta = false }: RecentTasksPr
                 <p className={cn("truncate text-sm font-medium text-zinc-800 dark:text-zinc-200", task.status === "COMPLETED" && "line-through opacity-60")}>{task.title}</p>
                 <p className="mt-0.5 flex items-center gap-1 text-[11px] text-zinc-400">
                   <Clock className="h-3 w-3" />{formatRelativeDate(task.createdAt)}
-                  {showMeta && task.assignees && task.assignees.length > 0 && (
-                    <span>· {task.assignees.map((a) => a.user.name).join(", ")}</span>
-                  )}
                 </p>
+                {showMeta && task.assignees && task.assignees.length > 0 && (
+                  <div className="mt-1">
+                    <AssigneeChips assignees={task.assignees} compact />
+                  </div>
+                )}
               </div>
               <span className={cn("shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase", getPriorityColor(task.priority))}>{task.priority}</span>
             </button>

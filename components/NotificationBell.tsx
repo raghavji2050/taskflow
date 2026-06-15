@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
 import { WORKSPACE_STORAGE_KEY } from "@/components/WorkspaceProvider";
@@ -25,11 +26,41 @@ interface Notification {
   createdAt: string;
 }
 
+const PANEL_WIDTH = 360;
+
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setMounted(true), []);
+
+  const updatePosition = useCallback(() => {
+    const el = buttonRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    let left = rect.right + 8;
+    if (left + PANEL_WIDTH > window.innerWidth - 12) {
+      left = rect.left - PANEL_WIDTH - 8;
+    }
+    if (left < 12) left = 12;
+    setPosition({ top: rect.top, left });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, updatePosition]);
 
   const fetchNotifications = useCallback(async () => {
     const res = await fetch("/api/notifications");
@@ -89,84 +120,90 @@ export function NotificationBell() {
     }
   };
 
+  const panel = open && mounted ? (
+    <>
+      <div className="fixed inset-0 z-[200]" onClick={() => setOpen(false)} aria-hidden="true" />
+      <div
+        className="fixed z-[201] overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl"
+        style={{ top: position.top, left: position.left, width: PANEL_WIDTH }}
+      >
+        <div className="flex items-center justify-between border-b border-[var(--card-border)] px-4 py-3">
+          <span className="text-sm font-semibold text-[var(--foreground)]">Notifications</span>
+          {unreadCount > 0 && (
+            <button type="button" onClick={markAllRead} className="text-xs font-medium text-[var(--accent)] hover:underline">
+              Mark all read
+            </button>
+          )}
+        </div>
+        <div className="max-h-[min(420px,70vh)] overflow-y-auto">
+          {notifications.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-[var(--muted)]">No notifications</p>
+          ) : (
+            notifications.map((n) => {
+              const isPendingInvite =
+                n.type === "workspace_invite" &&
+                n.inviteId &&
+                n.invite?.status === "PENDING";
+
+              return (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "border-b border-[var(--card-border)] px-4 py-3 last:border-0",
+                    !n.read && "bg-[var(--accent-soft)]/40 dark:bg-[var(--accent-muted)]/25"
+                  )}
+                >
+                  <p className="text-sm font-medium text-[var(--foreground)]">{n.title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">{n.body}</p>
+                  {isPendingInvite && n.inviteId && (
+                    <div className="mt-2.5 flex gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 flex-1 text-xs"
+                        isLoading={actingId === n.inviteId}
+                        onClick={() => handleInviteAction(n.inviteId!, "accept")}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 flex-1 text-xs"
+                        disabled={actingId === n.inviteId}
+                        onClick={() => handleInviteAction(n.inviteId!, "decline")}
+                      >
+                        Decline
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </>
+  ) : null;
+
   return (
-    <div className="relative">
+    <>
       <Button
+        ref={buttonRef}
         variant="ghost"
         size="sm"
         onClick={() => setOpen(!open)}
-        className="relative h-8 w-8 p-0"
+        className="relative h-8 w-8 shrink-0 rounded-lg p-0 text-[var(--muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]"
         aria-label="Notifications"
+        aria-expanded={open}
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </Button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-50 w-80 rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-2 dark:border-zinc-800">
-              <span className="text-sm font-semibold">Notifications</span>
-              {unreadCount > 0 && (
-                <button type="button" onClick={markAllRead} className="text-xs text-indigo-500">
-                  Mark all read
-                </button>
-              )}
-            </div>
-            <div className="max-h-80 overflow-y-auto">
-              {notifications.length === 0 ? (
-                <p className="px-4 py-6 text-center text-xs text-zinc-400">No notifications</p>
-              ) : (
-                notifications.map((n) => {
-                  const isPendingInvite =
-                    n.type === "workspace_invite" &&
-                    n.inviteId &&
-                    n.invite?.status === "PENDING";
-
-                  return (
-                    <div
-                      key={n.id}
-                      className={cn(
-                        "border-b border-zinc-50 px-4 py-3 last:border-0 dark:border-zinc-800",
-                        !n.read && "bg-indigo-500/5"
-                      )}
-                    >
-                      <p className="text-xs font-medium">{n.title}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500">{n.body}</p>
-                      {isPendingInvite && n.inviteId && (
-                        <div className="mt-2 flex gap-2">
-                          <Button
-                            size="sm"
-                            className="h-7 flex-1 text-xs"
-                            isLoading={actingId === n.inviteId}
-                            onClick={() => handleInviteAction(n.inviteId!, "accept")}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-7 flex-1 text-xs"
-                            disabled={actingId === n.inviteId}
-                            onClick={() => handleInviteAction(n.inviteId!, "decline")}
-                          >
-                            Decline
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+      {mounted && panel ? createPortal(panel, document.body) : null}
+    </>
   );
 }

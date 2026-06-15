@@ -18,6 +18,7 @@ export function toTaskInput(task: Task, overrides?: Partial<TaskInput>): TaskInp
     status: task.status,
     dueDate: task.dueDate,
     categoryId: task.categoryId ?? null,
+    boardColumnId: task.boardColumnId ?? null,
     workspaceId: task.workspaceId ?? null,
     assigneeIds,
     primaryAssigneeId,
