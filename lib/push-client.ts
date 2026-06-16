@@ -11,12 +11,126 @@ export function urlBase64ToUint8Array(base64String: string) {
 }
 
 export async function getVapidPublicKey(): Promise<string | null> {
+  // Prefer the live server key so it always matches VAPID_PRIVATE_KEY (avoids stale build-time env).
+  try {
+    const res = await fetch("/api/notifications/vapid-key");
+    if (res.ok) {
+      const data = (await res.json()) as { publicKey?: string | null; configured?: boolean };
+      if (data.publicKey) return data.publicKey;
+      if (!data.configured) return null;
+    }
+  } catch {
+    // fall through to build-time key
+  }
   if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
     return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   }
-  const res = await fetch("/api/notifications/vapid-key");
-  const data = await res.json();
-  return data.publicKey ?? null;
+  return null;
+}
+
+export function parseVapidPublicKey(base64String: string): Uint8Array {
+  const key = base64String.trim();
+  if (!key) {
+    throw new Error("Push is not configured on the server. Ask an admin to run: npm run generate:vapid");
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = urlBase64ToUint8Array(key);
+  } catch {
+    throw new Error("Invalid VAPID public key. Regenerate keys with: npm run generate:vapid");
+  }
+  if (bytes.length !== 65) {
+    throw new Error(
+      `Invalid VAPID public key length (${bytes.length}, expected 65). Regenerate with: npm run generate:vapid`
+    );
+  }
+  return bytes;
+}
+
+export function getPushSubscribeErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message && !error.message.includes("push service")) {
+    return error.message;
+  }
+  const name =
+    error && typeof error === "object" && "name" in error ? String((error as { name: string }).name) : "";
+  const message = error instanceof Error ? error.message : String(error);
+  if (name === "AbortError" || message.includes("push service error")) {
+    return (
+      "Browser push registration failed. On Brave: open brave://settings/privacy, enable " +
+      '"Use Google services for push messaging", allow notifications for this site, then retry. ' +
+      "Also verify VAPID keys are set on the server (npm run generate:vapid) and restart the app."
+    );
+  }
+  if (name === "NotAllowedError") {
+    return "Notifications are blocked in your browser settings.";
+  }
+  return message || "Failed to enable push notifications";
+}
+
+async function savePushSubscription(subscription: PushSubscription) {
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+    throw new Error("Invalid push subscription from browser");
+  }
+
+  const res = await fetch("/api/notifications/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      endpoint: json.endpoint,
+      keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+    }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(
+      (data as { error?: string }).error ?? "Server rejected push subscription"
+    );
+  }
+}
+
+export async function subscribeToPush(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+
+  const vapidKey = await getVapidPublicKey();
+  if (!vapidKey) {
+    throw new Error("Push is not configured on the server. Run: npm run generate:vapid");
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return false;
+
+  const applicationServerKey = parseVapidPublicKey(vapidKey);
+  const registration = await ensureServiceWorker();
+  let subscription = await registration.pushManager.getSubscription();
+
+  if (subscription) {
+    try {
+      await savePushSubscription(subscription);
+      return true;
+    } catch {
+      try {
+        await subscription.unsubscribe();
+      } catch {
+        // ignore
+      }
+      subscription = null;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  }
+
+  try {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: applicationServerKey as BufferSource,
+    });
+  } catch (error) {
+    throw new Error(getPushSubscribeErrorMessage(error));
+  }
+
+  await savePushSubscription(subscription);
+  return true;
 }
 
 export async function ensureServiceWorker() {
@@ -32,45 +146,6 @@ export function isPushSupported() {
     "PushManager" in window &&
     window.isSecureContext
   );
-}
-
-export async function subscribeToPush(): Promise<boolean> {
-  if (!isPushSupported()) return false;
-
-  const vapidKey = await getVapidPublicKey();
-  if (!vapidKey) return false;
-
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return false;
-
-  const registration = await ensureServiceWorker();
-  let subscription = await registration.pushManager.getSubscription();
-
-  if (subscription) {
-    await subscription.unsubscribe();
-    subscription = null;
-  }
-
-  subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidKey),
-  });
-
-  const json = subscription.toJSON();
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-    throw new Error("Invalid push subscription from browser");
-  }
-
-  const res = await fetch("/api/notifications/subscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      endpoint: json.endpoint,
-      keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-    }),
-  });
-
-  return res.ok;
 }
 
 export async function isPushSubscribed(): Promise<boolean> {
@@ -128,8 +203,8 @@ export function usePushEnrollment() {
       toast.error("Could not enable notifications");
       await refresh();
       return false;
-    } catch {
-      toast.error("Could not enable notifications");
+    } catch (error) {
+      toast.error(getPushSubscribeErrorMessage(error));
       return false;
     } finally {
       setBusy(false);
@@ -159,10 +234,12 @@ export function showPushEnrollmentToast() {
       label: "Enable",
       onClick: () => {
         markPushPrompted();
-        void subscribeToPush().then((ok) => {
-          if (ok) toast.success("Desktop notifications enabled");
-          else toast.error("Could not enable notifications");
-        });
+        void subscribeToPush()
+          .then((ok) => {
+            if (ok) toast.success("Desktop notifications enabled");
+            else toast.error("Could not enable notifications");
+          })
+          .catch((error) => toast.error(getPushSubscribeErrorMessage(error)));
       },
     },
   });

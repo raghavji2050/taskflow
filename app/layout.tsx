@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ConditionalNavbar } from "@/components/ConditionalNavbar";
 import { Providers } from "@/components/providers";
+import { rootMetadata } from "@/lib/metadata";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,13 +15,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "TaskFlow",
-    template: "%s · TaskFlow",
-  },
-  description: "A professional full-stack task management application built with Next.js",
-};
+export const metadata: Metadata = rootMetadata;
 
 export default function RootLayout({
   children,

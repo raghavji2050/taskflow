@@ -1,7 +1,14 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
+import { appPageMetadata } from "@/lib/metadata";
+
+export const metadata: Metadata = appPageMetadata(
+  "Admin",
+  "Manage users and application settings."
+);
 
 export default async function AdminPage() {
   const session = await auth();

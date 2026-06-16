@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import {
   ensureServiceWorker,
+  getPushSubscribeErrorMessage,
   isPushSubscribed,
   isPushSupported,
   subscribeToPush,
@@ -89,8 +90,7 @@ export function PushSubscribe({
       setStatus("enabled");
       window.dispatchEvent(new CustomEvent("taskflow:push-status"));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to enable push";
-      toast.error(message);
+      toast.error(getPushSubscribeErrorMessage(error));
       console.error("Push subscribe error:", error);
     } finally {
       setBusy(false);

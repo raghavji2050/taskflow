@@ -328,7 +328,10 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       if (markReadInFlightRef.current) return;
       markReadInFlightRef.current = true;
       void fetch(`/api/conversations/${convId}/read`, { method: "PATCH" })
-        .then(() => onReadRef.current?.())
+        .then(() => {
+          onReadRef.current?.();
+          window.dispatchEvent(new CustomEvent("taskflow:chat-unread"));
+        })
         .catch(() => {})
         .finally(() => {
           markReadInFlightRef.current = false;

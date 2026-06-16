@@ -1,6 +1,8 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { createPageMetadata, SITE_DESCRIPTION } from "@/lib/metadata";
 import {
   ArrowRight,
   BarChart3,
@@ -12,6 +14,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+
+export const metadata: Metadata = createPageMetadata({
+  title: "Task & team management",
+  description: SITE_DESCRIPTION,
+});
 
 const features = [
   {

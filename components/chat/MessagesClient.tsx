@@ -192,8 +192,9 @@ export function MessagesClient() {
   const handleRead = useCallback(() => {
     setConversations((prev) => {
       const target = prev.find((c) => c.id === selectedId);
-      if (!target || target.unreadCount === 0) return prev;
+      if (!target) return prev;
       queueMicrotask(() => window.dispatchEvent(new CustomEvent("taskflow:chat-unread")));
+      if (target.unreadCount === 0) return prev;
       return prev.map((c) => (c.id === selectedId ? { ...c, unreadCount: 0 } : c));
     });
   }, [selectedId]);

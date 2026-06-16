@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getActiveConversationId } from "@/lib/active-chat";
 
 export function useChatUnread() {
   const { data: session, status } = useSession();
+  const pathname = usePathname();
   const [totalUnread, setTotalUnread] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionUserIdRef = useRef(session?.user?.id);
@@ -31,6 +32,12 @@ export function useChatUnread() {
   }, [refresh]);
 
   useEffect(() => {
+    if (pathname?.startsWith("/dashboard/messages")) {
+      void refresh();
+    }
+  }, [pathname, refresh]);
+
+  useEffect(() => {
     const onMessage = (event: Event) => {
       const detail = (event as CustomEvent).detail as {
         type?: string;
@@ -41,14 +48,14 @@ export function useChatUnread() {
         detail?.type === "message:created" &&
         detail.conversationId &&
         detail.senderId &&
-        detail.senderId !== sessionUserIdRef.current &&
-        detail.conversationId !== getActiveConversationId()
+        detail.senderId !== sessionUserIdRef.current
       ) {
-        setTotalUnread((n) => n + 1);
+        debouncedRefresh();
       }
-      debouncedRefresh();
     };
-    const onUnread = () => debouncedRefresh();
+    const onUnread = () => {
+      void refresh();
+    };
     window.addEventListener("taskflow:message", onMessage);
     window.addEventListener("taskflow:chat-unread", onUnread);
     return () => {
@@ -56,7 +63,7 @@ export function useChatUnread() {
       window.removeEventListener("taskflow:message", onMessage);
       window.removeEventListener("taskflow:chat-unread", onUnread);
     };
-  }, [debouncedRefresh]);
+  }, [debouncedRefresh, refresh]);
 
   return { totalUnread, refresh };
 }
