@@ -1,3 +1,10 @@
+import {
+  isPusherConfigured,
+  triggerConversationChannel,
+  triggerUserChannel,
+  triggerWorkspaceChannel,
+} from "@/lib/pusher-server";
+
 export type TaskEventType = "task:created" | "task:updated" | "task:deleted" | "task:bulk" | "comment:created";
 
 export interface TaskEvent {
@@ -292,10 +299,17 @@ export function broadcastPresenceSync() {
 export function broadcastTaskEvent(
   event: Omit<TaskEvent, "at"> & { at?: string }
 ) {
-  getRealtimeHub().publish({
+  const payload = {
     ...event,
     at: event.at ?? new Date().toISOString(),
-  });
+  };
+  if (event.workspaceId) {
+    void triggerWorkspaceChannel(event.workspaceId, payload).then((sent) => {
+      if (!sent) getRealtimeHub().publish(payload);
+    });
+    return;
+  }
+  getRealtimeHub().publish(payload);
 }
 
 export function broadcastNotification(
@@ -308,7 +322,7 @@ export function broadcastNotification(
     messageId?: string;
   }
 ) {
-  getRealtimeHub().publishToUser(userId, {
+  const event = {
     type: "notification:new",
     userId,
     title: payload?.title,
@@ -317,7 +331,11 @@ export function broadcastNotification(
     conversationId: payload?.conversationId,
     messageId: payload?.messageId,
     at: new Date().toISOString(),
-  } satisfies NotificationEvent);
+  } satisfies NotificationEvent;
+
+  void triggerUserChannel(userId, event).then((sent) => {
+    if (!sent) getRealtimeHub().publishToUser(userId, event);
+  });
 }
 
 export function broadcastWorkspaceUpdate(params: {
@@ -327,28 +345,35 @@ export function broadcastWorkspaceUpdate(params: {
   notifyUserIds?: string[];
 }) {
   const at = new Date().toISOString();
-  getRealtimeHub().publishToWorkspace(params.workspaceId, {
+  const workspaceEvent = {
     type: "workspace:updated",
     workspaceId: params.workspaceId,
     reason: params.reason,
     actorId: params.actorId,
     at,
-  } satisfies WorkspaceEvent);
+  } satisfies WorkspaceEvent;
+
+  void triggerWorkspaceChannel(params.workspaceId, workspaceEvent).then((sent) => {
+    if (!sent) getRealtimeHub().publishToWorkspace(params.workspaceId, workspaceEvent);
+  });
 
   for (const userId of params.notifyUserIds ?? []) {
-    getRealtimeHub().publishToUser(userId, {
+    const membershipEvent = {
       type: "workspace:membership_changed",
       workspaceId: params.workspaceId,
       userId,
       at,
-    } satisfies WorkspaceMembershipEvent);
+    } satisfies WorkspaceMembershipEvent;
+    void triggerUserChannel(userId, membershipEvent).then((sent) => {
+      if (!sent) getRealtimeHub().publishToUser(userId, membershipEvent);
+    });
   }
 }
 
 export function broadcastMessageEvent(
   params: Omit<MessageEvent, "type" | "at"> & { at?: string; type?: MessageEvent["type"] }
 ) {
-  getRealtimeHub().publishToUser(params.recipientId, {
+  const event = {
     type: params.type ?? "message:created",
     conversationId: params.conversationId,
     messageId: params.messageId,
@@ -357,7 +382,11 @@ export function broadcastMessageEvent(
     recipientId: params.recipientId,
     message: params.message,
     at: params.at ?? new Date().toISOString(),
-  } satisfies MessageEvent);
+  } satisfies MessageEvent;
+
+  void triggerUserChannel(params.recipientId, event).then((sent) => {
+    if (!sent) getRealtimeHub().publishToUser(params.recipientId, event);
+  });
 }
 
 export function broadcastMessageToConversation(
@@ -371,7 +400,7 @@ export function broadcastMessageToConversation(
   const at = params.at ?? new Date().toISOString();
   const type = params.type ?? "message:updated";
   for (const recipientId of participantIds) {
-    getRealtimeHub().publishToUser(recipientId, {
+    const event = {
       type,
       conversationId: params.conversationId,
       messageId: params.messageId,
@@ -380,7 +409,10 @@ export function broadcastMessageToConversation(
       recipientId,
       message: params.message,
       at,
-    } satisfies MessageEvent);
+    } satisfies MessageEvent;
+    void triggerUserChannel(recipientId, event).then((sent) => {
+      if (!sent) getRealtimeHub().publishToUser(recipientId, event);
+    });
   }
 }
 
@@ -401,7 +433,9 @@ export function broadcastConversationReceipt(
   };
   for (const recipientId of participantIds) {
     if (recipientId !== userId) {
-      getRealtimeHub().publishToUser(recipientId, event);
+      void triggerUserChannel(recipientId, event).then((sent) => {
+        if (!sent) getRealtimeHub().publishToUser(recipientId, event);
+      });
     }
   }
 }
@@ -412,5 +446,16 @@ export function setConversationTyping(
   typing: boolean,
   participantIds: string[]
 ) {
+  if (isPusherConfigured()) {
+    const event: TypingChangedEvent = {
+      type: "typing:changed",
+      conversationId,
+      userId,
+      typing,
+      at: new Date().toISOString(),
+    };
+    void triggerConversationChannel(conversationId, event);
+    return;
+  }
   getRealtimeHub().setTyping(userId, conversationId, typing, participantIds);
 }

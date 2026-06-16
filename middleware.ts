@@ -10,6 +10,7 @@ const protectedApiPrefixes = [
   "/api/notifications",
   "/api/workspaces/:path*",
   "/api/events",
+  "/api/documents",
 ];
 
 export default auth((req) => {
@@ -61,6 +62,7 @@ export const config = {
     "/api/user/:path*",
     "/api/workspaces/:path*",
     "/api/events",
+    "/api/documents/:path*",
     "/api/admin/:path*",
   ],
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { MessageSquare, Paperclip, Bell, ListChecks, Users, Activity } from "lucide-react";
+import { MessageSquare, Paperclip, Bell, ListChecks, Users, Activity, BookOpen, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
 import { renderCommentBody } from "@/lib/mentions";
@@ -13,11 +13,14 @@ import { formatRelativeDate } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { LinkDocumentPicker } from "@/components/docs/LinkDocumentPicker";
+import { DocumentQuickModal } from "@/components/docs/DocumentQuickModal";
 
 interface Subtask { id: string; title: string; completed: boolean }
 interface Comment { id: string; body: string; user: { name: string }; createdAt: string; replies?: Comment[] }
 interface Activity { id: string; action: string; details: string | null; createdAt: string }
 interface Attachment { id: string; filename: string; url: string }
+interface LinkedDoc { id: string; title: string; type: string; updatedAt: string }
 
 interface TaskDetailProps {
   taskId: string;
@@ -51,11 +54,14 @@ export function TaskDetail({ taskId, readOnly = false, members = [] }: TaskDetai
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [assignees, setAssignees] = useState<TaskAssigneeUser[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [linkedDocs, setLinkedDocs] = useState<LinkedDoc[]>([]);
+  const [taskWorkspaceId, setTaskWorkspaceId] = useState<string | null>(null);
   const [newSubtask, setNewSubtask] = useState("");
   const [newComment, setNewComment] = useState("");
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [remindAt, setRemindAt] = useState("");
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null);
   const { subscribe } = useRealtime();
 
   const load = useCallback(async () => {
@@ -67,7 +73,11 @@ export function TaskDetail({ taskId, readOnly = false, members = [] }: TaskDetai
       setAttachments(data.task.attachments ?? []);
       setAssignees(data.task.assignees ?? []);
       setActivities(data.task.activities ?? []);
+      setTaskWorkspaceId(data.task.workspaceId ?? null);
     }
+    const docsRes = await fetch(`/api/tasks/${taskId}/documents`);
+    const docsData = await docsRes.json();
+    if (docsRes.ok) setLinkedDocs(docsData.documents ?? []);
   }, [taskId]);
 
   useEffect(() => { void load(); }, [load]);
@@ -167,13 +177,57 @@ export function TaskDetail({ taskId, readOnly = false, members = [] }: TaskDetai
     }
   };
 
+  const linkDocument = async (documentId: string) => {
+    const res = await fetch(`/api/documents/${documentId}/links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "task", taskId }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error ?? "Could not link document");
+      return;
+    }
+    toast.success("Document linked");
+    await load();
+  };
+
   return (
+    <>
     <div className="grid gap-4 sm:grid-cols-2">
       {assignees.length > 0 && (
         <Section icon={Users} title="Responsible">
           <AssigneeChips assignees={assignees} />
         </Section>
       )}
+
+      <Section icon={BookOpen} title="Linked docs">
+        {linkedDocs.length === 0 ? (
+          <p className="text-xs text-zinc-400">No linked documents yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {linkedDocs.map((doc) => (
+              <li key={doc.id}>
+                <button
+                  type="button"
+                  onClick={() => setViewingDocId(doc.id)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-zinc-100 px-3 py-2 text-left text-sm text-indigo-500 transition-colors hover:border-indigo-200 hover:bg-indigo-50/50 dark:border-zinc-800 dark:hover:border-indigo-900 dark:hover:bg-indigo-950/30"
+                >
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className="truncate font-medium">{doc.title}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!readOnly && (
+          <LinkDocumentPicker
+            workspaceId={taskWorkspaceId}
+            linkedDocIds={linkedDocs.map((d) => d.id)}
+            onLink={linkDocument}
+          />
+        )}
+      </Section>
 
       <Section icon={ListChecks} title="Subtasks">
         <div className="space-y-2">
@@ -342,5 +396,13 @@ export function TaskDetail({ taskId, readOnly = false, members = [] }: TaskDetai
         )}
       </Section>
     </div>
+
+    <DocumentQuickModal
+      documentId={viewingDocId}
+      isOpen={!!viewingDocId}
+      onClose={() => setViewingDocId(null)}
+      readOnly={readOnly}
+    />
+    </>
   );
 }

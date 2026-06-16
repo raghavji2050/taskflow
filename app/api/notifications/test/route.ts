@@ -21,6 +21,7 @@ export async function POST() {
     for (const sub of subs) {
       try {
         await sendPushToSubscription(sub, {
+          userId: user.id,
           title: "TaskFlow",
           body: "Push notifications are working!",
           url: "/dashboard",

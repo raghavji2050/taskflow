@@ -9,14 +9,21 @@ import { ChatComposer } from "@/components/chat/ChatComposer";
 import { ChatDateJumpModal } from "@/components/chat/ChatDateJumpModal";
 import { ChatSearchPanel } from "@/components/chat/ChatSearchPanel";
 import { GroupInfoModal } from "@/components/chat/GroupInfoModal";
+import { ForwardMessageModal } from "@/components/chat/ForwardMessageModal";
 import { MessageBubble, type ChatMessage } from "@/components/chat/MessageBubble";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
 import { useRealtime } from "@/components/RealtimeProvider";
 import { formatChatDateLabel, toDateKey } from "@/lib/chat-dates";
 import { formatPresenceSubtitle } from "@/lib/presence";
 import { attachReceiptStatuses, type ParticipantReceipt } from "@/lib/chat-receipts";
+import { isDocumentShareBody } from "@/lib/document-ui";
 import { setActiveConversationId } from "@/lib/active-chat";
 import { sendTypingIndicator } from "@/lib/realtime-ws-client";
+import {
+  subscribeConversationChannel,
+  unsubscribeConversationChannel,
+} from "@/lib/pusher-client";
 import { cn } from "@/lib/utils";
 
 export interface ChatConversation {
@@ -37,10 +44,20 @@ interface ChatThreadProps {
   onCleared?: () => void;
   onBack?: () => void;
   onConversationUpdated?: () => void;
+  onMessageSent?: (
+    conversationId: string,
+    lastMessage: {
+      id: string;
+      body: string;
+      createdAt: string;
+      user: { id: string; name: string };
+    }
+  ) => void;
 }
 
-export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, onCleared, onBack, onConversationUpdated }: ChatThreadProps) {
+export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, onCleared, onBack, onConversationUpdated, onMessageSent }: ChatThreadProps) {
   const { data: session } = useSession();
+  const { selectedWorkspaceId } = useWorkspace();
   const userId = session?.user?.id;
   const { isUserOnline } = useRealtime();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -49,6 +66,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const [sending, setSending] = useState(false);
   const [body, setBody] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
@@ -406,6 +424,10 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         }
 
         markRead(convId);
+
+        if (isDocumentShareBody(incoming.body) && !incoming.sharedDocument) {
+          void fetchMessages(convId, { silent: true });
+        }
         return;
       }
 
@@ -468,6 +490,14 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     if (!userId || receipts.length === 0) return;
     refreshReceiptStatuses(receipts);
   }, [receipts, userId, refreshReceiptStatuses]);
+
+  useEffect(() => {
+    const convId = conversation?.id;
+    if (!convId) return;
+
+    subscribeConversationChannel(convId);
+    return () => unsubscribeConversationChannel(convId);
+  }, [conversation?.id]);
 
   useEffect(() => {
     const convId = conversation?.id;
@@ -605,6 +635,13 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     setReplyTo(null);
     if (conversation.id) sendTypingIndicator(conversation.id, false);
 
+    onMessageSent?.(conversation.id, {
+      id: tempId,
+      body: optimisticBody,
+      createdAt: new Date().toISOString(),
+      user: { id: userId, name: session.user.name ?? "You" },
+    });
+
     setSending(true);
     try {
       const res = await sendMessageRequest(conversation.id, text, parentId, file);
@@ -619,6 +656,13 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
               : m
           )
         );
+        const sent = data.message as ChatMessage;
+        onMessageSent?.(conversation.id, {
+          id: sent.id,
+          body: sent.body,
+          createdAt: sent.createdAt,
+          user: { id: sent.user.id, name: sent.user.name },
+        });
       } else {
         setMessages((prev) =>
           prev.map((m) =>
@@ -709,13 +753,13 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
     const isDirect = conversation.type === "DIRECT";
     const message = isDirect
-      ? "Delete this conversation for everyone? This cannot be undone."
+      ? "Remove this conversation from your list?"
       : "Leave this group? It will be removed from your list.";
     if (!window.confirm(message)) return;
 
     const res = await fetch(`/api/conversations/${conversation.id}`, { method: "DELETE" });
     if (res.ok) {
-      toast.success(isDirect ? "Conversation deleted" : "Left group");
+      toast.success(isDirect ? "Conversation removed" : "Left group");
       setHeaderMenuOpen(false);
       onDeleted?.();
     } else {
@@ -1082,6 +1126,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
                       onJumpToMessage={(id, createdAt) => void navigateToMessage({ id, createdAt })}
                       onRetrySend={(tempId) => void handleRetrySend(tempId)}
                       onReply={setReplyTo}
+                      onForward={readOnly ? undefined : setForwardMessage}
                       onReact={handleReact}
                       onPin={handlePin}
                       onEdit={handleEdit}
@@ -1122,6 +1167,13 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           onCancelReply={() => setReplyTo(null)}
         />
       </div>
+
+      <ForwardMessageModal
+        message={forwardMessage}
+        isOpen={Boolean(forwardMessage)}
+        onClose={() => setForwardMessage(null)}
+        workspaceId={selectedWorkspaceId}
+      />
 
       {conversation.type === "GROUP" && (
         <GroupInfoModal

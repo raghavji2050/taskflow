@@ -17,12 +17,25 @@ export async function createNotification(params: {
   conversationId?: string;
   messageId?: string;
 }) {
+  const type = params.type ?? "general";
+
+  if (type === "message") {
+    await sendPushToUser(params.userId, {
+      title: params.title,
+      body: params.body,
+      url: chatPushUrl(params.conversationId, params.messageId),
+      conversationId: params.conversationId,
+      messageId: params.messageId,
+    });
+    return null;
+  }
+
   const notification = await prisma.notification.create({
     data: {
       userId: params.userId,
       title: params.title,
       body: params.body,
-      type: params.type ?? "general",
+      type,
       inviteId: params.inviteId,
       conversationId: params.conversationId,
       messageId: params.messageId,
@@ -32,13 +45,12 @@ export async function createNotification(params: {
   broadcastNotification(params.userId, {
     title: params.title,
     body: params.body,
-    notificationType: params.type ?? "general",
+    notificationType: type,
     conversationId: params.conversationId,
     messageId: params.messageId,
   });
 
-  const type = params.type ?? "general";
-  if (type === "message" || type === "mention") {
+  if (type === "mention") {
     await sendPushToUser(params.userId, {
       title: params.title,
       body: params.body,

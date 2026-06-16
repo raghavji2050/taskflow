@@ -14,22 +14,60 @@ const conversationInclude = {
   },
 };
 
+const dmUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  image: true,
+  lastSeenAt: true,
+} as const;
+
+/** Include peers who left/deleted the DM so names and avatars still resolve. */
+async function getDirectParticipantUsers(conversationId: string) {
+  const active = await prisma.conversationParticipant.findMany({
+    where: { conversationId },
+    include: { user: { select: dmUserSelect } },
+  });
+
+  const byId = new Map(active.map((p) => [p.user.id, p.user]));
+
+  if (byId.size < 2) {
+    const messageAuthors = await prisma.message.findMany({
+      where: { conversationId },
+      distinct: ["userId"],
+      select: { user: { select: dmUserSelect } },
+    });
+    for (const { user } of messageAuthors) {
+      if (!byId.has(user.id)) byId.set(user.id, user);
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
 export async function findDirectConversation(userId1: string, userId2: string) {
   const conversations = await prisma.conversation.findMany({
     where: {
       type: ConversationType.DIRECT,
-      participants: { some: { userId: userId1 } },
+      AND: [
+        {
+          OR: [
+            { participants: { some: { userId: userId1 } } },
+            { messages: { some: { userId: userId1 } } },
+          ],
+        },
+        {
+          OR: [
+            { participants: { some: { userId: userId2 } } },
+            { messages: { some: { userId: userId2 } } },
+          ],
+        },
+      ],
     },
     include: { participants: { select: { userId: true } } },
   });
 
-  return (
-    conversations.find(
-      (c) =>
-        c.participants.length === 2 &&
-        c.participants.some((p) => p.userId === userId2)
-    ) ?? null
-  );
+  return conversations[0] ?? null;
 }
 
 export async function createDirectConversation(creatorId: string, otherUserId: string) {
@@ -42,6 +80,7 @@ export async function createDirectConversation(creatorId: string, otherUserId: s
 
   const existing = await findDirectConversation(creatorId, otherUserId);
   if (existing) {
+    await ensureDirectParticipants(existing.id, creatorId);
     return prisma.conversation.findUniqueOrThrow({
       where: { id: existing.id },
       include: conversationInclude,
@@ -322,14 +361,25 @@ export async function listUserConversations(userId: string) {
         getUnreadCount(row.conversationId, userId, row.lastReadAt, clearedAt),
         getLastVisibleMessage(row.conversationId, clearedAt),
       ]);
+
+      const participants =
+        row.conversation.type === ConversationType.DIRECT
+          ? await getDirectParticipantUsers(row.conversationId)
+          : row.conversation.participants.map((p) => p.user);
+
+      const conversationForName = {
+        ...row.conversation,
+        participants: participants.map((user) => ({ user })),
+      };
+
       return {
         id: row.conversation.id,
         type: row.conversation.type,
-        name: getConversationDisplayName(row.conversation, userId),
+        name: getConversationDisplayName(conversationForName, userId),
         rawName: row.conversation.name,
         workspaceId: row.conversation.workspaceId,
         workspace: row.conversation.workspace,
-        participants: row.conversation.participants.map((p) => p.user),
+        participants,
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
@@ -386,15 +436,25 @@ export async function getConversationById(conversationId: string, userId: string
   });
   if (!row) return null;
 
+  const participants =
+    row.conversation.type === ConversationType.DIRECT
+      ? await getDirectParticipantUsers(conversationId)
+      : row.conversation.participants.map((p) => p.user);
+
+  const conversationForName = {
+    ...row.conversation,
+    participants: participants.map((user) => ({ user })),
+  };
+
   const unreadCount = await getUnreadCount(conversationId, userId, row.lastReadAt);
   return {
     id: row.conversation.id,
     type: row.conversation.type,
-    name: getConversationDisplayName(row.conversation, userId),
+    name: getConversationDisplayName(conversationForName, userId),
     rawName: row.conversation.name,
     workspaceId: row.conversation.workspaceId,
     workspace: row.conversation.workspace,
-    participants: row.conversation.participants.map((p) => p.user),
+    participants,
     unreadCount,
     canPost: await userCanPost(userId, row.conversation),
     archivedAt: row.archivedAt?.toISOString() ?? null,
@@ -423,8 +483,15 @@ export async function deleteConversationForUser(userId: string, conversationId: 
   }
 
   if (conv.type === ConversationType.DIRECT) {
-    await prisma.conversation.delete({ where: { id: conversationId } });
-    return { deleted: true as const };
+    await prisma.conversationParticipant.delete({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+    const remaining = await prisma.conversationParticipant.count({ where: { conversationId } });
+    if (remaining === 0) {
+      await prisma.conversation.delete({ where: { id: conversationId } });
+      return { deleted: true as const };
+    }
+    return { deleted: false as const, left: true as const };
   }
 
   if (conv.participants.length <= 1) {
@@ -436,6 +503,33 @@ export async function deleteConversationForUser(userId: string, conversationId: 
     where: { conversationId_userId: { conversationId, userId } },
   });
   return { deleted: false as const, left: true as const };
+}
+
+/** Re-add users who deleted a DM when the other party sends a new message. */
+export async function ensureDirectParticipants(conversationId: string, senderId: string) {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { type: true, participants: { select: { userId: true } } },
+  });
+  if (!conv || conv.type !== ConversationType.DIRECT) return;
+
+  const activeIds = new Set(conv.participants.map((p) => p.userId));
+  const pastSenders = await prisma.message.findMany({
+    where: { conversationId },
+    distinct: ["userId"],
+    select: { userId: true },
+  });
+
+  const dmUserIds = new Set(pastSenders.map((m) => m.userId));
+  dmUserIds.add(senderId);
+
+  for (const uid of dmUserIds) {
+    if (!activeIds.has(uid)) {
+      await prisma.conversationParticipant.create({
+        data: { conversationId, userId: uid },
+      });
+    }
+  }
 }
 
 export async function renameGroupConversation(

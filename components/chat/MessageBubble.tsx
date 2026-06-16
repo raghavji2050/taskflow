@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MoreHorizontal, Pencil, Pin, Reply, Smile, Trash2 } from "lucide-react";
+import { Forward, MoreHorizontal, Pencil, Pin, Reply, Smile, Trash2 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { ReactionPicker } from "@/components/chat/EmojiPicker";
 import { MessageBody } from "@/components/chat/MessageBody";
@@ -9,8 +9,12 @@ import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
 import type { MessageReceiptStatus } from "@/lib/chat-receipts";
 import { MessageAttachmentPreview } from "@/components/chat/MessageAttachmentPreview";
 import { MessageReceiptTicks } from "@/components/chat/MessageReceiptTicks";
+import { DocumentShareCard, type SharedDocumentPreview } from "@/components/chat/DocumentShareCard";
+import { ForwardedMessageCard } from "@/components/chat/ForwardedMessageCard";
 import { Button } from "@/components/ui/Button";
+import type { FormattedForwardedFrom } from "@/lib/message-format";
 import { isAttachmentOnlyBody, isImageAttachment } from "@/lib/attachments";
+import { isDefaultDocumentShareBody } from "@/lib/document-ui";
 
 export interface MessageAttachment {
   id: string;
@@ -48,6 +52,8 @@ export interface ChatMessage {
   receiptStatus?: MessageReceiptStatus;
   sendStatus?: MessageSendStatus;
   clientTempId?: string;
+  sharedDocument?: SharedDocumentPreview | null;
+  forwardedFrom?: FormattedForwardedFrom | null;
 }
 
 interface MessageBubbleProps {
@@ -65,6 +71,7 @@ interface MessageBubbleProps {
   hideAvatars?: boolean;
   onJumpToMessage?: (messageId: string, createdAt: string) => void;
   onRetrySend?: (clientTempId: string) => void;
+  onForward?: (message: ChatMessage) => void;
 }
 
 function groupReactions(reactions: MessageReaction[] = [], currentUserId?: string) {
@@ -100,6 +107,7 @@ export function MessageBubble({
   hideAvatars = false,
   onJumpToMessage,
   onRetrySend,
+  onForward,
 }: MessageBubbleProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
@@ -147,6 +155,14 @@ export function MessageBubble({
       message.attachments?.length &&
       message.attachments.every((a) => isImageAttachment(a.mimeType)) &&
       message.attachments.some((a) => isAttachmentOnlyBody(message.body, a.filename))
+    ) &&
+    !(
+      message.sharedDocument &&
+      isDefaultDocumentShareBody(
+        message.body,
+        message.sharedDocument.title,
+        message.sharedDocument.icon
+      )
     );
 
   return (
@@ -287,6 +303,14 @@ export function MessageBubble({
               </div>
             ) : (
               <>
+                {message.forwardedFrom && !isDeleted && (
+                  <ForwardedMessageCard
+                    forwarded={message.forwardedFrom}
+                    isOwn={isOwn}
+                    mentionMembers={mentionMembers}
+                  />
+                )}
+
                 {showBody && (
                   <MessageBody
                     body={message.body}
@@ -296,12 +320,16 @@ export function MessageBubble({
                   />
                 )}
 
-                {message.attachments && message.attachments.length > 0 && (
+                {!message.forwardedFrom && message.attachments && message.attachments.length > 0 && (
                   <MessageAttachmentPreview
                     attachments={message.attachments}
                     isOwn={isOwn}
                     messageBody={message.body}
                   />
+                )}
+
+                {!message.forwardedFrom && message.sharedDocument && !isDeleted && (
+                  <DocumentShareCard document={message.sharedDocument} isOwn={isOwn} />
                 )}
               </>
             )}
@@ -358,6 +386,15 @@ export function MessageBubble({
                         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
                       >
                         <Reply className="h-3.5 w-3.5" /> Reply
+                      </button>
+                    )}
+                    {onForward && !isDeleted && (
+                      <button
+                        type="button"
+                        onClick={() => { onForward(message); setMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
+                      >
+                        <Forward className="h-3.5 w-3.5" /> Forward
                       </button>
                     )}
                     {canModify && onEdit && message.body && (

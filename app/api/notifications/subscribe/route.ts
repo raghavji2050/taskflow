@@ -15,7 +15,11 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const count = await prisma.pushSubscription.count({ where: { userId: user.id } });
-    return NextResponse.json({ subscribed: count > 0, count });
+    return NextResponse.json({
+      subscribed: count > 0,
+      count,
+      pushConfigured: isPushConfigured(),
+    });
   } catch (error) {
     return handleApiError(error);
   }

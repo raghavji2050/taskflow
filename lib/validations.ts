@@ -163,6 +163,80 @@ export const bulkTaskSchema = z.object({
   action: z.enum(["complete", "archive", "delete", "pending"]),
 });
 
+export const documentTypeSchema = z.enum(["DOC", "SOP", "MEETING_NOTES", "NOTE"]);
+
+export const documentSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().max(200000).default(""),
+  type: documentTypeSchema.default("DOC"),
+  icon: z.string().max(8).optional().nullable(),
+  workspaceId: z.string().optional().nullable(),
+  parentId: z.string().optional().nullable(),
+  pinned: z.boolean().optional(),
+});
+
+export const documentUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  body: z.string().max(200000).optional(),
+  type: documentTypeSchema.optional(),
+  icon: z.string().max(8).optional().nullable(),
+  parentId: z.string().optional().nullable(),
+  pinned: z.boolean().optional(),
+  archived: z.boolean().optional(),
+  changeNote: z.string().max(500).optional().nullable(),
+});
+
+export const documentsQuerySchema = z.object({
+  workspaceId: z.string().optional(),
+  search: z.string().optional(),
+  type: documentTypeSchema.or(z.literal("ALL")).optional().default("ALL"),
+  archived: z.enum(["true", "false"]).optional().default("false"),
+  parentId: z.string().optional(),
+  flat: z.enum(["true", "false"]).optional().default("false"),
+});
+
+export const documentCommentSchema = z.object({
+  body: z.string().min(1).max(4000),
+  parentId: z.string().optional().nullable(),
+  versionId: z.string().optional().nullable(),
+});
+
+export const documentLinkSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("task"), taskId: z.string().min(1) }),
+  z.object({ kind: z.literal("message"), messageId: z.string().min(1) }),
+]);
+
+export const documentUnlinkSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("task"), taskId: z.string().min(1) }),
+  z.object({ kind: z.literal("message"), messageId: z.string().min(1) }),
+]);
+
+export const documentRestoreVersionSchema = z.object({
+  versionId: z.string().min(1),
+  changeNote: z.string().max(500).optional().nullable(),
+});
+
+export const documentShareSchema = z
+  .object({
+    conversationId: z.string().optional(),
+    userId: z.string().optional(),
+    body: z.string().max(4000).optional().default(""),
+  })
+  .refine((data) => Boolean(data.conversationId) !== Boolean(data.userId), {
+    message: "Provide conversationId or userId, not both",
+  });
+
+export const forwardMessageSchema = z
+  .object({
+    sourceMessageId: z.string().min(1),
+    conversationId: z.string().optional(),
+    userId: z.string().optional(),
+    body: z.string().max(4000).optional().default(""),
+  })
+  .refine((data) => Boolean(data.conversationId) !== Boolean(data.userId), {
+    message: "Provide conversationId or userId, not both",
+  });
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type TaskInput = z.infer<typeof taskSchema>;

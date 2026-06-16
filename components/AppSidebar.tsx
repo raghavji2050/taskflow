@@ -22,11 +22,13 @@ import {
   ChevronUp,
   Shield,
   MessageSquare,
+  BookOpen,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useRealtime } from "@/components/RealtimeProvider";
 import { clearWorkspaceSelection } from "@/components/WorkspaceProvider";
+import { useChatUnread } from "@/lib/useChatUnread";
 import { cn, getInitials } from "@/lib/utils";
 
 const navItems = [
@@ -36,6 +38,7 @@ const navItems = [
   { href: "/dashboard/my-work", label: "My Work", icon: UserCircle, match: (p: string) => p.startsWith("/dashboard/my-work") },
   { href: "/dashboard/timeline", label: "Timeline", icon: GanttChart, match: (p: string) => p.startsWith("/dashboard/timeline") },
   { href: "/dashboard/messages", label: "Messages", icon: MessageSquare, match: (p: string) => p.startsWith("/dashboard/messages") },
+  { href: "/dashboard/docs", label: "Docs", icon: BookOpen, match: (p: string) => p.startsWith("/dashboard/docs") },
 ];
 
 function SidebarUserMenu() {
@@ -151,6 +154,7 @@ function SidebarContent({
 }) {
   const pathname = usePathname();
   const { connected } = useRealtime();
+  const { totalUnread } = useChatUnread();
 
   return (
     <div className="flex h-full flex-col">
@@ -201,6 +205,7 @@ function SidebarContent({
         <div className="space-y-0.5">
           {navItems.map(({ href, label, icon: Icon, match }) => {
             const active = match(pathname);
+            const unreadBadge = href === "/dashboard/messages" ? totalUnread : 0;
             return (
               <Link
                 key={href}
@@ -210,6 +215,11 @@ function SidebarContent({
               >
                 <Icon className={cn("sidebar-nav-icon h-[18px] w-[18px] shrink-0", active ? "text-[var(--accent)]" : "text-[var(--muted)]")} strokeWidth={active ? 2.25 : 2} />
                 <span className="min-w-0 flex-1 truncate">{label}</span>
+                {unreadBadge > 0 && (
+                  <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 text-[10px] font-bold tabular-nums text-white">
+                    {unreadBadge > 99 ? "99+" : unreadBadge}
+                  </span>
+                )}
               </Link>
             );
           })}

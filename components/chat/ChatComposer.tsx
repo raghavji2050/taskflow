@@ -46,6 +46,7 @@ export function ChatComposer({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<MentionInputHandle>(null);
+  const prevSendingRef = useRef(false);
 
   const canSend = Boolean(body.trim() || pendingFile) && !sending && !readOnly;
   const composerDisabled = sending || readOnly;
@@ -53,6 +54,13 @@ export function ChatComposer({
   useEffect(() => {
     if (sending) setEmojiOpen(false);
   }, [sending]);
+
+  useEffect(() => {
+    if (prevSendingRef.current && !sending && !readOnly) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+    prevSendingRef.current = Boolean(sending);
+  }, [sending, readOnly]);
 
   useEffect(() => {
     if (!replyTo) return;

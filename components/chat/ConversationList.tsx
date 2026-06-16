@@ -105,6 +105,7 @@ function ConversationRow({
   );
   const lastActivityAt = conv.lastMessage?.createdAt;
   const listTime = lastActivityAt ? formatConversationListTime(lastActivityAt) : null;
+  const hasUnread = conv.unreadCount > 0 && selectedId !== conv.id;
 
   useLayoutEffect(() => {
     if (!menuOpen || !menuButtonRef.current) return;
@@ -171,16 +172,35 @@ function ConversationRow({
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium">{conv.name}</span>
-          {listTime && (
-            <span className="shrink-0 text-[10px] tabular-nums text-[var(--muted)]">
-              {listTime}
-            </span>
-          )}
+          <span className={cn("truncate text-sm font-medium", hasUnread && "font-semibold")}>
+            {conv.name}
+          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {hasUnread && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 text-[10px] font-bold tabular-nums text-white">
+                {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+              </span>
+            )}
+            {listTime && (
+              <span
+                className={cn(
+                  "text-[10px] tabular-nums text-[var(--muted)]",
+                  hasUnread && "font-medium text-[var(--accent)]"
+                )}
+              >
+                {listTime}
+              </span>
+            )}
+          </div>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
           {conv.lastMessage ? (
-            <p className="min-w-0 truncate text-xs text-[var(--muted)]">
+            <p
+              className={cn(
+                "min-w-0 truncate text-xs text-[var(--muted)]",
+                hasUnread && "font-medium text-[var(--foreground)]"
+              )}
+            >
               {formatLastMessagePreview(conv.lastMessage, currentUserId, conv.type)}
             </p>
           ) : (

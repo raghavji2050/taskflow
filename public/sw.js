@@ -6,40 +6,68 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-async function shouldSuppressPush(data) {
-  const clients = await self.clients.matchAll({
-    type: "window",
-    includeUncontrolled: true,
-  });
+/** @type {Map<string, { visible: boolean, at: number }>} */
+const visibilityByUser = new Map();
 
-  if (data.conversationId) {
-    const marker = `c=${data.conversationId}`;
-    return clients.some(
-      (client) => client.visibilityState === "visible" && client.url.includes(marker)
-    );
+const VISIBILITY_TTL_MS = 10_000;
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "taskflow:visibility") return;
+  const userId = event.data.userId;
+  if (!userId) return;
+  if (!event.data.visible) {
+    visibilityByUser.delete(userId);
+    return;
+  }
+  visibilityByUser.set(userId, {
+    visible: true,
+    at: Date.now(),
+  });
+});
+
+function isUserForeground(userId) {
+  if (!userId) return false;
+  const state = visibilityByUser.get(userId);
+  if (!state) return false;
+  return state.visible && Date.now() - state.at < VISIBILITY_TTL_MS;
+}
+
+async function shouldSuppressPush(userId) {
+  if (userId && isUserForeground(userId)) return true;
+
+  if (!userId) {
+    const clients = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    });
+    return clients.some((client) => client.visibilityState === "visible");
   }
 
-  return clients.some((client) => client.visibilityState === "visible");
+  return false;
 }
 
 self.addEventListener("push", (event) => {
-  let data = { title: "TaskFlow", body: "You have a notification", url: "/dashboard" };
+  let data = { title: "TaskFlow", body: "New message", url: "/dashboard" };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {
     // use defaults
   }
 
+  const body = (data.body && String(data.body).trim()) || "New message";
+
   event.waitUntil(
     (async () => {
-      if (await shouldSuppressPush(data)) return;
+      if (await shouldSuppressPush(data.userId)) return;
 
-      await self.registration.showNotification(data.title, {
-        body: data.body,
+      await self.registration.showNotification(data.title || "TaskFlow", {
+        body,
         icon: "/icon.svg",
         badge: "/icon.svg",
         tag: data.conversationId ? `chat-${data.conversationId}` : "taskflow",
         renotify: true,
+        requireInteraction: false,
+        silent: false,
         data: {
           url: data.url ?? "/dashboard",
           conversationId: data.conversationId,

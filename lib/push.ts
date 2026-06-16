@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
+import { isPushForegroundActive } from "@/lib/push-foreground";
 
 export function getVapidPublicKey(): string | null {
   return (
@@ -29,6 +30,7 @@ export function configureWebPush(): boolean {
 export async function sendPushToSubscription(
   subscription: { endpoint: string; p256dh: string; auth: string },
   payload: {
+    userId: string;
     title: string;
     body: string;
     url?: string;
@@ -40,12 +42,14 @@ export async function sendPushToSubscription(
     throw new Error("Push notifications are not configured on the server");
   }
 
+  const safeBody = payload.body?.trim() || "New message";
+
   await webpush.sendNotification(
     {
       endpoint: subscription.endpoint,
       keys: { p256dh: subscription.p256dh, auth: subscription.auth },
     },
-    JSON.stringify(payload)
+    JSON.stringify({ ...payload, body: safeBody })
   );
 }
 
@@ -59,15 +63,35 @@ export async function sendPushToUser(
     messageId?: string;
   }
 ) {
-  if (!configureWebPush()) return;
+  try {
+    if (!configureWebPush()) return;
 
-  const subs = await prisma.pushSubscription.findMany({ where: { userId } });
-
-  for (const sub of subs) {
-    try {
-      await sendPushToSubscription(sub, payload);
-    } catch {
-      await prisma.pushSubscription.delete({ where: { id: sub.id } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { pushForegroundAt: true },
+    });
+    if (isPushForegroundActive(user?.pushForegroundAt)) {
+      return;
     }
+
+    const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+
+    for (const sub of subs) {
+      try {
+        await sendPushToSubscription(sub, { userId, ...payload });
+      } catch (error) {
+        const statusCode =
+          error && typeof error === "object" && "statusCode" in error
+            ? (error as { statusCode?: number }).statusCode
+            : undefined;
+        console.warn(
+          `[push] Failed to send to subscription ${sub.id} (user ${userId})`,
+          statusCode ? `status ${statusCode}` : error
+        );
+        await prisma.pushSubscription.delete({ where: { id: sub.id } });
+      }
+    }
+  } catch (error) {
+    console.warn(`[push] sendPushToUser failed for ${userId}:`, error);
   }
 }

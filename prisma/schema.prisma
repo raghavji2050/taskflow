@@ -44,6 +44,13 @@ enum ConversationType {
   PERSONAL
 }
 
+enum DocumentType {
+  DOC
+  SOP
+  MEETING_NOTES
+  NOTE
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String
@@ -52,8 +59,9 @@ model User {
   role          UserRole  @default(USER)
   emailVerified DateTime?
   image         String?
-  lastSeenAt    DateTime?
-  createdAt     DateTime  @default(now())
+  lastSeenAt         DateTime?
+  pushForegroundAt   DateTime?
+  createdAt          DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   tasks                   Task[]                    @relation("TaskOwner")
@@ -76,6 +84,10 @@ model User {
   messages                Message[]
   messageReactions        MessageReaction[]
   pinnedMessages          Message[]                 @relation("PinnedMessages")
+  documents               Document[]
+  documentVersions        DocumentVersion[]
+  documentComments        DocumentComment[]
+  documentAttachments     DocumentAttachment[]
 }
 
 model Account {
@@ -161,6 +173,7 @@ model Task {
   comments    Comment[]
   activities  TaskActivity[]
   reminders   Reminder[]
+  documentLinks DocumentTask[]
 
   @@index([userId])
   @@index([status])
@@ -316,6 +329,7 @@ model Workspace {
   automationRules    AutomationRule[]
   boardColumns       BoardColumn[]
   conversation       Conversation?
+  documents          Document[]
 }
 
 model AutomationRule {
@@ -424,6 +438,7 @@ model Message {
   userId         String
   body           String    @default("") @db.Text
   parentId       String?
+  forwardedFromId String?
   pinnedAt       DateTime?
   pinnedById     String?
   editedAt       DateTime?
@@ -435,14 +450,18 @@ model Message {
   user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent       Message?            @relation("MessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
   replies      Message[]           @relation("MessageReplies")
+  forwardedFrom Message?           @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
+  forwards     Message[]           @relation("MessageForwards")
   pinnedBy     User?               @relation("PinnedMessages", fields: [pinnedById], references: [id], onDelete: SetNull)
   attachments  MessageAttachment[]
   reactions    MessageReaction[]
+  documentLinks DocumentMessage[]
 
   @@index([conversationId, createdAt])
   @@index([conversationId, pinnedAt])
   @@index([userId])
   @@index([parentId])
+  @@index([forwardedFromId])
 }
 
 model MessageAttachment {
@@ -471,4 +490,117 @@ model MessageReaction {
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
+}
+
+model Document {
+  id          String       @id @default(cuid())
+  title       String
+  body        String       @db.LongText
+  type        DocumentType @default(DOC)
+  icon        String?
+  userId      String
+  workspaceId String?
+  parentId    String?
+  position    Int          @default(0)
+  pinned      Boolean      @default(false)
+  archived    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent        Document?           @relation("DocumentTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children      Document[]          @relation("DocumentTree")
+  versions      DocumentVersion[]
+  comments      DocumentComment[]
+  taskLinks     DocumentTask[]
+  messageLinks  DocumentMessage[]
+  attachments   DocumentAttachment[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([parentId])
+  @@index([archived])
+  @@index([type])
+}
+
+model DocumentVersion {
+  id            String   @id @default(cuid())
+  documentId    String
+  versionNumber Int
+  title         String
+  body          String   @db.LongText
+  changeNote    String?  @db.Text
+  userId        String
+  createdAt     DateTime @default(now())
+
+  document Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments DocumentComment[]
+
+  @@unique([documentId, versionNumber])
+  @@index([documentId])
+  @@index([userId])
+}
+
+model DocumentComment {
+  id         String   @id @default(cuid())
+  documentId String
+  versionId  String?
+  userId     String
+  body       String   @db.Text
+  parentId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  document Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version  DocumentVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   DocumentComment? @relation("DocumentCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  DocumentComment[] @relation("DocumentCommentReplies")
+
+  @@index([documentId])
+  @@index([versionId])
+  @@index([parentId])
+}
+
+model DocumentTask {
+  documentId String
+  taskId     String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, taskId])
+  @@index([taskId])
+}
+
+model DocumentMessage {
+  documentId String
+  messageId  String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  message  Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, messageId])
+  @@index([messageId])
+}
+
+model DocumentAttachment {
+  id         String   @id @default(cuid())
+  documentId String
+  userId     String
+  filename   String
+  url        String
+  mimeType   String
+  size       Int
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
 }

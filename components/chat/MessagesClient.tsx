@@ -11,12 +11,13 @@ import { GlobalSearchPanel } from "@/components/chat/GlobalSearchPanel";
 import { NewDirectChatModal } from "@/components/chat/NewDirectChatModal";
 import { NewGroupChatModal } from "@/components/chat/NewGroupChatModal";
 import { Button } from "@/components/ui/Button";
+import { MessagesPushBanner } from "@/components/chat/MessagesPushBanner";
 import { cn } from "@/lib/utils";
 
 export function MessagesClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,7 +55,71 @@ export function MessagesClient() {
 
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const handler = () => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        type?: string;
+        conversationId?: string;
+        senderId?: string;
+        preview?: string;
+        message?: { body?: string; createdAt?: string; user?: { id: string; name: string } };
+      };
+      if (
+        detail?.type === "message:created" &&
+        detail.conversationId &&
+        detail.senderId !== session?.user?.id &&
+        detail.conversationId !== selectedId
+      ) {
+        setConversations((prev) => {
+          const idx = prev.findIndex((c) => c.id === detail.conversationId);
+          if (idx === -1) return prev;
+          const previewBody =
+            detail.message?.body ?? detail.preview ?? prev[idx].lastMessage?.body ?? "";
+          const previewUser = detail.message?.user ?? prev[idx].lastMessage?.user;
+          const updated = {
+            ...prev[idx],
+            unreadCount: prev[idx].unreadCount + 1,
+            lastMessage: previewUser
+              ? {
+                  id: detail.message?.id ?? prev[idx].lastMessage?.id ?? detail.conversationId!,
+                  body: previewBody,
+                  createdAt: detail.message?.createdAt ?? new Date().toISOString(),
+                  user: previewUser,
+                }
+              : prev[idx].lastMessage,
+          };
+          const next = [...prev];
+          next.splice(idx, 1);
+          next.unshift(updated);
+          return next;
+        });
+        window.dispatchEvent(new CustomEvent("taskflow:chat-unread"));
+      } else if (
+        detail?.type === "message:created" &&
+        detail.conversationId &&
+        detail.senderId !== session?.user?.id
+      ) {
+        setConversations((prev) => {
+          const idx = prev.findIndex((c) => c.id === detail.conversationId);
+          if (idx === -1) return prev;
+          const previewBody =
+            detail.message?.body ?? detail.preview ?? prev[idx].lastMessage?.body ?? "";
+          const previewUser = detail.message?.user ?? prev[idx].lastMessage?.user;
+          if (!previewUser) return prev;
+          const updated = {
+            ...prev[idx],
+            lastMessage: {
+              id: detail.message?.id ?? prev[idx].lastMessage?.id ?? detail.conversationId!,
+              body: previewBody,
+              createdAt: detail.message?.createdAt ?? new Date().toISOString(),
+              user: previewUser,
+            },
+          };
+          const next = [...prev];
+          next.splice(idx, 1);
+          next.unshift(updated);
+          return next;
+        });
+      }
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => void loadConversations(), 500);
     };
@@ -63,7 +128,7 @@ export function MessagesClient() {
       if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener("taskflow:message", handler);
     };
-  }, [loadConversations]);
+  }, [loadConversations, selectedId, session?.user?.id]);
 
   const selectedConversation = useMemo<ChatConversation | null>(() => {
     const found = conversations.find((c) => c.id === selectedId);
@@ -89,13 +154,13 @@ export function MessagesClient() {
     async (conversationId: string, type: string) => {
       const isDirect = type === "DIRECT";
       const message = isDirect
-        ? "Delete this conversation for everyone? This cannot be undone."
+        ? "Remove this conversation from your list?"
         : "Leave this group? It will be removed from your list.";
       if (!window.confirm(message)) return;
 
       const res = await fetch(`/api/conversations/${conversationId}`, { method: "DELETE" });
       if (res.ok) {
-        toast.success(isDirect ? "Conversation deleted" : "Left group");
+        toast.success(isDirect ? "Conversation removed" : "Left group");
         if (selectedId === conversationId) {
           setSelectedId(null);
           router.replace("/dashboard/messages", { scroll: false });
@@ -132,6 +197,33 @@ export function MessagesClient() {
     });
   }, [selectedId]);
 
+  const handleMessageSent = useCallback(
+    (
+      conversationId: string,
+      lastMessage: {
+        id: string;
+        body: string;
+        createdAt: string;
+        user: { id: string; name: string };
+      }
+    ) => {
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.id === conversationId);
+        if (idx === -1) return prev;
+        const updated = {
+          ...prev[idx],
+          lastMessage,
+          unreadCount: conversationId === selectedId ? 0 : prev[idx].unreadCount,
+        };
+        const next = [...prev];
+        next.splice(idx, 1);
+        next.unshift(updated);
+        return next;
+      });
+    },
+    [selectedId]
+  );
+
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
     const update = () => {
@@ -156,6 +248,7 @@ export function MessagesClient() {
         "max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:top-14 max-md:z-30 max-md:h-auto max-md:bg-[var(--background)]"
       )}
     >
+      <MessagesPushBanner />
       <div className="mb-3 hidden shrink-0 px-4 pt-4 sm:px-6 sm:pt-5 lg:px-8 md:block">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
@@ -223,6 +316,7 @@ export function MessagesClient() {
               onDeleted={handleDeleted}
               onCleared={loadConversations}
               onConversationUpdated={loadConversations}
+              onMessageSent={handleMessageSent}
               onBack={showMobileThread ? handleBack : undefined}
             />
           )}

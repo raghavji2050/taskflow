@@ -40,6 +40,7 @@ export async function GET(request: Request) {
       for (const sub of subs) {
         try {
           await sendPushToSubscription(sub, {
+            userId: reminder.task.userId,
             title: "Task Reminder",
             body: reminder.task.title,
             url: "/dashboard",

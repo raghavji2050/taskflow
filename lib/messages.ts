@@ -1,11 +1,14 @@
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { messageInclude, formatMessageForClient } from "@/lib/message-format";
+import { getMessageAudience } from "@/lib/message-audience";
 import { createNotification } from "@/lib/notifications";
 import { parseMentionsFromBody } from "@/lib/mentions";
 import { broadcastMessageEvent, broadcastMessageToConversation, broadcastConversationReceipt } from "@/lib/realtime";
 import { getConversationParticipantIds } from "@/lib/chat-access";
+import { ensureDirectParticipants } from "@/lib/conversations";
 import { attachReceiptStatuses, type ParticipantReceipt } from "@/lib/chat-receipts";
 
 async function getParticipantClearedAt(conversationId: string, userId: string) {
@@ -66,11 +69,15 @@ export async function listMessages(
   });
 
   const receipts = await getConversationReceipts(conversationId, userId);
-  const formatted = items.reverse().map(formatMessageForClient);
+  const formatted = items.reverse().map((m) => formatMessageForClient(m, userId));
 
   return {
     messages: attachReceiptStatuses(formatted, userId, receipts),
-    pinned: attachReceiptStatuses(pinned.map(formatMessageForClient), userId, receipts),
+    pinned: attachReceiptStatuses(
+      pinned.map((m) => formatMessageForClient(m, userId)),
+      userId,
+      receipts
+    ),
     receipts,
     nextCursor,
     hasMore,
@@ -96,42 +103,115 @@ export async function searchMessages(
     include: messageInclude,
   });
 
-  return messages.map(formatMessageForClient);
+  return messages.map((m) => formatMessageForClient(m, userId));
 }
 
-export async function searchMessagesGlobal(userId: string, query: string, limit = 40) {
+const globalMessageInclude = {
+  ...messageInclude,
+  conversation: {
+    include: {
+      workspace: { select: { name: true } },
+      participants: { include: { user: { select: { id: true, name: true } } } },
+    },
+  },
+} as const;
+
+type GlobalMessageRow = Prisma.MessageGetPayload<{ include: typeof globalMessageInclude }>;
+
+async function getUserParticipations(userId: string) {
   const participations = await prisma.conversationParticipant.findMany({
     where: { userId },
     select: { conversationId: true, clearedAt: true },
   });
-  if (participations.length === 0) return [];
-
   const clearedMap = new Map(
     participations.map((p) => [p.conversationId, p.clearedAt] as const)
   );
-  const convIds = participations.map((p) => p.conversationId);
+  return { participations, clearedMap, convIds: participations.map((p) => p.conversationId) };
+}
 
-  const rows = await prisma.message.findMany({
-    where: {
-      conversationId: { in: convIds },
-      deletedAt: null,
-      body: { contains: query },
+function messageTextSearchFilter(query: string): Prisma.MessageWhereInput {
+  const term = query.trim();
+  return {
+    OR: [
+      { body: { contains: term } },
+      { user: { name: { contains: term } } },
+      { conversation: { name: { contains: term } } },
+      { conversation: { workspace: { name: { contains: term } } } },
+      {
+        conversation: {
+          participants: { some: { user: { name: { contains: term } } } },
+        },
+      },
+    ],
+  };
+}
+
+function formatGlobalMessageResult(message: GlobalMessageRow, _userId: string) {
+  const audience = getMessageAudience(message.conversation, message.userId);
+  return {
+    ...formatMessageForClient(message),
+    conversationId: message.conversationId,
+    sender: { id: message.user.id, name: message.user.name },
+    audience: {
+      kind: audience.kind,
+      title: audience.title,
+      recipients: audience.recipients,
     },
-    orderBy: { createdAt: "desc" },
-    take: limit * 3,
-    include: messageInclude,
-  });
+    sentToLabel: audience.sentToLabel,
+  };
+}
 
+function filterVisibleMessages(
+  rows: GlobalMessageRow[],
+  clearedMap: Map<string, Date | null>,
+  limit: number
+) {
   return rows
     .filter((m) => {
       const cleared = clearedMap.get(m.conversationId);
       return !cleared || m.createdAt > cleared;
     })
     .slice(0, limit)
-    .map((m) => ({
-      ...formatMessageForClient(m),
-      conversationId: m.conversationId,
-    }));
+    .map((m) => m);
+}
+
+export async function listRecentMessagesGlobal(userId: string, limit = 15) {
+  const { participations, clearedMap, convIds } = await getUserParticipations(userId);
+  if (participations.length === 0) return [];
+
+  const rows = await prisma.message.findMany({
+    where: {
+      conversationId: { in: convIds },
+      deletedAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit * 3,
+    include: globalMessageInclude,
+  });
+
+  return filterVisibleMessages(rows, clearedMap, limit).map((m) =>
+    formatGlobalMessageResult(m, userId)
+  );
+}
+
+export async function searchMessagesGlobal(userId: string, query: string, limit = 40) {
+  const { participations, clearedMap, convIds } = await getUserParticipations(userId);
+  if (participations.length === 0) return [];
+
+  const rows = await prisma.message.findMany({
+    where: {
+      conversationId: { in: convIds },
+      deletedAt: null,
+      ...messageTextSearchFilter(query),
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit * 3,
+    include: globalMessageInclude,
+  });
+
+  return filterVisibleMessages(rows, clearedMap, limit).map((m) =>
+    formatGlobalMessageResult(m, userId)
+  );
 }
 
 export async function listMessageDates(conversationId: string, userId: string) {
@@ -187,7 +267,7 @@ export async function getMessagesForDate(
   });
 
   return {
-    messages: messages.map(formatMessageForClient),
+    messages: messages.map((m) => formatMessageForClient(m, userId)),
     date: dateKey,
     hasMoreBefore: hasMoreBefore > 0,
     hasMoreAfter: hasMoreAfter > 0,
@@ -250,8 +330,8 @@ async function notifyParticipants(params: {
 
     await createNotification({
       userId: participantId,
-      title: `New message in ${params.conversationTitle}`,
-      body: `${params.userName}: ${params.preview}`,
+      title: params.userName,
+      body: params.preview,
       type: "message",
       conversationId: params.conversationId,
       messageId: params.messageId,
@@ -273,8 +353,8 @@ async function notifyParticipants(params: {
 
     await createNotification({
       userId: m.id,
-      title: "You were mentioned",
-      body: `${params.userName} mentioned you in ${params.conversationTitle}`,
+      title: `${params.userName} mentioned you`,
+      body: params.preview,
       type: "mention",
       conversationId: params.conversationId,
       messageId: params.messageId,
@@ -298,6 +378,8 @@ export async function sendMessage(params: {
   if (!trimmed) {
     throw new Error("Message cannot be empty");
   }
+
+  await ensureDirectParticipants(conversationId, userId);
 
   const message = await prisma.message.create({
     data: {
@@ -338,6 +420,176 @@ export async function sendMessage(params: {
     messageId: message.id,
     message: formatted,
     type: "message:created",
+  });
+
+  return formatted;
+}
+
+export async function sendDocumentShareMessage(params: {
+  conversationId: string;
+  userId: string;
+  userName: string;
+  body: string;
+  documentId: string;
+  conversationTitle: string;
+  mentionCandidates: { id: string; name: string }[];
+}) {
+  const { conversationId, userId, userName, body, documentId, conversationTitle, mentionCandidates } =
+    params;
+
+  const trimmed = body.trim();
+  if (!trimmed) {
+    throw new Error("Message cannot be empty");
+  }
+
+  await ensureDirectParticipants(conversationId, userId);
+
+  const created = await prisma.message.create({
+    data: {
+      conversationId,
+      userId,
+      body: trimmed,
+    },
+  });
+
+  await prisma.documentMessage.create({
+    data: { documentId, messageId: created.id },
+  });
+
+  const message = await prisma.message.findUniqueOrThrow({
+    where: { id: created.id },
+    include: messageInclude,
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  await prisma.conversationParticipant.updateMany({
+    where: { conversationId },
+    data: { archivedAt: null },
+  });
+
+  await prisma.conversationParticipant.update({
+    where: { conversationId_userId: { conversationId, userId } },
+    data: { lastReadAt: new Date() },
+  });
+
+  const preview = trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
+  const formatted = formatMessageForClient(message);
+
+  await notifyParticipants({
+    conversationId,
+    userId,
+    userName,
+    preview,
+    conversationTitle,
+    mentionCandidates,
+    body: trimmed,
+    messageId: message.id,
+    message: formatted,
+  });
+
+  return formatted;
+}
+
+export async function forwardMessage(params: {
+  sourceMessageId: string;
+  targetConversationId: string;
+  userId: string;
+  userName: string;
+  body?: string;
+  conversationTitle: string;
+  mentionCandidates: { id: string; name: string }[];
+}) {
+  const {
+    sourceMessageId,
+    targetConversationId,
+    userId,
+    userName,
+    body = "",
+    conversationTitle,
+    mentionCandidates,
+  } = params;
+
+  const source = await prisma.message.findUnique({
+    where: { id: sourceMessageId },
+    include: messageInclude,
+  });
+  if (!source) throw new Error("Message not found");
+
+  const comment = body.trim();
+
+  await ensureDirectParticipants(targetConversationId, userId);
+
+  const created = await prisma.message.create({
+    data: {
+      conversationId: targetConversationId,
+      userId,
+      body: comment,
+      forwardedFromId: source.id,
+    },
+  });
+
+  if (source.attachments.length > 0) {
+    await prisma.messageAttachment.createMany({
+      data: source.attachments.map((a) => ({
+        messageId: created.id,
+        filename: a.filename,
+        url: a.url,
+        mimeType: a.mimeType,
+        size: a.size,
+      })),
+    });
+  }
+
+  if (source.documentLinks.length > 0) {
+    await prisma.documentMessage.createMany({
+      data: source.documentLinks.map((link) => ({
+        documentId: link.documentId,
+        messageId: created.id,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  const message = await prisma.message.findUniqueOrThrow({
+    where: { id: created.id },
+    include: messageInclude,
+  });
+
+  await prisma.conversation.update({
+    where: { id: targetConversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  await prisma.conversationParticipant.updateMany({
+    where: { conversationId: targetConversationId },
+    data: { archivedAt: null },
+  });
+
+  await prisma.conversationParticipant.update({
+    where: { conversationId_userId: { conversationId: targetConversationId, userId } },
+    data: { lastReadAt: new Date() },
+  });
+
+  const sourcePreview = source.deletedAt
+    ? "Forwarded a message"
+    : source.body.trim().slice(0, 80) || "Forwarded a message";
+  const preview = comment || sourcePreview;
+  const formatted = formatMessageForClient(message, userId);
+
+  await notifyParticipants({
+    conversationId: targetConversationId,
+    userId,
+    userName,
+    preview: preview.length > 80 ? `${preview.slice(0, 80)}…` : preview,
+    conversationTitle,
+    mentionCandidates,
+    body: comment || sourcePreview,
+    messageId: message.id,
+    message: formatted,
   });
 
   return formatted;

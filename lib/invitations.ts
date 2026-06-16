@@ -96,6 +96,7 @@ export async function sendWorkspaceInvite(params: {
     for (const sub of subs) {
       try {
         await sendPushToSubscription(sub, {
+          userId: invitee.id,
           title: "Workspace invitation",
           body: `${inviter.name} invited you to "${workspace.name}"`,
           url: "/dashboard",

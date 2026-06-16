@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { getActiveConversationId } from "@/lib/active-chat";
 
 export function useChatUnread() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const [totalUnread, setTotalUnread] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionUserIdRef = useRef(session?.user?.id);
+  sessionUserIdRef.current = session?.user?.id;
 
   const refresh = useCallback(async () => {
     if (status !== "authenticated") {
@@ -28,7 +31,23 @@ export function useChatUnread() {
   }, [refresh]);
 
   useEffect(() => {
-    const onMessage = () => debouncedRefresh();
+    const onMessage = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        type?: string;
+        conversationId?: string;
+        senderId?: string;
+      };
+      if (
+        detail?.type === "message:created" &&
+        detail.conversationId &&
+        detail.senderId &&
+        detail.senderId !== sessionUserIdRef.current &&
+        detail.conversationId !== getActiveConversationId()
+      ) {
+        setTotalUnread((n) => n + 1);
+      }
+      debouncedRefresh();
+    };
     const onUnread = () => debouncedRefresh();
     window.addEventListener("taskflow:message", onMessage);
     window.addEventListener("taskflow:chat-unread", onUnread);

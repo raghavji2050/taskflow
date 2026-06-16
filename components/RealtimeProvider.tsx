@@ -3,12 +3,20 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import type { TaskEvent } from "@/lib/realtime";
-import { dispatchRealtimeMessage } from "@/lib/realtime-client";
+import {
+  dispatchRealtimeMessage,
+  type RealtimeWireMessage,
+} from "@/lib/realtime-client";
 import { setRealtimeWebSocket } from "@/lib/realtime-ws-client";
+import {
+  connectPusher,
+  disconnectPusher,
+  isPusherClientConfigured,
+} from "@/lib/pusher-client";
 
 interface RealtimeContextValue {
   connected: boolean;
-  transport: "websocket" | "sse" | "none";
+  transport: "pusher" | "websocket" | "sse" | "none";
   subscribe: (handler: (event: TaskEvent) => void) => () => void;
   isUserOnline: (userId: string) => boolean;
   countOnline: (userIds: string[], excludeUserId?: string) => number;
@@ -20,7 +28,7 @@ const RealtimeContext = createContext<RealtimeContextValue | null>(null);
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const [connected, setConnected] = useState(false);
-  const [transport, setTransport] = useState<"websocket" | "sse" | "none">("none");
+  const [transport, setTransport] = useState<"pusher" | "websocket" | "sse" | "none">("none");
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(() => new Set());
   const [presenceVersion, setPresenceVersion] = useState(0);
   const handlersRef = useRef(new Set<(event: TaskEvent) => void>());
@@ -85,7 +93,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (status !== "authenticated") {
+    if (status !== "authenticated" || !session?.user?.id) {
       setConnected(false);
       setTransport("none");
       setOnlineUserIds(new Set());
@@ -97,6 +105,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     let ws: WebSocket | null = null;
     let source: EventSource | null = null;
     let useSse = false;
+    let pusherCleanup: (() => void) | null = null;
 
     const dispatchCtx = () => ({
       sessionUserId: sessionUserIdRef.current,
@@ -116,6 +125,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // ignore malformed payloads
       }
+    };
+
+    const handleRealtime = (data: object) => {
+      dispatchRealtimeMessage(data as RealtimeWireMessage, dispatchCtx());
     };
 
     const scheduleReconnect = (delayMs = 3000) => {
@@ -175,10 +188,39 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       };
     };
 
+    const connectPusherTransport = async () => {
+      if (disposed) return;
+      try {
+        const res = await fetch("/api/workspaces");
+        if (!res.ok || disposed) {
+          scheduleReconnect(5000);
+          return;
+        }
+        const data = await res.json();
+        const workspaceIds = (data.workspaces as { id: string }[]).map((w) => w.id);
+        if (disposed) return;
+
+        setTransport("pusher");
+        pusherCleanup = connectPusher(
+          session.user.id,
+          workspaceIds,
+          handleRealtime,
+          setConnected
+        );
+      } catch {
+        if (!disposed) scheduleReconnect(5000);
+      }
+    };
+
     const connect = () => {
       if (disposed) return;
-      if (useSse) connectSse();
-      else connectWs();
+      if (isPusherClientConfigured()) {
+        void connectPusherTransport();
+      } else if (useSse) {
+        connectSse();
+      } else {
+        connectWs();
+      }
     };
 
     connect();
@@ -189,6 +231,8 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       source?.close();
       ws = null;
       source = null;
+      pusherCleanup?.();
+      disconnectPusher();
     };
     window.addEventListener("pagehide", handlePageHide);
 
@@ -208,8 +252,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       ws?.close();
       source?.close();
+      pusherCleanup?.();
+      disconnectPusher();
     };
-  }, [status, markOnline, applyOnlineUserIds, applyPresenceChanged]);
+  }, [status, session?.user?.id, markOnline, applyOnlineUserIds, applyPresenceChanged]);
 
   return (
     <RealtimeContext.Provider

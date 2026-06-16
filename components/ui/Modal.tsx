@@ -24,6 +24,8 @@ interface ModalProps {
   className?: string;
   bodyClassName?: string;
   size?: keyof typeof sizeClasses;
+  /** Use when opening atop another modal (e.g. doc preview from task editor). */
+  priority?: "normal" | "elevated";
 }
 
 export function Modal({
@@ -36,6 +38,7 @@ export function Modal({
   className,
   bodyClassName,
   size = "md",
+  priority = "normal",
 }: ModalProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -62,7 +65,10 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center"
+      className={cn(
+        "fixed inset-0 flex items-end justify-center sm:items-center",
+        priority === "elevated" ? "z-[150]" : "z-[100]"
+      )}
       role="presentation"
     >
       <div

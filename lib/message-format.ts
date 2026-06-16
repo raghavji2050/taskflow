@@ -1,4 +1,29 @@
+import { getConversationDisplayName } from "@/lib/conversations";
+
 export const messageUserSelect = { id: true, name: true, image: true } as const;
+
+const forwardedFromSelect = {
+  id: true,
+  body: true,
+  deletedAt: true,
+  createdAt: true,
+  user: { select: { id: true, name: true } },
+  attachments: true,
+  documentLinks: {
+    take: 1,
+    include: {
+      document: { select: { id: true, title: true, type: true, icon: true } },
+    },
+  },
+  conversation: {
+    select: {
+      type: true,
+      name: true,
+      workspace: { select: { name: true } },
+      participants: { select: { user: { select: { id: true, name: true } } } },
+    },
+  },
+} as const;
 
 export const messageInclude = {
   user: { select: messageUserSelect },
@@ -11,11 +36,36 @@ export const messageInclude = {
       user: { select: { id: true, name: true } },
     },
   },
+  forwardedFrom: { select: forwardedFromSelect },
   attachments: true,
   reactions: {
     include: { user: { select: { id: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
+  documentLinks: {
+    take: 1,
+    include: {
+      document: { select: { id: true, title: true, type: true, icon: true } },
+    },
+  },
+};
+
+type ForwardedFromSource = {
+  id: string;
+  body: string;
+  deletedAt?: Date | null;
+  createdAt: Date;
+  user: { id: string; name: string };
+  attachments?: { id: string; filename: string; url: string; mimeType: string; size: number }[];
+  documentLinks?: {
+    document: { id: string; title: string; type: string; icon: string | null };
+  }[];
+  conversation: {
+    type: import("@prisma/client").ConversationType;
+    name: string | null;
+    workspace?: { name: string } | null;
+    participants: { user: { id: string; name: string } }[];
+  };
 };
 
 type MessageWithRelations = {
@@ -34,11 +84,48 @@ type MessageWithRelations = {
     createdAt: Date;
     user: { id: string; name: string };
   } | null;
+  forwardedFrom?: ForwardedFromSource | null;
   attachments?: { id: string; filename: string; url: string; mimeType: string; size: number }[];
   reactions?: { id: string; emoji: string; user: { id: string; name: string } }[];
+  documentLinks?: {
+    document: { id: string; title: string; type: string; icon: string | null };
+  }[];
 };
 
-export function formatMessageForClient(message: MessageWithRelations) {
+function formatSharedDocument(
+  documentLinks?: { document: { id: string; title: string; type: string; icon: string | null } }[]
+) {
+  const doc = documentLinks?.[0]?.document;
+  if (!doc) return null;
+  return {
+    id: doc.id,
+    title: doc.title,
+    type: doc.type,
+    icon: doc.icon,
+  };
+}
+
+function formatForwardedFrom(source: ForwardedFromSource, viewerUserId?: string) {
+  const deleted = Boolean(source.deletedAt);
+  const sourceLabel = viewerUserId
+    ? getConversationDisplayName(source.conversation, viewerUserId)
+    : source.conversation.name ?? "Chat";
+
+  return {
+    id: source.id,
+    body: deleted ? "" : source.body,
+    deleted,
+    createdAt: source.createdAt.toISOString(),
+    user: source.user,
+    attachments: deleted ? [] : (source.attachments ?? []),
+    sharedDocument: deleted ? null : formatSharedDocument(source.documentLinks),
+    sourceLabel,
+  };
+}
+
+export type FormattedForwardedFrom = ReturnType<typeof formatForwardedFrom>;
+
+export function formatMessageForClient(message: MessageWithRelations, viewerUserId?: string) {
   const deleted = Boolean(message.deletedAt);
   return {
     id: message.id,
@@ -58,7 +145,16 @@ export function formatMessageForClient(message: MessageWithRelations) {
           user: message.parent.user,
         }
       : null,
+    forwardedFrom:
+      !deleted && message.forwardedFrom
+        ? formatForwardedFrom(message.forwardedFrom, viewerUserId)
+        : null,
     attachments: deleted ? [] : (message.attachments ?? []),
     reactions: message.reactions ?? [],
+    sharedDocument: deleted
+      ? null
+      : message.documentLinks?.[0]?.document
+        ? formatSharedDocument(message.documentLinks)
+        : null,
   };
 }
