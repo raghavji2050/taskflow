@@ -59,6 +59,7 @@ export function MessagesClient() {
       const detail = (event as CustomEvent).detail as {
         type?: string;
         conversationId?: string;
+        messageId?: string;
         senderId?: string;
         preview?: string;
         message?: { body?: string; createdAt?: string; user?: { id: string; name: string } };
@@ -80,7 +81,7 @@ export function MessagesClient() {
             unreadCount: prev[idx].unreadCount + 1,
             lastMessage: previewUser
               ? {
-                  id: detail.message?.id ?? prev[idx].lastMessage?.id ?? detail.conversationId!,
+                  id: detail.messageId ?? prev[idx].lastMessage?.id ?? detail.conversationId!,
                   body: previewBody,
                   createdAt: detail.message?.createdAt ?? new Date().toISOString(),
                   user: previewUser,
@@ -108,7 +109,7 @@ export function MessagesClient() {
           const updated = {
             ...prev[idx],
             lastMessage: {
-              id: detail.message?.id ?? prev[idx].lastMessage?.id ?? detail.conversationId!,
+              id: detail.messageId ?? prev[idx].lastMessage?.id ?? detail.conversationId!,
               body: previewBody,
               createdAt: detail.message?.createdAt ?? new Date().toISOString(),
               user: previewUser,
