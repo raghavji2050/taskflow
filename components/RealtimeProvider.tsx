@@ -12,6 +12,7 @@ import {
   connectPusher,
   disconnectPusher,
   isPusherClientConfigured,
+  reportUserOffline,
 } from "@/lib/pusher-client";
 
 interface RealtimeContextValue {
@@ -226,6 +227,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     connect();
 
     const handlePageHide = () => {
+      reportUserOffline();
       disposed = true;
       ws?.close();
       source?.close();

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export function urlBase64ToUint8Array(base64String: string) {
@@ -81,6 +82,61 @@ export async function isPushSubscribed(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export function usePushEnrollment() {
+  const [needsEnable, setNeedsEnable] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!isPushSupported()) {
+      setNeedsEnable(false);
+      setLoading(false);
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setNeedsEnable(false);
+      setLoading(false);
+      return;
+    }
+    const subscribed = await isPushSubscribed();
+    setNeedsEnable(!subscribed);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const onFocus = () => void refresh();
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refresh]);
+
+  const enable = useCallback(async () => {
+    setBusy(true);
+    try {
+      const ok = await subscribeToPush();
+      if (ok) {
+        toast.success("Desktop notifications enabled");
+        setNeedsEnable(false);
+        return true;
+      }
+      toast.error("Could not enable notifications");
+      await refresh();
+      return false;
+    } catch {
+      toast.error("Could not enable notifications");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }, [refresh]);
+
+  return { needsEnable, loading, busy, enable, refresh };
 }
 
 const PROMPT_KEY = "taskflow:push-prompted";

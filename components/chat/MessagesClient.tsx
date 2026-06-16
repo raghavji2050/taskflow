@@ -11,7 +11,7 @@ import { GlobalSearchPanel } from "@/components/chat/GlobalSearchPanel";
 import { NewDirectChatModal } from "@/components/chat/NewDirectChatModal";
 import { NewGroupChatModal } from "@/components/chat/NewGroupChatModal";
 import { Button } from "@/components/ui/Button";
-import { MessagesPushBanner } from "@/components/chat/MessagesPushBanner";
+import { PushSubscribe } from "@/components/PushSubscribe";
 import { cn } from "@/lib/utils";
 
 export function MessagesClient() {
@@ -249,7 +249,6 @@ export function MessagesClient() {
         "max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:top-14 max-md:z-30 max-md:h-auto max-md:bg-[var(--background)]"
       )}
     >
-      <MessagesPushBanner />
       <div className="mb-3 hidden shrink-0 px-4 pt-4 sm:px-6 sm:pt-5 lg:px-8 md:block">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
@@ -258,7 +257,8 @@ export function MessagesClient() {
               Direct messages, groups, and team channels
             </p>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <PushSubscribe variant="toolbar" />
             <Button type="button" size="sm" variant="secondary" onClick={() => setGlobalSearchOpen(true)}>
               <Search className="h-4 w-4" />
               <span className="hidden sm:inline">Search</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, Bookmark, Calendar, ChevronDown, Eraser, Loader2, MessageCircle, MoreVertical, Pin, Search, Trash2, Users } from "lucide-react";
@@ -59,7 +59,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const { data: session } = useSession();
   const { selectedWorkspaceId } = useWorkspace();
   const userId = session?.user?.id;
-  const { isUserOnline } = useRealtime();
+  const { isUserOnline, presenceVersion } = useRealtime();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,6 +79,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const [activeDateKey, setActiveDateKey] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<ParticipantReceipt[]>([]);
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
+  const [peerLastSeenAt, setPeerLastSeenAt] = useState<string | null>(null);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [newMessagesBelow, setNewMessagesBelow] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -798,6 +799,26 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     void fetchMessages(conversation.id, { cursor, prepend: true });
   };
 
+  const directPeerId =
+    conversation?.type === "DIRECT"
+      ? conversation.participants.find((p) => p.id !== userId)?.id
+      : undefined;
+
+  useEffect(() => {
+    setPeerLastSeenAt(null);
+  }, [conversation?.id, directPeerId]);
+
+  useEffect(() => {
+    if (!directPeerId) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string; online?: boolean }>).detail;
+      if (detail?.userId !== directPeerId) return;
+      setPeerLastSeenAt(detail.online ? null : new Date().toISOString());
+    };
+    window.addEventListener("taskflow:presence", handler);
+    return () => window.removeEventListener("taskflow:presence", handler);
+  }, [directPeerId]);
+
   if (!conversation) {
     return (
       <div className="flex flex-1 items-center justify-center bg-[var(--background)] p-8 text-center">
@@ -830,7 +851,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     isUserOnline,
     currentUserId: userId,
     peerEmail: directPeer?.email,
-    peerLastSeen: directPeer?.lastSeenAt ?? null,
+    peerLastSeen: peerLastSeenAt ?? directPeer?.lastSeenAt ?? null,
     typingNames,
   });
 

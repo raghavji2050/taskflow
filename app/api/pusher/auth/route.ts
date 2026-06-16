@@ -46,6 +46,8 @@ export async function POST(request: Request) {
 async function authorizeChannel(userId: string, channelName: string): Promise<boolean> {
   if (channelName === `private-user-${userId}`) return true;
 
+  if (channelName === "presence-app") return true;
+
   if (channelName.startsWith("private-workspace-")) {
     const workspaceId = channelName.slice("private-workspace-".length);
     const membership = await getWorkspaceMembership(userId, workspaceId);

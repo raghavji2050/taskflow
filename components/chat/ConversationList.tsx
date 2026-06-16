@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Bookmark, ChevronDown, Hash, LogOut, MessageCircle, MessageSquarePlus, MoreHorizontal, Search, Trash2, Users } from "lucide-react";
 import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
+import { PushSubscribe } from "@/components/PushSubscribe";
 import { useRealtime } from "@/components/RealtimeProvider";
 import { formatConversationListTime } from "@/lib/chat-dates";
 import { cn } from "@/lib/utils";
@@ -373,10 +374,11 @@ export function ConversationList({
 
   return (
     <div className="flex h-full flex-col bg-[var(--card)] md:border-r md:border-[var(--card-border)]">
-      <div className="shrink-0 border-b border-[var(--card-border)] px-4 py-3 md:px-5 md:py-3.5">
+      <div className="shrink-0 border-b border-[var(--card-border)] px-4 py-3 md:hidden">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-[var(--foreground)]">Messages</h2>
           <div className="flex items-center gap-1">
+            <PushSubscribe variant="toolbar" iconOnly />
             {onSearch && (
               <button
                 type="button"
