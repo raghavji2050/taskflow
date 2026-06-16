@@ -127,89 +127,90 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        "group relative flex items-stretch rounded-lg",
+        "group relative rounded-lg",
         selectedId === conv.id
           ? "bg-[var(--accent)]/10"
           : "hover:bg-[var(--surface-hover)]"
       )}
     >
-    <button
-      type="button"
-      onClick={() => onSelect(conv.id)}
-      className={cn(
-        "flex min-w-0 flex-1 items-start gap-2.5 px-3 py-2 text-left transition-colors",
-        selectedId === conv.id
-          ? "text-[var(--accent)]"
-          : "text-[var(--foreground)]"
-      )}
-    >
-      {isDirect && peer ? (
-        <PresenceAvatar
-          name={peer.name}
-          image={peer.image}
-          userId={peer.id}
-          size="sm"
-        />
-      ) : isPersonal ? (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10">
-          <Bookmark className="h-4 w-4 text-[var(--accent)]" />
-        </div>
-      ) : (
-        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-hover)]">
-          {conv.type === "WORKSPACE" ? (
-            <Hash className="h-4 w-4 text-[var(--muted)]" />
-          ) : (
-            <Users className="h-4 w-4 text-[var(--muted)]" />
-          )}
-          {onlineCount > 0 && (
-            <span
-              className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-[var(--card)] bg-emerald-500 px-0.5 text-[9px] font-bold text-white"
-              title={`${onlineCount} online`}
-            >
-              {onlineCount > 9 ? "9+" : onlineCount}
-            </span>
-          )}
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className={cn("truncate text-sm font-medium", hasUnread && "font-semibold")}>
-            {conv.name}
-          </span>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {hasUnread && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 text-[10px] font-bold tabular-nums text-white">
-                {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
-              </span>
+      <button
+        type="button"
+        onClick={() => onSelect(conv.id)}
+        className={cn(
+          "flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors",
+          selectedId === conv.id
+            ? "text-[var(--accent)]"
+            : "text-[var(--foreground)]"
+        )}
+      >
+        {isDirect && peer ? (
+          <PresenceAvatar
+            name={peer.name}
+            image={peer.image}
+            userId={peer.id}
+            size="sm"
+          />
+        ) : isPersonal ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10">
+            <Bookmark className="h-4 w-4 text-[var(--accent)]" />
+          </div>
+        ) : (
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-hover)]">
+            {conv.type === "WORKSPACE" ? (
+              <Hash className="h-4 w-4 text-[var(--muted)]" />
+            ) : (
+              <Users className="h-4 w-4 text-[var(--muted)]" />
             )}
-            {listTime && (
+            {onlineCount > 0 && (
               <span
-                className={cn(
-                  "text-[10px] tabular-nums text-[var(--muted)]",
-                  hasUnread && "font-medium text-[var(--accent)]"
-                )}
+                className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-[var(--card)] bg-emerald-500 px-0.5 text-[9px] font-bold text-white"
+                title={`${onlineCount} online`}
               >
-                {listTime}
+                {onlineCount > 9 ? "9+" : onlineCount}
               </span>
             )}
           </div>
-        </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
+        )}
+        <div className="min-w-0 flex-1 pr-14">
+          <p
+            className={cn(
+              "truncate text-sm font-medium leading-5",
+              hasUnread && "font-semibold"
+            )}
+          >
+            {conv.name}
+          </p>
           {conv.lastMessage ? (
             <p
               className={cn(
-                "min-w-0 truncate text-xs text-[var(--muted)]",
-                hasUnread && "font-medium text-[var(--foreground)]"
+                "mt-0.5 truncate text-xs leading-4 text-[var(--muted)]",
+                hasUnread && "font-medium text-[var(--foreground)]",
+                showMenu && "pr-7"
               )}
             >
               {formatLastMessagePreview(conv.lastMessage, currentUserId, conv.type)}
             </p>
-          ) : (
-            <span className="min-w-0 flex-1" />
-          )}
+          ) : null}
         </div>
+      </button>
+
+      <div className="pointer-events-none absolute right-3 top-2 flex items-center justify-end gap-1">
+        {hasUnread && (
+          <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-bold leading-none tabular-nums text-white">
+            {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+          </span>
+        )}
+        {listTime && (
+          <span
+            className={cn(
+              "text-[10px] leading-none tabular-nums text-[var(--muted)]",
+              hasUnread && "font-medium text-[var(--accent)]"
+            )}
+          >
+            {listTime}
+          </span>
+        )}
       </div>
-    </button>
 
     {showMenu && (
       <>
@@ -221,7 +222,7 @@ function ConversationRow({
             setMenuOpen((v) => !v);
           }}
           className={cn(
-            "mr-1 flex h-8 w-8 shrink-0 self-center items-center justify-center rounded-md text-[var(--muted)] transition-opacity hover:bg-[var(--card)] hover:text-[var(--foreground)]",
+            "absolute bottom-1.5 right-0.5 flex h-6 w-6 items-center justify-center rounded-md text-[var(--muted)] transition-opacity hover:bg-[var(--card)] hover:text-[var(--foreground)]",
             menuOpen ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
           )}
           aria-label="Conversation options"

@@ -317,6 +317,25 @@ function afterCleared(clearedAt: Date | null) {
   return clearedAt ? { createdAt: { gt: clearedAt } } : {};
 }
 
+/** DM initiator sees the chat immediately; the other person only after a message from the peer. */
+export async function isDirectConversationVisible(
+  userId: string,
+  conversation: { id: string; createdById: string; type: ConversationType }
+) {
+  if (conversation.type !== ConversationType.DIRECT) return true;
+  if (conversation.createdById === userId) return true;
+
+  const fromPeer = await prisma.message.findFirst({
+    where: {
+      conversationId: conversation.id,
+      deletedAt: null,
+      userId: { not: userId },
+    },
+    select: { id: true },
+  });
+  return !!fromPeer;
+}
+
 export function getConversationDisplayName(
   conversation: {
     type: ConversationType;
@@ -356,6 +375,9 @@ export async function listUserConversations(userId: string) {
 
   const enriched = await Promise.all(
     rows.map(async (row) => {
+      const visible = await isDirectConversationVisible(userId, row.conversation);
+      if (!visible) return null;
+
       const clearedAt = row.clearedAt ?? null;
       const [unreadCount, lastMsg] = await Promise.all([
         getUnreadCount(row.conversationId, userId, row.lastReadAt, clearedAt),
@@ -397,24 +419,33 @@ export async function listUserConversations(userId: string) {
     })
   );
 
-  enriched.sort((a, b) => {
+  const conversations = enriched.filter((c): c is NonNullable<typeof c> => c !== null);
+
+  conversations.sort((a, b) => {
     const aTime = a.lastMessage?.createdAt ?? a.clearedAt ?? a.updatedAt;
     const bTime = b.lastMessage?.createdAt ?? b.clearedAt ?? b.updatedAt;
     return new Date(bTime).getTime() - new Date(aTime).getTime();
   });
 
-  const totalUnread = enriched.reduce((sum, c) => sum + c.unreadCount, 0);
-  return { conversations: enriched, totalUnread };
+  const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
+  return { conversations, totalUnread };
 }
 
 export async function getTotalUnreadCount(userId: string) {
   const participants = await prisma.conversationParticipant.findMany({
     where: { userId },
-    select: { conversationId: true, lastReadAt: true, clearedAt: true },
+    select: {
+      conversationId: true,
+      lastReadAt: true,
+      clearedAt: true,
+      conversation: { select: { id: true, type: true, createdById: true } },
+    },
   });
 
   let total = 0;
   for (const p of participants) {
+    const visible = await isDirectConversationVisible(userId, p.conversation);
+    if (!visible) continue;
     total += await getUnreadCount(p.conversationId, userId, p.lastReadAt, p.clearedAt);
   }
   return total;
@@ -435,6 +466,9 @@ export async function getConversationById(conversationId: string, userId: string
     },
   });
   if (!row) return null;
+
+  const visible = await isDirectConversationVisible(userId, row.conversation);
+  if (!visible) return null;
 
   const participants =
     row.conversation.type === ConversationType.DIRECT

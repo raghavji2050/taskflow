@@ -1,6 +1,7 @@
 import { ConversationType, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getWorkspaceMembership } from "@/lib/workspace";
+import { isDirectConversationVisible } from "@/lib/conversations";
 
 export async function getConversationParticipant(userId: string, conversationId: string) {
   return prisma.conversationParticipant.findUnique({
@@ -23,6 +24,11 @@ export async function canAccessConversation(userId: string, conversationId: stri
   if (!participant) return null;
 
   const { conversation } = participant;
+
+  if (conversation.type === ConversationType.DIRECT) {
+    const visible = await isDirectConversationVisible(userId, conversation);
+    if (!visible) return null;
+  }
 
   if (conversation.type === ConversationType.WORKSPACE && conversation.workspaceId) {
     const membership = await getWorkspaceMembership(userId, conversation.workspaceId);
