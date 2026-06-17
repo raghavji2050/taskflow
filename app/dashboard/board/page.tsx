@@ -23,6 +23,10 @@ import {
   type TaskViewFiltersState,
 } from "@/lib/task-view-filters";
 import { useOpenTaskListener } from "@/lib/open-task-event";
+import { dispatchTasksRefresh } from "@/lib/tasks-refresh-event";
+import { saveTaskWithOptionalTimer } from "@/lib/client-task-submit";
+import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
+import { useActiveTimer } from "@/lib/useActiveTimer";
 
 export default function BoardPage() {
   const router = useRouter();
@@ -36,6 +40,7 @@ export default function BoardPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listsKey, setListsKey] = useState(0);
+  const { entry: activeTimer, elapsed: activeTimerElapsed, refresh: onTimerRefresh } = useActiveTimer();
 
   const fetchColumns = useCallback(async (wsId: string | null) => {
     const params = new URLSearchParams();
@@ -74,6 +79,27 @@ export default function BoardPage() {
   );
 
   useEffect(() => { if (status === "unauthenticated") router.push("/login"); }, [status, router]);
+
+  const openTaskById = useCallback(async (taskId: string) => {
+    const cached = tasks.find((t) => t.id === taskId);
+    if (cached) {
+      setEditingTask(cached);
+      setIsFormOpen(true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load task");
+      setEditingTask(data.task);
+      setIsFormOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open task");
+    }
+  }, [tasks]);
+
+  useOpenTaskListener((taskId) => { void openTaskById(taskId); });
+
   if (status === "loading") return null;
 
   const withWorkspace = (data: TaskInput): TaskInput => ({
@@ -101,42 +127,24 @@ export default function BoardPage() {
     }
   };
 
-  const handleSubmit = async (data: TaskInput) => {
+  const handleSubmit = async (data: TaskInput, options?: TaskFormSubmitOptions) => {
     if (!canEditTasks) return;
     setIsSubmitting(true);
-    const url = editingTask ? `/api/tasks/${editingTask.id}` : "/api/tasks";
-    const res = await fetch(url, {
-      method: editingTask ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(withWorkspace(data)),
-    });
-    if (res.ok) {
+    try {
+      await saveTaskWithOptionalTimer(withWorkspace(data), editingTask?.id ?? null, options);
+      if (!editingTask && options?.startTimer) {
+        dispatchTasksRefresh();
+        toast.success("Task created and timer started");
+      }
       setIsFormOpen(false);
       setEditingTask(null);
       void refresh();
-    }
-    setIsSubmitting(false);
-  };
-
-  const openTaskById = useCallback(async (taskId: string) => {
-    const cached = tasks.find((t) => t.id === taskId);
-    if (cached) {
-      setEditingTask(cached);
-      setIsFormOpen(true);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/tasks/${taskId}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load task");
-      setEditingTask(data.task);
-      setIsFormOpen(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to open task");
+      toast.error(error instanceof Error ? error.message : "Failed to save task");
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [tasks]);
-
-  useOpenTaskListener((taskId) => { void openTaskById(taskId); });
+  };
 
   const pageTitle = isPersonal ? "Board" : `${selectedWorkspace?.name} Board`;
 
@@ -173,6 +181,9 @@ export default function BoardPage() {
           onColumnChange={handleColumnChange}
           onEdit={(t) => { setEditingTask(t); setIsFormOpen(true); }}
           readOnly={!canEditTasks}
+          activeEntry={activeTimer}
+          activeTimerElapsed={activeTimerElapsed}
+          onTimerRefresh={onTimerRefresh}
         />
       ) : (
         <div className="rounded-xl border border-dashed border-[var(--card-border)] py-16 text-center text-sm text-[var(--muted)]">

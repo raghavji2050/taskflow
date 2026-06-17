@@ -33,4 +33,35 @@ describe("validations", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts valid estimatedMinutes", () => {
+    const result = taskSchema.safeParse({
+      title: "Task",
+      priority: "MEDIUM",
+      status: "PENDING",
+      estimatedMinutes: 120,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.estimatedMinutes).toBe(120);
+  });
+
+  it("allows null estimatedMinutes", () => {
+    const result = taskSchema.safeParse({
+      title: "Task",
+      priority: "MEDIUM",
+      status: "PENDING",
+      estimatedMinutes: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects zero estimatedMinutes", () => {
+    const result = taskSchema.safeParse({
+      title: "Task",
+      priority: "MEDIUM",
+      status: "PENDING",
+      estimatedMinutes: 0,
+    });
+    expect(result.success).toBe(false);
+  });
 });

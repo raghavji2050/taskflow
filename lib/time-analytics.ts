@@ -18,10 +18,68 @@ async function sumDuration(where: Prisma.TimeEntryWhereInput): Promise<number> {
   return result._sum.duration ?? 0;
 }
 
+type ReportTaskAgg = {
+  taskId: string;
+  title: string;
+  total: number;
+  estimatedMinutes: number | null;
+  allTimeTotal: number;
+};
+
+async function getByTagReport(where: Prisma.TimeEntryWhereInput) {
+  const tagged = await prisma.timeEntry.findMany({
+    where: { ...where, isRunning: false },
+    select: {
+      duration: true,
+      labels: { include: { label: { select: { id: true, name: true } } } },
+    },
+  });
+
+  const byTagMap = new Map<string, { labelId: string; name: string; total: number }>();
+  for (const entry of tagged) {
+    for (const { label } of entry.labels) {
+      const agg = byTagMap.get(label.id) ?? {
+        labelId: label.id,
+        name: label.name,
+        total: 0,
+      };
+      agg.total += entry.duration;
+      byTagMap.set(label.id, agg);
+    }
+  }
+
+  return [...byTagMap.values()].sort((a, b) => b.total - a.total);
+}
+
+async function enrichReportTaskAggs(
+  byTaskMap: Map<string, Omit<ReportTaskAgg, "allTimeTotal">>,
+  allTimeWhere: Prisma.TimeEntryWhereInput
+): Promise<ReportTaskAgg[]> {
+  const taskIds = [...byTaskMap.keys()];
+  if (taskIds.length === 0) return [];
+
+  const allTimeGroups = await prisma.timeEntry.groupBy({
+    by: ["taskId"],
+    where: { ...allTimeWhere, taskId: { in: taskIds }, isRunning: false },
+    _sum: { duration: true },
+  });
+  const allTimeByTask = new Map(allTimeGroups.map((g) => [g.taskId, g._sum.duration ?? 0]));
+
+  return [...byTaskMap.values()].map((agg) => ({
+    ...agg,
+    allTimeTotal: allTimeByTask.get(agg.taskId) ?? 0,
+  }));
+}
+
 export async function getTaskTrackedTime(taskId: string) {
   const now = new Date();
   const today = resolveTimeRange("today");
   const week = resolveTimeRange("week");
+
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { estimatedMinutes: true },
+  });
 
   const [total, todaySeconds, weekSeconds] = await Promise.all([
     sumDuration({ taskId }),
@@ -29,7 +87,13 @@ export async function getTaskTrackedTime(taskId: string) {
     sumDuration({ taskId, ...buildDateFilter(week.from, week.to) }),
   ]);
 
-  return { total, today: todaySeconds, week: weekSeconds, asOf: now.toISOString() };
+  return {
+    total,
+    today: todaySeconds,
+    week: weekSeconds,
+    asOf: now.toISOString(),
+    estimatedMinutes: task?.estimatedMinutes ?? null,
+  };
 }
 
 export async function getUserTrackedTime(userId: string, workspaceId?: string) {
@@ -153,7 +217,7 @@ export async function getPersonalReport(
       duration: true,
       startTime: true,
       user: { select: { id: true, name: true } },
-      task: { select: { id: true, title: true } },
+      task: { select: { id: true, title: true, estimatedMinutes: true } },
     },
   });
 
@@ -162,7 +226,7 @@ export async function getPersonalReport(
   const month = resolveTimeRange("month");
 
   type UserAgg = { userId: string; name: string; today: number; week: number; month: number; total: number };
-  type TaskAgg = { taskId: string; title: string; total: number };
+  type TaskAgg = { taskId: string; title: string; total: number; estimatedMinutes: number | null };
 
   const byUserMap = new Map<string, UserAgg>();
   const byTaskMap = new Map<string, TaskAgg>();
@@ -192,19 +256,23 @@ export async function getPersonalReport(
       taskId: e.taskId,
       title: e.task.title,
       total: 0,
+      estimatedMinutes: e.task.estimatedMinutes,
     };
     taskAgg.total += e.duration;
     byTaskMap.set(e.taskId, taskAgg);
   }
 
-  const [trendDaily, trendWeekly] = await Promise.all([
+  const [trendDaily, trendWeekly, byTask, byTag] = await Promise.all([
     getPersonalProductivityTrend(userId, "daily", filters.from, filters.to),
     getPersonalProductivityTrend(userId, "weekly", filters.from, filters.to),
+    enrichReportTaskAggs(byTaskMap, personalTaskFilter(userId)),
+    getByTagReport(where),
   ]);
 
   return {
     byUser: [...byUserMap.values()].sort((a, b) => b.total - a.total),
-    byTask: [...byTaskMap.values()].sort((a, b) => b.total - a.total),
+    byTask: byTask.sort((a, b) => b.total - a.total),
+    byTag,
     trendDaily,
     trendWeekly,
     totalSeconds: entries.reduce((sum, e) => sum + e.duration, 0),
@@ -277,7 +345,7 @@ export async function getWorkspaceReport(
       duration: true,
       startTime: true,
       user: { select: { id: true, name: true } },
-      task: { select: { id: true, title: true } },
+      task: { select: { id: true, title: true, estimatedMinutes: true } },
     },
   });
 
@@ -286,7 +354,7 @@ export async function getWorkspaceReport(
   const month = resolveTimeRange("month");
 
   type UserAgg = { userId: string; name: string; today: number; week: number; month: number; total: number };
-  type TaskAgg = { taskId: string; title: string; total: number };
+  type TaskAgg = { taskId: string; title: string; total: number; estimatedMinutes: number | null };
 
   const byUserMap = new Map<string, UserAgg>();
   const byTaskMap = new Map<string, TaskAgg>();
@@ -316,19 +384,23 @@ export async function getWorkspaceReport(
       taskId: e.taskId,
       title: e.task.title,
       total: 0,
+      estimatedMinutes: e.task.estimatedMinutes,
     };
     taskAgg.total += e.duration;
     byTaskMap.set(e.taskId, taskAgg);
   }
 
-  const [trendDaily, trendWeekly] = await Promise.all([
+  const [trendDaily, trendWeekly, byTask, byTag] = await Promise.all([
     getProductivityTrend(workspaceId, "daily", filters.from, filters.to),
     getProductivityTrend(workspaceId, "weekly", filters.from, filters.to),
+    enrichReportTaskAggs(byTaskMap, { task: { workspaceId } }),
+    getByTagReport(where),
   ]);
 
   return {
     byUser: [...byUserMap.values()].sort((a, b) => b.total - a.total),
-    byTask: [...byTaskMap.values()].sort((a, b) => b.total - a.total),
+    byTask: byTask.sort((a, b) => b.total - a.total),
+    byTag,
     trendDaily,
     trendWeekly,
     totalSeconds: entries.reduce((sum, e) => sum + e.duration, 0),

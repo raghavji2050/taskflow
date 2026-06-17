@@ -15,6 +15,7 @@ import { useActiveTimer } from "@/lib/useActiveTimer";
 import { useOpenTaskListener } from "@/lib/open-task-event";
 import { useTasksRefreshListener } from "@/lib/tasks-refresh-event";
 import type { TaskInput } from "@/lib/validations";
+import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
 import { toTaskInput } from "@/lib/task-ui";
 
 type MyWorkTask = Task & { canEdit?: boolean };
@@ -82,7 +83,7 @@ export default function MyWorkPage() {
     return ws?.members.map((m) => m.user);
   };
 
-  const handleSubmit = async (formData: TaskInput) => {
+  const handleSubmit = async (formData: TaskInput, _options?: TaskFormSubmitOptions) => {
     if (!editingTask || !canEditTask(editingTask)) return;
     setIsSubmitting(true);
     const res = await fetch(`/api/tasks/${editingTask.id}`, {

@@ -21,6 +21,7 @@ export interface Task {
   categoryId?: string | null;
   boardColumnId?: string | null;
   recurrenceRule?: string | null;
+  estimatedMinutes?: number | null;
   createdAt: string;
   updatedAt: string;
   category?: { id: string; name: string; color: string } | null;
@@ -62,6 +63,10 @@ export function TaskCard({
   const isCompleted = task.status === "COMPLETED";
   const subtaskDone = task.subtasks?.filter((s) => s.completed).length ?? 0;
   const subtaskTotal = task.subtasks?.length ?? 0;
+  const isTimerActiveOnTask = Boolean(
+    activeTimer?.isRunning &&
+      (activeTimer.taskId === task.id || activeTimer.task?.id === task.id)
+  );
 
   return (
     <div className={cn("task-row group flex gap-0 overflow-hidden rounded-xl", getPriorityClass(task.priority), isCompleted && "opacity-70", selected && "ring-2 ring-[var(--accent)]")}>
@@ -130,13 +135,21 @@ export function TaskCard({
 
         <div className="flex shrink-0 items-center gap-0.5">
           {showTimeControls && onTimerRefresh && (
-            <TaskTimeControls
-              taskId={task.id}
-              readOnly={readOnly}
-              activeEntry={activeTimer}
-              elapsed={activeTimerElapsed}
-              onRefresh={onTimerRefresh}
-            />
+            <div
+              className={cn(
+                "transition-opacity max-sm:opacity-100",
+                isTimerActiveOnTask ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              )}
+            >
+              <TaskTimeControls
+                taskId={task.id}
+                taskStatus={task.status}
+                readOnly={readOnly}
+                activeEntry={activeTimer}
+                elapsed={activeTimerElapsed}
+                onRefresh={onTimerRefresh}
+              />
+            </div>
           )}
           <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
           <Button variant="ghost" size="sm" onClick={() => onEdit(task)} className="h-7 w-7 p-0" aria-label={readOnly ? "View task" : "Edit task"}>

@@ -22,6 +22,7 @@ import { useWorkspace } from "@/components/WorkspaceProvider";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import type { Task } from "@/components/TaskCard";
 import type { TaskInput } from "@/lib/validations";
+import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -327,7 +328,7 @@ export function DocumentEditorClient({ documentId }: { documentId: string }) {
     }
   };
 
-  const handleTaskUpdate = async (formData: TaskInput) => {
+  const handleTaskUpdate = async (formData: TaskInput, _options?: TaskFormSubmitOptions) => {
     if (!editingTask) return;
     setIsTaskSubmitting(true);
     try {

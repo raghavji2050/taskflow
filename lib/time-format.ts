@@ -27,6 +27,42 @@ export function parseDurationInput(hours: number, minutes: number): number {
   return h * 3600 + m * 60;
 }
 
+export function formatEstimateMinutes(minutes: number): string {
+  return formatDurationShort(Math.max(0, Math.floor(minutes)) * 60);
+}
+
+export function formatLoggedVsEstimated(
+  loggedSeconds: number,
+  estimatedMinutes: number | null | undefined
+): string {
+  const logged = formatDurationShort(loggedSeconds);
+  if (estimatedMinutes == null || estimatedMinutes <= 0) return logged;
+  return `${logged} / ${formatEstimateMinutes(estimatedMinutes)}`;
+}
+
+export function isOverEstimate(
+  loggedSeconds: number,
+  estimatedMinutes: number | null | undefined
+): boolean {
+  return (
+    estimatedMinutes != null &&
+    estimatedMinutes > 0 &&
+    loggedSeconds > estimatedMinutes * 60
+  );
+}
+
+export function minutesToHoursMinutes(totalMinutes: number): { hours: number; minutes: number } {
+  const m = Math.max(0, Math.floor(totalMinutes));
+  return { hours: Math.floor(m / 60), minutes: m % 60 };
+}
+
+export function hoursMinutesToMinutes(hours: number, minutes: number): number | null {
+  const h = Math.max(0, Math.floor(hours));
+  const m = Math.max(0, Math.min(59, Math.floor(minutes)));
+  const total = h * 60 + m;
+  return total > 0 ? total : null;
+}
+
 export function parseDurationText(text: string): number | null {
   const trimmed = text.trim().toLowerCase();
   if (!trimmed) return null;

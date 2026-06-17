@@ -23,6 +23,7 @@ export function toTaskInput(task: Task, overrides?: Partial<TaskInput>): TaskInp
     assigneeIds,
     primaryAssigneeId,
     recurrenceRule: (task.recurrenceRule ?? null) as TaskInput["recurrenceRule"],
+    estimatedMinutes: task.estimatedMinutes ?? null,
     ...overrides,
   };
 }

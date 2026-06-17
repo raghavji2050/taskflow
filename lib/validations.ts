@@ -29,6 +29,7 @@ export const taskSchema = z.object({
   recurrenceRule: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional().nullable(),
   tagIds: z.array(z.string()).optional(),
   position: z.number().int().optional(),
+  estimatedMinutes: z.coerce.number().int().min(1).max(10080).optional().nullable(),
 });
 
 export const taskQuerySchema = z.object({
@@ -314,17 +315,29 @@ export const timeRangeSchema = z.enum(["today", "week", "month", "custom", "all"
 export const timeStartSchema = z.object({
   taskId: z.string().min(1),
   description: z.string().max(500).optional().nullable(),
+  promoteStatus: z.boolean().optional(),
 });
 
 export const timeStopSchema = z.object({
   timeEntryId: z.string().optional(),
   description: z.string().max(500).optional().nullable(),
   taskStatus: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED"]).optional(),
+  labelIds: z.array(z.string()).optional(),
+});
+
+export const timePauseSchema = z.object({
+  timeEntryId: z.string().optional(),
+  reason: z.enum(["manual", "idle"]).optional(),
+});
+
+export const timeResumePausedSchema = z.object({
+  timeEntryId: z.string().optional(),
 });
 
 export const timeResumeSchema = z.object({
   taskId: z.string().min(1),
   description: z.string().max(500).optional().nullable(),
+  promoteStatus: z.boolean().optional(),
 });
 
 export const timeManualSchema = z.object({
@@ -332,6 +345,7 @@ export const timeManualSchema = z.object({
   date: z.string().refine((v) => !Number.isNaN(Date.parse(v)), "Invalid date"),
   durationSeconds: z.coerce.number().int().min(60).max(86400),
   description: z.string().max(500).optional().nullable(),
+  labelIds: z.array(z.string()).optional(),
 });
 
 export const timeEntryUpdateSchema = z.object({
@@ -339,6 +353,34 @@ export const timeEntryUpdateSchema = z.object({
   startTime: z.string().datetime({ offset: true }).optional(),
   endTime: z.string().datetime({ offset: true }).optional().nullable(),
   durationSeconds: z.coerce.number().int().min(60).max(86400).optional(),
+  reminderSnoozedUntil: z.string().datetime({ offset: true }).optional().nullable(),
+  labelIds: z.array(z.string()).optional(),
+});
+
+export const timeSplitSchema = z.object({
+  segments: z
+    .array(
+      z.object({
+        durationSeconds: z.coerce.number().int().min(60).max(86400),
+        taskId: z.string().optional(),
+        description: z.string().max(500).optional().nullable(),
+        labelIds: z.array(z.string()).optional(),
+      })
+    )
+    .min(2),
+});
+
+export const timeMergeSchema = z.object({
+  entryIds: z.array(z.string().min(1)).min(2),
+});
+
+export const timeDuplicateLastSchema = z.object({
+  taskId: z.string().optional(),
+});
+
+export const timeLabelCreateSchema = z.object({
+  name: z.string().min(1).max(50),
+  color: z.string().max(20).optional().nullable(),
 });
 
 export const timeQuerySchema = z.object({

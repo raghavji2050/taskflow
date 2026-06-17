@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { addMonths, format, subMonths } from "date-fns";
+import { addMonths, format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { CalendarView } from "@/components/CalendarView";
@@ -22,10 +22,15 @@ import {
   type TaskViewFiltersState,
 } from "@/lib/task-view-filters";
 import { useOpenTaskListener } from "@/lib/open-task-event";
+import { dispatchTasksRefresh } from "@/lib/tasks-refresh-event";
+import { saveTaskWithOptionalTimer } from "@/lib/client-task-submit";
+import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
+import { useActiveTimer } from "@/lib/useActiveTimer";
+import type { CalendarTimeBlock } from "@/components/CalendarView";
 
 export default function CalendarPage() {
   const router = useRouter();
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const { selectedWorkspaceId, selectedWorkspace, isPersonal, members, canEditTasks } = useWorkspace();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -36,6 +41,14 @@ export default function CalendarPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [timeBlocks, setTimeBlocks] = useState<CalendarTimeBlock[]>([]);
+  const [showTimeBlocks, setShowTimeBlocks] = useState(true);
+  const { entry: activeTimer, elapsed: activeTimerElapsed, refresh: onTimerRefresh } = useActiveTimer();
+
+  useEffect(() => {
+    const stored = localStorage.getItem("calendar-show-time-blocks");
+    if (stored !== null) setShowTimeBlocks(stored === "true");
+  }, []);
 
   const fetchTasks = useCallback(async (wsId: string | null, currentFilters: TaskViewFiltersState) => {
     setIsLoading(true);
@@ -52,6 +65,49 @@ export default function CalendarPage() {
   useEffect(() => {
     if (status === "authenticated") void fetchTasks(selectedWorkspaceId, filters);
   }, [status, selectedWorkspaceId, filters, fetchTasks]);
+
+  const fetchTimeBlocks = useCallback(async (userId: string, currentMonth: Date) => {
+    const from = startOfMonth(currentMonth).toISOString();
+    const to = endOfMonth(currentMonth).toISOString();
+    const params = new URLSearchParams({
+      range: "custom",
+      from,
+      to,
+      personal: "true",
+      limit: "200",
+    });
+    const res = await fetch(`/api/time/user/${userId}?${params}`);
+    const data = await res.json();
+    if (res.ok) {
+      setTimeBlocks(
+        (data.entries ?? []).map(
+          (e: {
+            id: string;
+            taskId: string;
+            task?: { title: string };
+            startTime: string;
+            endTime: string | null;
+            duration: number;
+            labels?: { id: string; name: string; color: string | null }[];
+          }) => ({
+            id: e.id,
+            taskId: e.taskId,
+            taskTitle: e.task?.title ?? "Task",
+            startTime: e.startTime,
+            endTime: e.endTime,
+            duration: e.duration,
+            labels: e.labels,
+          })
+        )
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.id) {
+      void fetchTimeBlocks(session.user.id, month);
+    }
+  }, [status, session?.user?.id, month, fetchTimeBlocks]);
 
   useRealtimeSync({
     workspaceId: selectedWorkspaceId,
@@ -85,20 +141,22 @@ export default function CalendarPage() {
     workspaceId: selectedWorkspaceId,
   });
 
-  const handleSubmit = async (data: TaskInput) => {
+  const handleSubmit = async (data: TaskInput, options?: TaskFormSubmitOptions) => {
     if (!canEditTasks) return;
     setIsSubmitting(true);
-    const url = editingTask ? `/api/tasks/${editingTask.id}` : "/api/tasks";
-    const res = await fetch(url, {
-      method: editingTask ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(withWorkspace(data)),
-    });
-    if (res.ok) {
+    try {
+      await saveTaskWithOptionalTimer(withWorkspace(data), editingTask?.id ?? null, options);
+      if (!editingTask && options?.startTimer) {
+        dispatchTasksRefresh();
+        toast.success("Task created and timer started");
+      }
       closeModal();
       fetchTasks(selectedWorkspaceId, filters);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save task");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const openTaskById = useCallback(async (taskId: string) => {
@@ -158,6 +216,19 @@ export default function CalendarPage() {
                 <Plus className="h-4 w-4" />New Task
               </Button>
             )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setShowTimeBlocks((v) => {
+                  const next = !v;
+                  localStorage.setItem("calendar-show-time-blocks", String(next));
+                  return next;
+                });
+              }}
+            >
+              {showTimeBlocks ? "Hide logged time" : "Show logged time"}
+            </Button>
           </div>
         }
       />
@@ -176,6 +247,12 @@ export default function CalendarPage() {
           tasks={filteredTasks}
           month={month}
           showCreateHint={canEditTasks}
+          timeBlocks={timeBlocks}
+          showTimeBlocks={showTimeBlocks}
+          canEditTasks={canEditTasks}
+          activeEntry={activeTimer}
+          activeTimerElapsed={activeTimerElapsed}
+          onTimerRefresh={onTimerRefresh}
           onEdit={(t) => {
             setEditingTask(t);
             setDefaultDueDate(undefined);

@@ -5,12 +5,14 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { formatDurationHms } from "@/lib/time-format";
+import { TimeEntryTagPicker } from "@/components/tasks/TimeEntryTagPicker";
 
 export interface TimeEntryRow {
   id: string;
   startTime: string;
   duration: number;
   description: string | null;
+  labels?: { id: string; name: string; color: string | null }[];
 }
 
 interface EditTimeEntryModalProps {
@@ -22,6 +24,7 @@ interface EditTimeEntryModalProps {
     date: string;
     hours: number;
     minutes: number;
+    labelIds: string[];
   }) => Promise<void>;
 }
 
@@ -30,6 +33,7 @@ export function EditTimeEntryModal({ entry, isOpen, onClose, onSubmit }: EditTim
   const [date, setDate] = useState("");
   const [hours, setHours] = useState("0");
   const [minutes, setMinutes] = useState("0");
+  const [labelIds, setLabelIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -38,6 +42,7 @@ export function EditTimeEntryModal({ entry, isOpen, onClose, onSubmit }: EditTim
     setHours(String(Math.floor(entry.duration / 3600)));
     setMinutes(String(Math.floor((entry.duration % 3600) / 60)));
     setDescription(entry.description ?? "");
+    setLabelIds((entry.labels ?? []).map((l) => l.id));
   }, [entry, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,6 +55,7 @@ export function EditTimeEntryModal({ entry, isOpen, onClose, onSubmit }: EditTim
         date,
         hours: Number(hours) || 0,
         minutes: Number(minutes) || 0,
+        labelIds,
       });
       onClose();
     } finally {
@@ -82,6 +88,7 @@ export function EditTimeEntryModal({ entry, isOpen, onClose, onSubmit }: EditTim
             <label className="mb-1 block text-sm font-medium text-[var(--foreground)]">Description</label>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
+          <TimeEntryTagPicker selectedIds={labelIds} onChange={setLabelIds} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>
               Cancel

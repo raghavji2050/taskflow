@@ -9,7 +9,9 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const data = timeResumeSchema.parse(await request.json());
-    const entry = await resumeTimer(user.id, data.taskId, data.description);
+    const entry = await resumeTimer(user.id, data.taskId, data.description, {
+      promoteStatus: data.promoteStatus,
+    });
     return NextResponse.json({ entry }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {

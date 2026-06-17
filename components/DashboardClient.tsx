@@ -23,6 +23,9 @@ import { TaskEditModal } from "@/components/TaskEditModal";
 import type { TaskInput } from "@/lib/validations";
 import { PageHeader } from "@/components/PageHeader";
 import { cn, getTimeGreeting } from "@/lib/utils";
+import { dispatchTasksRefresh } from "@/lib/tasks-refresh-event";
+import { saveTaskWithOptionalTimer } from "@/lib/client-task-submit";
+import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
 import { toTaskInput } from "@/lib/task-ui";
 import { format } from "date-fns";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
@@ -155,24 +158,26 @@ export function DashboardClient({ userName }: DashboardClientProps) {
     workspaceId: selectedWorkspaceId,
   });
 
-  const handleCreateOrUpdate = async (formData: TaskInput) => {
+  const handleCreateOrUpdate = async (formData: TaskInput, options?: TaskFormSubmitOptions) => {
     setIsSubmitting(true);
     try {
       const payload = withWorkspace(formData);
-      const url = editingTask ? `/api/tasks/${editingTask.id}` : "/api/tasks";
-      const response = await fetch(url, {
-        method: editingTask ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to save task");
-      toast.success(editingTask ? "Task updated" : "Task created");
-      setIsFormOpen(false); setEditingTask(null);
+      await saveTaskWithOptionalTimer(payload, editingTask?.id ?? null, options);
+      if (!editingTask && options?.startTimer) {
+        dispatchTasksRefresh();
+        void refreshActiveTimer();
+        toast.success("Task created and timer started");
+      } else {
+        toast.success(editingTask ? "Task updated" : "Task created");
+      }
+      setIsFormOpen(false);
+      setEditingTask(null);
       await fetchTasks(filters, page, categoryId, selectedWorkspaceId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save task");
-    } finally { setIsSubmitting(false); }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = async () => {

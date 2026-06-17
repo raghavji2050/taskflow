@@ -108,7 +108,7 @@ export interface ConversationRemovedEvent {
   at: string;
 }
 
-export type TimeEventType = "time:started" | "time:stopped" | "time:updated";
+export type TimeEventType = "time:started" | "time:stopped" | "time:updated" | "time:paused" | "time:resumed";
 
 export interface TimeEvent {
   type: TimeEventType;

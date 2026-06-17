@@ -2,24 +2,34 @@
 
 import { useEffect, useState } from "react";
 
-export function useLiveTimer(startTimeIso: string | null | undefined, isRunning: boolean) {
-  const [elapsed, setElapsed] = useState(0);
+export function useLiveTimer(
+  startTimeIso: string | null | undefined,
+  isActive: boolean,
+  accumulatedSeconds = 0
+) {
+  const [elapsed, setElapsed] = useState(accumulatedSeconds);
 
   useEffect(() => {
-    if (!startTimeIso || !isRunning) {
-      setElapsed(0);
+    if (!isActive) {
+      setElapsed(accumulatedSeconds);
+      return;
+    }
+
+    if (!startTimeIso) {
+      setElapsed(accumulatedSeconds);
       return;
     }
 
     const startMs = new Date(startTimeIso).getTime();
     const tick = () => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000)));
+      const segment = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+      setElapsed(accumulatedSeconds + segment);
     };
 
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [startTimeIso, isRunning]);
+  }, [startTimeIso, isActive, accumulatedSeconds]);
 
   return elapsed;
 }

@@ -52,6 +52,13 @@ describe("time validations", () => {
   it("validates start schema", () => {
     const result = timeStartSchema.safeParse({ taskId: "task_1", description: "Work" });
     expect(result.success).toBe(true);
+
+    const withPromoteOff = timeStartSchema.safeParse({
+      taskId: "task_1",
+      promoteStatus: false,
+    });
+    expect(withPromoteOff.success).toBe(true);
+    if (withPromoteOff.success) expect(withPromoteOff.data.promoteStatus).toBe(false);
   });
 
   it("validates stop schema with optional description and taskStatus", () => {

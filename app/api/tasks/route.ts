@@ -175,6 +175,7 @@ export async function POST(request: Request) {
         boardColumnId: taskData.boardColumnId ?? null,
         workspaceId: taskData.workspaceId || null,
         recurrenceRule: taskData.recurrenceRule || null,
+        estimatedMinutes: taskData.estimatedMinutes ?? null,
         position: (maxPos._max.position ?? 0) + 1,
         userId: user.id,
         tags: tagIds?.length ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,

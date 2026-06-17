@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
 import type { Task } from "@/components/TaskCard";
 import type { TaskInput } from "@/lib/validations";
+import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
 import {
   buildTaskQueryParams,
   applyClientTaskFilters,
@@ -52,7 +53,7 @@ export default function TimelinePage() {
     [tasks, filters]
   );
 
-  const handleSubmit = async (data: TaskInput) => {
+  const handleSubmit = async (data: TaskInput, _options?: TaskFormSubmitOptions) => {
     if (!editingTask || !canEditTasks) return;
     setIsSubmitting(true);
     const res = await fetch(`/api/tasks/${editingTask.id}`, {

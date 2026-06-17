@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquarePlus, Square } from "lucide-react";
+import { MessageSquarePlus, Pause, Play, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { TimerNoteModal } from "@/components/tasks/TimerNoteModal";
@@ -22,6 +22,37 @@ export function TimeTrackingBar() {
   if (!entry?.isRunning) return null;
 
   const taskId = entry.taskId ?? entry.task?.id;
+  const isPaused = Boolean(entry.isPaused);
+
+  const handlePause = async () => {
+    const res = await fetch("/api/time/pause", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timeEntryId: entry.id, reason: "manual" }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      toast.error(err.error ?? "Could not pause timer");
+      return;
+    }
+    toast.success("Timer paused");
+    void refresh();
+  };
+
+  const handleResume = async () => {
+    const res = await fetch("/api/time/resume-paused", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timeEntryId: entry.id }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      toast.error(err.error ?? "Could not resume timer");
+      return;
+    }
+    toast.success("Timer resumed");
+    void refresh();
+  };
 
   const handleStop = async (data: TimerStopSubmitData) => {
     const body: Record<string, unknown> = {
@@ -64,11 +95,15 @@ export function TimeTrackingBar() {
 
   return (
     <>
-      <div className="sticky top-0 z-30 border-b border-[var(--card-border)] border-l-4 border-l-[var(--accent)] bg-[var(--card)] shadow-sm backdrop-blur-xl px-4 py-2">
+      <div
+        className={`sticky top-0 z-30 border-b border-[var(--card-border)] border-l-4 bg-[var(--card)] shadow-sm backdrop-blur-xl px-4 py-2 ${
+          isPaused ? "border-l-amber-500" : "border-l-[var(--accent)]"
+        }`}
+      >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
-              Active timer
+              {isPaused ? "Timer paused" : "Active timer"}
             </p>
             {taskId ? (
               <button
@@ -84,7 +119,11 @@ export function TimeTrackingBar() {
               </p>
             )}
           </div>
-          <p className="font-mono text-lg font-semibold tabular-nums text-[var(--accent)]">
+          <p
+            className={`font-mono text-lg font-semibold tabular-nums ${
+              isPaused ? "text-amber-600 dark:text-amber-400" : "text-[var(--accent)]"
+            }`}
+          >
             {formatDurationHms(elapsed)}
           </p>
           <div className="flex shrink-0 items-center gap-2">
@@ -97,6 +136,17 @@ export function TimeTrackingBar() {
               <MessageSquarePlus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Add note</span>
             </Button>
+            {isPaused ? (
+              <Button type="button" size="sm" variant="primary" onClick={() => void handleResume()}>
+                <Play className="h-3.5 w-3.5" />
+                Resume
+              </Button>
+            ) : (
+              <Button type="button" size="sm" variant="secondary" onClick={() => void handlePause()}>
+                <Pause className="h-3.5 w-3.5" />
+                Pause
+              </Button>
+            )}
             <Button type="button" size="sm" variant="danger" onClick={() => setStopModalOpen(true)}>
               <Square className="h-3.5 w-3.5" />
               Stop

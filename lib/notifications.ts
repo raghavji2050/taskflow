@@ -60,5 +60,13 @@ export async function createNotification(params: {
     });
   }
 
+  if (type === "timer_still_running") {
+    await sendPushToUser(params.userId, {
+      title: params.title,
+      body: params.body,
+      url: "/dashboard",
+    });
+  }
+
   return notification;
 }

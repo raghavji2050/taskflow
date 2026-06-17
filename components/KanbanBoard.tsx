@@ -15,8 +15,24 @@ import { resolveTaskColumnId } from "@/lib/board-columns";
 import type { Task } from "@/components/TaskCard";
 import type { BoardColumn } from "@/components/BoardListsPanel";
 import { AssigneeChips } from "@/components/AssigneeChips";
+import { TaskTimeControls } from "@/components/tasks/TaskTimeControls";
+import type { ActiveTimerEntry } from "@/lib/useActiveTimer";
 
-function DraggableTask({ task, onEdit, readOnly }: { task: Task; onEdit: (t: Task) => void; readOnly?: boolean }) {
+function DraggableTask({
+  task,
+  onEdit,
+  readOnly,
+  activeEntry,
+  elapsed,
+  onTimerRefresh,
+}: {
+  task: Task;
+  onEdit: (t: Task) => void;
+  readOnly?: boolean;
+  activeEntry: ActiveTimerEntry | null;
+  elapsed: number;
+  onTimerRefresh: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     disabled: readOnly,
@@ -36,12 +52,24 @@ function DraggableTask({ task, onEdit, readOnly }: { task: Task; onEdit: (t: Tas
       )}
     >
       <p className="text-sm font-medium text-[var(--foreground)]">{task.title}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className={cn("inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase", getPriorityColor(task.priority))}>
-          {task.priority}
-        </span>
-        {task.assignees && task.assignees.length > 0 && (
-          <AssigneeChips assignees={task.assignees} compact />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn("inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase", getPriorityColor(task.priority))}>
+            {task.priority}
+          </span>
+          {task.assignees && task.assignees.length > 0 && (
+            <AssigneeChips assignees={task.assignees} compact />
+          )}
+        </div>
+        {!readOnly && (
+          <TaskTimeControls
+            taskId={task.id}
+            taskStatus={task.status}
+            activeEntry={activeEntry}
+            elapsed={elapsed}
+            onRefresh={onTimerRefresh}
+            variant="compact"
+          />
         )}
       </div>
     </div>
@@ -63,9 +91,21 @@ interface KanbanBoardProps {
   onColumnChange: (taskId: string, columnId: string) => void;
   onEdit: (task: Task) => void;
   readOnly?: boolean;
+  activeEntry?: ActiveTimerEntry | null;
+  activeTimerElapsed?: number;
+  onTimerRefresh?: () => void;
 }
 
-export function KanbanBoard({ tasks, columns, onColumnChange, onEdit, readOnly = false }: KanbanBoardProps) {
+export function KanbanBoard({
+  tasks,
+  columns,
+  onColumnChange,
+  onEdit,
+  readOnly = false,
+  activeEntry = null,
+  activeTimerElapsed = 0,
+  onTimerRefresh = () => {},
+}: KanbanBoardProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: readOnly ? 99999 : 8 } })
   );
@@ -111,7 +151,15 @@ export function KanbanBoard({ tasks, columns, onColumnChange, onEdit, readOnly =
               </h3>
               <DroppableColumn id={col.id}>
                 {colTasks.map((task) => (
-                  <DraggableTask key={task.id} task={task} onEdit={onEdit} readOnly={readOnly} />
+                  <DraggableTask
+                    key={task.id}
+                    task={task}
+                    onEdit={onEdit}
+                    readOnly={readOnly}
+                    activeEntry={activeEntry}
+                    elapsed={activeTimerElapsed}
+                    onTimerRefresh={onTimerRefresh}
+                  />
                 ))}
               </DroppableColumn>
             </div>

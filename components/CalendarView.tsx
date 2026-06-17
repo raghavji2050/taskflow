@@ -15,6 +15,19 @@ import { cn, getPriorityColor, isSameCalendarDay } from "@/lib/utils";
 import type { Task } from "@/components/TaskCard";
 import { AssigneeChips } from "@/components/AssigneeChips";
 import { Card } from "@/components/ui/Card";
+import { TaskTimeControls } from "@/components/tasks/TaskTimeControls";
+import { formatDurationShort } from "@/lib/time-format";
+import type { ActiveTimerEntry } from "@/lib/useActiveTimer";
+
+export interface CalendarTimeBlock {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  startTime: string;
+  endTime: string | null;
+  duration: number;
+  labels?: { id: string; name: string; color: string | null }[];
+}
 
 interface CalendarViewProps {
   tasks: Task[];
@@ -22,11 +35,29 @@ interface CalendarViewProps {
   onEdit: (task: Task) => void;
   onDayClick?: (day: Date) => void;
   showCreateHint?: boolean;
+  timeBlocks?: CalendarTimeBlock[];
+  showTimeBlocks?: boolean;
+  canEditTasks?: boolean;
+  activeEntry?: ActiveTimerEntry | null;
+  activeTimerElapsed?: number;
+  onTimerRefresh?: () => void;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function CalendarView({ tasks, month, onEdit, onDayClick, showCreateHint = true }: CalendarViewProps) {
+export function CalendarView({
+  tasks,
+  month,
+  onEdit,
+  onDayClick,
+  showCreateHint = true,
+  timeBlocks = [],
+  showTimeBlocks = true,
+  canEditTasks = false,
+  activeEntry = null,
+  activeTimerElapsed = 0,
+  onTimerRefresh = () => {},
+}: CalendarViewProps) {
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(month);
     const monthEnd = endOfMonth(month);
@@ -44,6 +75,19 @@ export function CalendarView({ tasks, month, onEdit, onDayClick, showCreateHint 
 
   return (
     <div className="space-y-4">
+      {showTimeBlocks && timeBlocks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--muted)]">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded bg-indigo-200 dark:bg-indigo-900/60" />
+            Due dates
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded bg-teal-200 dark:bg-teal-900/60" />
+            Logged time
+          </span>
+        </div>
+      )}
+
       <Card className="overflow-hidden p-4 sm:p-5">
         <h2 className="mb-4 text-center text-lg font-semibold text-zinc-800 dark:text-zinc-100">
           {format(month, "MMMM yyyy")}
@@ -60,9 +104,10 @@ export function CalendarView({ tasks, month, onEdit, onDayClick, showCreateHint 
           ))}
 
           {calendarDays.map((day) => {
-            const dayTasks = scheduled.filter((t) =>
-              isSameCalendarDay(t.dueDate, day)
-            );
+            const dayTasks = scheduled.filter((t) => isSameCalendarDay(t.dueDate, day));
+            const dayBlocks = showTimeBlocks
+              ? timeBlocks.filter((b) => isSameCalendarDay(b.startTime, day))
+              : [];
             const inMonth = isSameMonth(day, month);
             const today = isToday(day);
 
@@ -90,7 +135,7 @@ export function CalendarView({ tasks, month, onEdit, onDayClick, showCreateHint 
                 </span>
 
                 <div className="mt-1 space-y-0.5">
-                  {dayTasks.slice(0, 3).map((task) => (
+                  {dayTasks.slice(0, 2).map((task) => (
                     <span
                       key={task.id}
                       role="button"
@@ -111,17 +156,46 @@ export function CalendarView({ tasks, month, onEdit, onDayClick, showCreateHint 
                         getPriorityColor(task.priority)
                       )}
                     >
-                      <span className="block truncate">{task.title}</span>
-                      {task.assignees && task.assignees.length > 0 && (
-                        <span className="mt-0.5 block" onClick={(e) => e.stopPropagation()}>
-                          <AssigneeChips assignees={task.assignees} compact />
-                        </span>
-                      )}
+                      <span className="flex items-center justify-between gap-1">
+                        <span className="block truncate">{task.title}</span>
+                        {canEditTasks && (
+                          <TaskTimeControls
+                            taskId={task.id}
+                            taskStatus={task.status}
+                            activeEntry={activeEntry}
+                            elapsed={activeTimerElapsed}
+                            onRefresh={onTimerRefresh}
+                            variant="compact"
+                          />
+                        )}
+                      </span>
                     </span>
                   ))}
-                  {dayTasks.length > 3 && (
+                  {dayTasks.length > 2 && (
                     <span className="block px-1 text-[10px] text-zinc-400">
-                      +{dayTasks.length - 3} more
+                      +{dayTasks.length - 2} due
+                    </span>
+                  )}
+                  {dayBlocks.slice(0, 2).map((block) => (
+                    <span
+                      key={block.id}
+                      role="button"
+                      tabIndex={0}
+                      title={`${block.taskTitle} — ${formatDurationShort(block.duration)}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const task = tasks.find((t) => t.id === block.taskId);
+                        if (task) onEdit(task);
+                      }}
+                      className="block w-full cursor-default rounded bg-teal-100 px-1 py-0.5 text-left text-[10px] font-medium text-teal-900 dark:bg-teal-950/50 dark:text-teal-200"
+                    >
+                      <span className="block truncate">{block.taskTitle}</span>
+                      <span className="text-[9px] opacity-75">{formatDurationShort(block.duration)}</span>
+                    </span>
+                  ))}
+                  {dayBlocks.length > 2 && (
+                    <span className="block px-1 text-[10px] text-teal-600 dark:text-teal-400">
+                      +{dayBlocks.length - 2} logged
                     </span>
                   )}
                 </div>
@@ -131,9 +205,9 @@ export function CalendarView({ tasks, month, onEdit, onDayClick, showCreateHint 
         </div>
 
         {showCreateHint && (
-        <p className="mt-3 text-center text-xs text-zinc-400">
-          Click a day to add a task with that due date
-        </p>
+          <p className="mt-3 text-center text-xs text-zinc-400">
+            Click a day to add a task with that due date
+          </p>
         )}
       </Card>
 
@@ -153,12 +227,19 @@ export function CalendarView({ tasks, month, onEdit, onDayClick, showCreateHint 
                   getPriorityColor(task.priority)
                 )}
               >
-                <span className="block truncate">{task.title}</span>
-                {task.assignees && task.assignees.length > 0 && (
-                  <span className="mt-1 block" onClick={(e) => e.stopPropagation()}>
-                    <AssigneeChips assignees={task.assignees} compact />
-                  </span>
-                )}
+                <span className="flex items-center gap-2">
+                  <span className="block truncate">{task.title}</span>
+                  {canEditTasks && (
+                    <TaskTimeControls
+                      taskId={task.id}
+                      taskStatus={task.status}
+                      activeEntry={activeEntry}
+                      elapsed={activeTimerElapsed}
+                      onRefresh={onTimerRefresh}
+                      variant="compact"
+                    />
+                  )}
+                </span>
               </button>
             ))}
           </div>

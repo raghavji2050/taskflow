@@ -20,14 +20,21 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
-import { formatDurationShort, formatDurationHms } from "@/lib/time-format";
+import { formatDurationShort, formatDurationHms, formatLoggedVsEstimated, isOverEstimate } from "@/lib/time-format";
 import { cn } from "@/lib/utils";
 
 type RangePreset = "today" | "week" | "month" | "all";
 
 interface ReportData {
   byUser: { userId: string; name: string; today: number; week: number; month: number; total: number }[];
-  byTask: { taskId: string; title: string; total: number }[];
+  byTask: {
+    taskId: string;
+    title: string;
+    total: number;
+    allTimeTotal: number;
+    estimatedMinutes: number | null;
+  }[];
+  byTag?: { labelId: string; name: string; total: number }[];
   trendDaily: { date: string; hours: number }[];
   trendWeekly: { date: string; hours: number }[];
   totalSeconds: number;
@@ -304,7 +311,7 @@ export function TimeReportsClient() {
                   <thead className="sticky top-0 bg-[var(--card)] text-xs text-[var(--muted)]">
                     <tr>
                       <th className="pb-2 pr-3">Task</th>
-                      <th className="pb-2 text-right">Hours</th>
+                      <th className="pb-2 text-right">Logged / Est.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -318,6 +325,8 @@ export function TimeReportsClient() {
                       (report?.byTask ?? []).map((row) => {
                         const expanded = expandedTaskIds.has(row.taskId);
                         const logs = taskLogs[row.taskId];
+                        const hasEstimate = row.estimatedMinutes != null && row.estimatedMinutes > 0;
+                        const overBudget = hasEstimate && isOverEstimate(row.allTimeTotal, row.estimatedMinutes);
                         return (
                           <Fragment key={row.taskId}>
                             <tr
@@ -336,8 +345,22 @@ export function TimeReportsClient() {
                                   </span>
                                 </div>
                               </td>
-                              <td className="py-2 text-right font-medium tabular-nums">
-                                {formatDurationShort(row.total)}
+                              <td className="py-2 text-right tabular-nums">
+                                <p
+                                  className={cn(
+                                    "font-medium",
+                                    overBudget && "text-amber-600 dark:text-amber-400"
+                                  )}
+                                >
+                                  {hasEstimate
+                                    ? formatLoggedVsEstimated(row.allTimeTotal, row.estimatedMinutes)
+                                    : formatDurationShort(row.total)}
+                                </p>
+                                {hasEstimate && (
+                                  <p className="text-[10px] text-[var(--muted)]">
+                                    This period: {formatDurationShort(row.total)}
+                                  </p>
+                                )}
                               </td>
                             </tr>
                             {expanded && (
@@ -405,6 +428,25 @@ export function TimeReportsClient() {
                 </table>
               </div>
             </Card>
+
+            {(report?.byTag ?? []).length > 0 && (
+              <Card className="p-4">
+                <h2 className="mb-3 text-sm font-semibold text-[var(--foreground)]">Hours by activity tag</h2>
+                <div className="space-y-2">
+                  {(report?.byTag ?? []).map((row) => (
+                    <div
+                      key={row.labelId}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span className="font-medium text-[var(--foreground)]">{row.name}</span>
+                      <span className="font-mono tabular-nums text-[var(--muted)]">
+                        {formatDurationShort(row.total)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
           </div>
 
           <Card className="p-4">

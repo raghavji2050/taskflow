@@ -4,11 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { Play, Square, Plus, MessageSquarePlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
-import { formatDurationHms, formatDurationShort, parseDurationInput } from "@/lib/time-format";
+import {
+  formatDurationHms,
+  formatDurationShort,
+  formatLoggedVsEstimated,
+  isOverEstimate,
+  parseDurationInput,
+} from "@/lib/time-format";
+import { cn } from "@/lib/utils";
 import { useLiveTimer } from "@/lib/useLiveTimer";
 import { useTimeRealtime } from "@/lib/useTimeRealtime";
 import { ManualTimeEntryModal } from "@/components/tasks/ManualTimeEntryModal";
-import { TimerNoteModal } from "@/components/tasks/TimerNoteModal";
+import { TimerNoteModal, type TimerStartSubmitData } from "@/components/tasks/TimerNoteModal";
 import {
   TimerStopModal,
   type TimerStopSubmitData,
@@ -19,6 +26,7 @@ interface TimeSummary {
   total: number;
   today: number;
   week: number;
+  estimatedMinutes?: number | null;
 }
 
 interface ActiveEntry {
@@ -69,7 +77,7 @@ export function TimeTracker({ taskId, readOnly = false, taskStatus }: TimeTracke
 
   useTimeRealtime({ taskId, onEvent: () => void load() });
 
-  const handleStart = async (description: string) => {
+  const handleStart = async (data: TimerStartSubmitData) => {
     setActing(true);
     try {
       const res = await fetch("/api/time/start", {
@@ -77,12 +85,13 @@ export function TimeTracker({ taskId, readOnly = false, taskStatus }: TimeTracke
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId,
-          description: description.trim() || null,
+          description: data.note.trim() || null,
+          promoteStatus: data.promoteStatus,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not start timer");
-      setActiveEntry(data.entry);
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? "Could not start timer");
+      setActiveEntry(result.entry);
       toast.success("Timer started");
       void load();
     } catch (err) {
@@ -165,6 +174,12 @@ export function TimeTracker({ taskId, readOnly = false, taskStatus }: TimeTracke
 
   const isRunning = Boolean(activeEntry?.isRunning);
   const currentTaskStatus = activeEntry?.task?.status ?? taskStatus;
+  const displayTotal = summary.total + (isRunning ? elapsed : 0);
+  const hasEstimate = summary.estimatedMinutes != null && summary.estimatedMinutes > 0;
+  const overBudget = isOverEstimate(displayTotal, summary.estimatedMinutes);
+  const progressPct = hasEstimate
+    ? Math.min(100, (displayTotal / (summary.estimatedMinutes! * 60)) * 100)
+    : 0;
 
   return (
     <div className="space-y-3">
@@ -187,9 +202,25 @@ export function TimeTracker({ taskId, readOnly = false, taskStatus }: TimeTracke
             </div>
             <div className="rounded-lg bg-[var(--surface-hover)] px-2 py-2">
               <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total</p>
-              <p className="mt-0.5 text-sm font-semibold text-[var(--foreground)]">
-                {formatDurationShort(summary.total)}
+              <p
+                className={cn(
+                  "mt-0.5 text-sm font-semibold tabular-nums",
+                  overBudget ? "text-amber-600 dark:text-amber-400" : "text-[var(--foreground)]"
+                )}
+              >
+                {formatLoggedVsEstimated(displayTotal, summary.estimatedMinutes)}
               </p>
+              {hasEstimate && (
+                <div className="mx-auto mt-1.5 h-1 w-full max-w-[72px] overflow-hidden rounded-full bg-[var(--card-border)]">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      overBudget ? "bg-amber-500" : "bg-[var(--accent)]"
+                    )}
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -229,6 +260,7 @@ export function TimeTracker({ taskId, readOnly = false, taskStatus }: TimeTracke
       <TimerNoteModal
         isOpen={startModalOpen}
         mode="start"
+        taskStatus={taskStatus}
         onClose={() => setStartModalOpen(false)}
         onSubmit={handleStart}
       />

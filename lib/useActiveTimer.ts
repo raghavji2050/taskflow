@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useLiveTimer } from "@/lib/useLiveTimer";
 import { useTimeRealtime } from "@/lib/useTimeRealtime";
-import { useEffect } from "react";
 
 export interface ActiveTimerEntry {
   id: string;
   startTime: string;
+  duration?: number;
   isRunning: boolean;
+  isPaused?: boolean;
   description?: string | null;
   taskId?: string;
   task?: { id: string; title: string; status?: string };
+  reminderSnoozedUntil?: string | null;
 }
 
 export function useActiveTimer() {
@@ -29,12 +31,35 @@ export function useActiveTimer() {
 
   useTimeRealtime({ onEvent: () => void refresh() });
 
-  const elapsed = useLiveTimer(entry?.startTime, Boolean(entry?.isRunning));
+  const isActive = Boolean(entry?.isRunning && !entry?.isPaused);
+  const accumulated = entry?.duration ?? 0;
+  const liveElapsed = useLiveTimer(entry?.startTime, isActive, accumulated);
+  const elapsed =
+    entry?.isRunning && entry?.isPaused
+      ? accumulated
+      : entry?.isRunning
+        ? liveElapsed
+        : 0;
 
   const isRunningOnTask = useCallback(
-    (taskId: string) => Boolean(entry?.isRunning && (entry.taskId === taskId || entry.task?.id === taskId)),
+    (taskId: string) =>
+      Boolean(
+        entry?.isRunning &&
+          !entry?.isPaused &&
+          (entry.taskId === taskId || entry.task?.id === taskId)
+      ),
     [entry]
   );
 
-  return { entry, elapsed, refresh, isRunningOnTask };
+  const isPausedOnTask = useCallback(
+    (taskId: string) =>
+      Boolean(
+        entry?.isRunning &&
+          entry?.isPaused &&
+          (entry.taskId === taskId || entry.task?.id === taskId)
+      ),
+    [entry]
+  );
+
+  return { entry, elapsed, refresh, isRunningOnTask, isPausedOnTask };
 }

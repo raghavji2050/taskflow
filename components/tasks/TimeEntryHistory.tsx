@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Scissors, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { formatDurationHms } from "@/lib/time-format";
 import { useTimeRealtime } from "@/lib/useTimeRealtime";
 import { EditTimeEntryModal, type TimeEntryRow } from "@/components/tasks/EditTimeEntryModal";
+import { SplitTimeEntryModal } from "@/components/tasks/SplitTimeEntryModal";
 import { parseDurationInput } from "@/lib/time-format";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ type PageSize = 10 | 25 | 50;
 interface Entry extends TimeEntryRow {
   user?: { id: string; name: string };
   canEdit?: boolean;
+  labels?: { id: string; name: string; color: string | null }[];
 }
 
 interface TimeEntryHistoryProps {
@@ -41,6 +43,8 @@ export function TimeEntryHistory({
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Entry | null>(null);
+  const [splitting, setSplitting] = useState<Entry | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     setPage(1);
@@ -89,6 +93,7 @@ export function TimeEntryHistory({
     date: string;
     hours: number;
     minutes: number;
+    labelIds: string[];
   }) => {
     if (!editing) return;
     const durationSeconds = parseDurationInput(input.hours, input.minutes);
@@ -102,6 +107,7 @@ export function TimeEntryHistory({
         startTime: start.toISOString(),
         endTime: end.toISOString(),
         durationSeconds,
+        labelIds: input.labelIds,
       }),
     });
     if (!res.ok) {
@@ -111,6 +117,65 @@ export function TimeEntryHistory({
     toast.success("Time entry updated");
     setEditing(null);
     void load();
+  };
+
+  const handleSplit = async (
+    segments: { hours: number; minutes: number; description: string }[]
+  ) => {
+    if (!splitting) return;
+    const res = await fetch(`/api/time/${splitting.id}/split`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        segments: segments.map((s) => ({
+          durationSeconds: parseDurationInput(s.hours, s.minutes),
+          description: s.description || null,
+        })),
+      }),
+    });
+    if (!res.ok) {
+      toast.error((await res.json()).error ?? "Could not split");
+      return;
+    }
+    toast.success("Time entry split");
+    setSplitting(null);
+    void load();
+  };
+
+  const handleDuplicateLast = async () => {
+    const res = await fetch("/api/time/duplicate-last", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId }),
+    });
+    if (!res.ok) {
+      toast.error((await res.json()).error ?? "Could not duplicate");
+      return;
+    }
+    toast.success("Last entry duplicated");
+    void load();
+  };
+
+  const handleMerge = async () => {
+    if (selectedIds.length < 2) return;
+    const res = await fetch("/api/time/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entryIds: selectedIds }),
+    });
+    if (!res.ok) {
+      toast.error((await res.json()).error ?? "Could not merge");
+      return;
+    }
+    toast.success("Entries merged");
+    setSelectedIds([]);
+    void load();
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
   const userSelectOptions = [
@@ -160,6 +225,19 @@ export function TimeEntryHistory({
           ]}
           className="h-8 min-w-[100px] w-auto text-xs"
         />
+        {!readOnly && (
+          <div className="ml-auto flex gap-1">
+            <Button type="button" size="sm" variant="ghost" onClick={() => void handleDuplicateLast()}>
+              <Copy className="mr-1 h-3.5 w-3.5" />
+              Duplicate last
+            </Button>
+            {selectedIds.length >= 2 && (
+              <Button type="button" size="sm" variant="secondary" onClick={() => void handleMerge()}>
+                Merge selected ({selectedIds.length})
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {loading && entries.length === 0 ? (
@@ -171,9 +249,11 @@ export function TimeEntryHistory({
           <table className="w-full min-w-[320px] text-left text-sm">
             <thead className="bg-[var(--surface-hover)] text-xs text-[var(--muted)]">
               <tr>
+                {!readOnly && <th className="w-8 px-2 py-2" />}
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">User</th>
                 <th className="px-3 py-2 font-medium">Description</th>
+                <th className="px-3 py-2 font-medium">Tags</th>
                 <th className="px-3 py-2 font-medium">Duration</th>
                 {!readOnly && <th className="px-3 py-2 font-medium" />}
               </tr>
@@ -181,12 +261,36 @@ export function TimeEntryHistory({
             <tbody>
               {entries.map((entry) => (
                 <tr key={entry.id} className="border-t border-[var(--card-border)]">
+                  {!readOnly && (
+                    <td className="px-2 py-2">
+                      {entry.canEdit && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(entry.id)}
+                          onChange={() => toggleSelect(entry.id)}
+                          className="h-3.5 w-3.5 rounded accent-[var(--accent)]"
+                        />
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-[var(--foreground)]">
                     {format(new Date(entry.startTime), "MMM d, yyyy")}
                   </td>
                   <td className="px-3 py-2 text-[var(--muted)]">{entry.user?.name ?? "—"}</td>
                   <td className="max-w-[140px] truncate px-3 py-2 text-[var(--foreground)]">
                     {entry.description || "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {(entry.labels ?? []).map((l) => (
+                        <span
+                          key={l.id}
+                          className="rounded bg-[var(--surface-hover)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]"
+                        >
+                          {l.name}
+                        </span>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-3 py-2 font-mono text-[var(--foreground)]">
                     {formatDurationHms(entry.duration)}
@@ -202,6 +306,14 @@ export function TimeEntryHistory({
                             aria-label="Edit"
                           >
                             <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSplitting(entry)}
+                            className="rounded p-1 text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                            aria-label="Split"
+                          >
+                            <Scissors className="h-3.5 w-3.5" />
                           </button>
                           <button
                             type="button"
@@ -253,6 +365,12 @@ export function TimeEntryHistory({
         isOpen={Boolean(editing)}
         onClose={() => setEditing(null)}
         onSubmit={handleEdit}
+      />
+      <SplitTimeEntryModal
+        entry={splitting}
+        isOpen={Boolean(splitting)}
+        onClose={() => setSplitting(null)}
+        onSubmit={handleSplit}
       />
     </div>
   );

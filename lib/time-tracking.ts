@@ -8,6 +8,7 @@ import {
   resolveTimeRange,
   type TimeRangePreset,
 } from "@/lib/time-format";
+import { getEntryElapsedSeconds, validateSplitSegments } from "@/lib/time-reminder";
 import {
   canEditTimeEntry,
   canStartTimer,
@@ -21,16 +22,22 @@ import { promoteTaskToInProgress } from "@/lib/time-task-status";
 const timeEntryInclude = {
   user: { select: { id: true, name: true, image: true } },
   task: { select: { id: true, title: true, workspaceId: true, status: true } },
+  labels: { include: { label: { select: { id: true, name: true, color: true } } } },
 } satisfies Prisma.TimeEntryInclude;
 
-export type FormattedTimeEntry = ReturnType<typeof formatTimeEntryForClient>;
-
-export function formatTimeEntryForClient(entry: TimeEntry & {
+type TimeEntryWithRelations = TimeEntry & {
   user?: { id: string; name: string; image?: string | null };
   task?: { id: string; title: string; workspaceId: string | null; status: string };
-}) {
+  labels?: { label: { id: string; name: string; color: string | null } }[];
+};
+
+function mapEntryLabels(entry: TimeEntryWithRelations) {
+  return (entry.labels ?? []).map((t) => t.label);
+}
+
+export function formatTimeEntryForClient(entry: TimeEntryWithRelations) {
   const elapsed = entry.isRunning
-    ? computeElapsedSeconds(entry.startTime)
+    ? getEntryElapsedSeconds(entry)
     : entry.duration;
 
   return {
@@ -43,6 +50,10 @@ export function formatTimeEntryForClient(entry: TimeEntry & {
     duration: entry.duration,
     elapsedSeconds: elapsed,
     isRunning: entry.isRunning,
+    isPaused: entry.isPaused,
+    lastReminderAt: entry.lastReminderAt?.toISOString() ?? null,
+    reminderSnoozedUntil: entry.reminderSnoozedUntil?.toISOString() ?? null,
+    labels: mapEntryLabels(entry),
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
     user: entry.user,
@@ -51,8 +62,32 @@ export function formatTimeEntryForClient(entry: TimeEntry & {
   };
 }
 
+export type FormattedTimeEntry = ReturnType<typeof formatTimeEntryForClient>;
+
+async function syncEntryLabels(entryId: string, labelIds: string[], userId: string) {
+  if (labelIds.length === 0) {
+    await prisma.timeEntryTag.deleteMany({ where: { timeEntryId: entryId } });
+    return;
+  }
+  const valid = await prisma.timeEntryLabel.findMany({
+    where: { id: { in: labelIds }, userId },
+    select: { id: true },
+  });
+  const validIds = valid.map((l) => l.id);
+  await prisma.timeEntryTag.deleteMany({
+    where: { timeEntryId: entryId, labelId: { notIn: validIds } },
+  });
+  for (const labelId of validIds) {
+    await prisma.timeEntryTag.upsert({
+      where: { timeEntryId_labelId: { timeEntryId: entryId, labelId } },
+      create: { timeEntryId: entryId, labelId },
+      update: {},
+    });
+  }
+}
+
 async function emitTimeEvent(
-  type: "time:started" | "time:stopped" | "time:updated",
+  type: "time:started" | "time:stopped" | "time:updated" | "time:paused" | "time:resumed",
   entry: FormattedTimeEntry,
   actorId: string
 ) {
@@ -79,22 +114,28 @@ type TaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
 interface StopTimerOptions {
   description?: string | null;
   taskStatus?: TaskStatus;
+  labelIds?: string[];
+}
+
+function finalizeDuration(entry: Pick<TimeEntry, "duration" | "startTime" | "isPaused">, endTime = new Date()) {
+  if (entry.isPaused) return entry.duration;
+  const segment = computeElapsedSeconds(entry.startTime, endTime);
+  return entry.duration + segment;
 }
 
 async function stopRunningEntryInternal(
-  entry: TimeEntry & {
-    task?: { id: string; title: string; workspaceId: string | null; status: string };
-  },
+  entry: TimeEntryWithRelations,
   actorId: string,
   actorName: string,
   options?: StopTimerOptions
 ) {
   const endTime = new Date();
-  const duration = computeElapsedSeconds(entry.startTime, endTime);
+  const duration = finalizeDuration(entry, endTime);
   const updateData: Prisma.TimeEntryUpdateInput = {
     endTime,
     duration,
     isRunning: false,
+    isPaused: false,
   };
 
   if (options && "description" in options) {
@@ -106,6 +147,17 @@ async function stopRunningEntryInternal(
     data: updateData,
     include: timeEntryInclude,
   });
+
+  if (options?.labelIds) {
+    await syncEntryLabels(entry.id, options.labelIds, entry.userId);
+  }
+
+  const withLabels = options?.labelIds
+    ? await prisma.timeEntry.findUniqueOrThrow({
+        where: { id: entry.id },
+        include: timeEntryInclude,
+      })
+    : updated;
 
   if (
     options?.taskStatus &&
@@ -133,16 +185,82 @@ async function stopRunningEntryInternal(
       actorId,
       taskId: entry.taskId,
     });
-    updated.task = { ...updated.task!, status: options.taskStatus };
+    withLabels.task = { ...withLabels.task!, status: options.taskStatus };
   }
 
-  const formatted = formatTimeEntryForClient(updated);
+  const formatted = formatTimeEntryForClient(withLabels);
   await logTaskActivity(
     entry.taskId,
     "time_stopped",
     `${actorName} stopped timer (${formatDurationShort(duration)})`
   );
   await emitTimeEvent("time:stopped", formatted, actorId);
+  return formatted;
+}
+
+export async function pauseTimer(
+  userId: string,
+  timeEntryId?: string,
+  reason?: "manual" | "idle"
+) {
+  const entry = timeEntryId
+    ? await prisma.timeEntry.findFirst({
+        where: { id: timeEntryId, userId },
+        include: timeEntryInclude,
+      })
+    : await prisma.timeEntry.findFirst({
+        where: { userId, isRunning: true },
+        include: timeEntryInclude,
+      });
+
+  if (!entry) throw new Error("No active timer found");
+  if (!entry.isRunning) throw new Error("Timer is not running");
+  if (entry.isPaused) throw new Error("Timer is already paused");
+
+  const now = new Date();
+  const duration = finalizeDuration(entry, now);
+  const actorName = await getUserName(userId);
+
+  const updated = await prisma.timeEntry.update({
+    where: { id: entry.id },
+    data: { duration, isPaused: true },
+    include: timeEntryInclude,
+  });
+
+  const formatted = formatTimeEntryForClient(updated);
+  const reasonLabel = reason === "idle" ? " (idle)" : "";
+  await logTaskActivity(
+    entry.taskId,
+    "time_paused",
+    `${actorName} paused timer${reasonLabel} (${formatDurationShort(duration)})`
+  );
+  await emitTimeEvent("time:paused", formatted, userId);
+  return formatted;
+}
+
+export async function resumePausedTimer(userId: string, timeEntryId?: string) {
+  const entry = timeEntryId
+    ? await prisma.timeEntry.findFirst({
+        where: { id: timeEntryId, userId, isRunning: true, isPaused: true },
+        include: timeEntryInclude,
+      })
+    : await prisma.timeEntry.findFirst({
+        where: { userId, isRunning: true, isPaused: true },
+        include: timeEntryInclude,
+      });
+
+  if (!entry) throw new Error("No paused timer found");
+
+  const actorName = await getUserName(userId);
+  const updated = await prisma.timeEntry.update({
+    where: { id: entry.id },
+    data: { startTime: new Date(), isPaused: false },
+    include: timeEntryInclude,
+  });
+
+  const formatted = formatTimeEntryForClient(updated);
+  await logTaskActivity(entry.taskId, "time_resumed", `${actorName} resumed timer`);
+  await emitTimeEvent("time:resumed", formatted, userId);
   return formatted;
 }
 
@@ -158,7 +276,8 @@ export async function getActiveTimer(userId: string) {
 export async function startTimer(
   userId: string,
   taskId: string,
-  description?: string | null
+  description?: string | null,
+  options?: { promoteStatus?: boolean }
 ) {
   if (!(await canStartTimer(userId, taskId))) {
     throw new Error("Forbidden");
@@ -168,6 +287,7 @@ export async function startTimer(
   if (!task) throw new Error("Task not found");
 
   const actorName = await getUserName(userId);
+  const shouldPromote = options?.promoteStatus !== false;
 
   let statusPromoted = false;
   const entry = await prisma.$transaction(async (tx) => {
@@ -176,10 +296,10 @@ export async function startTimer(
     });
     if (running) {
       const endTime = new Date();
-      const duration = computeElapsedSeconds(running.startTime, endTime);
+      const duration = finalizeDuration(running, endTime);
       await tx.timeEntry.update({
         where: { id: running.id },
-        data: { endTime, duration, isRunning: false },
+        data: { endTime, duration, isRunning: false, isPaused: false },
       });
       await logTaskActivity(
         running.taskId,
@@ -188,12 +308,14 @@ export async function startTimer(
       );
     }
 
-    statusPromoted = await promoteTaskToInProgress(tx, {
-      id: task.id,
-      status: task.status,
-      userId: task.userId,
-      workspaceId: task.workspaceId,
-    });
+    if (shouldPromote) {
+      statusPromoted = await promoteTaskToInProgress(tx, {
+        id: task.id,
+        status: task.status,
+        userId: task.userId,
+        workspaceId: task.workspaceId,
+      });
+    }
 
     return tx.timeEntry.create({
       data: {
@@ -253,9 +375,16 @@ export async function stopTimer(
 export async function resumeTimer(
   userId: string,
   taskId: string,
-  description?: string | null
+  description?: string | null,
+  options?: { promoteStatus?: boolean }
 ) {
-  return startTimer(userId, taskId, description);
+  const paused = await prisma.timeEntry.findFirst({
+    where: { userId, isRunning: true, isPaused: true },
+  });
+  if (paused) {
+    return resumePausedTimer(userId, paused.id);
+  }
+  return startTimer(userId, taskId, description, options);
 }
 
 export async function createManualEntry(
@@ -265,6 +394,7 @@ export async function createManualEntry(
     date: string;
     durationSeconds: number;
     description?: string | null;
+    labelIds?: string[];
   }
 ) {
   if (!(await canStartTimer(userId, input.taskId))) {
@@ -294,7 +424,18 @@ export async function createManualEntry(
     include: timeEntryInclude,
   });
 
-  const formatted = formatTimeEntryForClient(entry);
+  if (input.labelIds?.length) {
+    await syncEntryLabels(entry.id, input.labelIds, userId);
+  }
+
+  const withLabels = input.labelIds?.length
+    ? await prisma.timeEntry.findUniqueOrThrow({
+        where: { id: entry.id },
+        include: timeEntryInclude,
+      })
+    : entry;
+
+  const formatted = formatTimeEntryForClient(withLabels);
   await logTaskActivity(
     input.taskId,
     "time_manual_added",
@@ -312,6 +453,8 @@ export async function updateTimeEntry(
     startTime?: string;
     endTime?: string | null;
     durationSeconds?: number;
+    reminderSnoozedUntil?: string | null;
+    labelIds?: string[];
   }
 ) {
   const entry = await prisma.timeEntry.findUnique({
@@ -331,6 +474,16 @@ export async function updateTimeEntry(
     data.description = input.description?.trim() || null;
   }
 
+  if (input.reminderSnoozedUntil !== undefined) {
+    if (input.reminderSnoozedUntil === null) {
+      data.reminderSnoozedUntil = null;
+    } else {
+      const parsed = new Date(input.reminderSnoozedUntil);
+      if (Number.isNaN(parsed.getTime())) throw new Error("Invalid snooze time");
+      data.reminderSnoozedUntil = parsed;
+    }
+  }
+
   if (entry.isRunning) {
     const hasNonDescriptionFields =
       input.startTime !== undefined ||
@@ -339,7 +492,11 @@ export async function updateTimeEntry(
     if (hasNonDescriptionFields) {
       throw new Error("Cannot edit duration on a running timer");
     }
-    if (input.description === undefined) {
+    if (
+      input.description === undefined &&
+      input.reminderSnoozedUntil === undefined &&
+      input.labelIds === undefined
+    ) {
       throw new Error("No updates provided");
     }
     const updated = await prisma.timeEntry.update({
@@ -347,7 +504,16 @@ export async function updateTimeEntry(
       data,
       include: timeEntryInclude,
     });
-    const formatted = formatTimeEntryForClient(updated);
+    if (input.labelIds) {
+      await syncEntryLabels(entryId, input.labelIds, entry.userId);
+    }
+    const withLabels = input.labelIds
+      ? await prisma.timeEntry.findUniqueOrThrow({
+          where: { id: entryId },
+          include: timeEntryInclude,
+        })
+      : updated;
+    const formatted = formatTimeEntryForClient(withLabels);
     await emitTimeEvent("time:updated", formatted, actorId);
     return formatted;
   }
@@ -386,11 +552,22 @@ export async function updateTimeEntry(
     include: timeEntryInclude,
   });
 
-  const formatted = formatTimeEntryForClient(updated);
+  if (input.labelIds) {
+    await syncEntryLabels(entryId, input.labelIds, entry.userId);
+  }
+
+  const withLabels = input.labelIds
+    ? await prisma.timeEntry.findUniqueOrThrow({
+        where: { id: entryId },
+        include: timeEntryInclude,
+      })
+    : updated;
+
+  const formatted = formatTimeEntryForClient(withLabels);
   await logTaskActivity(
     entry.taskId,
     "time_entry_edited",
-    `${actorName} edited time entry (${formatDurationShort(updated.duration)})`
+    `${actorName} edited time entry (${formatDurationShort(withLabels.duration)})`
   );
   await emitTimeEvent("time:updated", formatted, actorId);
   return formatted;
@@ -648,4 +825,205 @@ export async function canActorViewEntry(actorId: string, entryId: string) {
   if (!entry) return null;
   if (!(await canViewTimeEntry(actorId, entry))) return null;
   return entry;
+}
+
+export async function splitTimeEntry(
+  actorId: string,
+  entryId: string,
+  segments: {
+    durationSeconds: number;
+    taskId?: string;
+    description?: string | null;
+    labelIds?: string[];
+  }[]
+) {
+  const entry = await prisma.timeEntry.findUnique({
+    where: { id: entryId },
+    include: timeEntryInclude,
+  });
+  if (!entry) throw new Error("Time entry not found");
+  if (entry.isRunning) throw new Error("Stop the timer before splitting");
+  if (!(await canEditTimeEntry(actorId, entry))) throw new Error("Forbidden");
+
+  const validationError = validateSplitSegments(entry.duration, segments);
+  if (validationError) throw new Error(validationError);
+
+  const actorName = await getUserName(actorId);
+  const sourceLabels = (entry.labels ?? []).map((t) => t.label.id);
+
+  const created = await prisma.$transaction(async (tx) => {
+    const results = [];
+    let cursor = entry.startTime.getTime();
+
+    for (const seg of segments) {
+      const taskId = seg.taskId ?? entry.taskId;
+      if (taskId !== entry.taskId && !(await canStartTimer(actorId, taskId))) {
+        throw new Error("Forbidden");
+      }
+      const startTime = new Date(cursor);
+      const endTime = new Date(cursor + seg.durationSeconds * 1000);
+      cursor = endTime.getTime();
+
+      const row = await tx.timeEntry.create({
+        data: {
+          userId: entry.userId,
+          taskId,
+          description: seg.description?.trim() ?? entry.description,
+          startTime,
+          endTime,
+          duration: seg.durationSeconds,
+          isRunning: false,
+        },
+        include: timeEntryInclude,
+      });
+      results.push({ row, labelIds: seg.labelIds ?? sourceLabels });
+    }
+
+    await tx.timeEntry.delete({ where: { id: entryId } });
+    return results;
+  });
+
+  for (const { row, labelIds } of created) {
+    if (labelIds.length) await syncEntryLabels(row.id, labelIds, entry.userId);
+  }
+
+  const formatted = await Promise.all(
+    created.map(async ({ row }) => {
+      const full = await prisma.timeEntry.findUniqueOrThrow({
+        where: { id: row.id },
+        include: timeEntryInclude,
+      });
+      return formatTimeEntryForClient(full);
+    })
+  );
+
+  await logTaskActivity(
+    entry.taskId,
+    "time_entry_split",
+    `${actorName} split time entry into ${segments.length} parts`
+  );
+  await emitTimeEvent("time:updated", formatted[0]!, actorId);
+  return formatted;
+}
+
+export async function mergeTimeEntries(actorId: string, entryIds: string[]) {
+  if (entryIds.length < 2) throw new Error("At least two entries required");
+
+  const entries = await prisma.timeEntry.findMany({
+    where: { id: { in: entryIds } },
+    include: timeEntryInclude,
+    orderBy: { startTime: "asc" },
+  });
+
+  if (entries.length !== entryIds.length) throw new Error("Time entry not found");
+
+  const userId = entries[0]!.userId;
+  const taskId = entries[0]!.taskId;
+  for (const e of entries) {
+    if (e.isRunning) throw new Error("Stop all timers before merging");
+    if (e.userId !== userId) throw new Error("Entries must belong to the same user");
+    if (!(await canEditTimeEntry(actorId, e))) throw new Error("Forbidden");
+  }
+
+  const actorName = await getUserName(actorId);
+  const startTime = entries[0]!.startTime;
+  const endTime = entries[entries.length - 1]!.endTime ?? entries[entries.length - 1]!.startTime;
+  const duration = entries.reduce((sum, e) => sum + e.duration, 0);
+  const descriptions = entries
+    .map((e) => e.description?.trim())
+    .filter(Boolean)
+    .join(" / ");
+
+  const allLabelIds = [
+    ...new Set(entries.flatMap((e) => (e.labels ?? []).map((t) => t.label.id))),
+  ];
+
+  const merged = await prisma.$transaction(async (tx) => {
+    await tx.timeEntry.deleteMany({ where: { id: { in: entryIds } } });
+    return tx.timeEntry.create({
+      data: {
+        userId,
+        taskId,
+        description: descriptions || null,
+        startTime,
+        endTime,
+        duration,
+        isRunning: false,
+      },
+      include: timeEntryInclude,
+    });
+  });
+
+  if (allLabelIds.length) await syncEntryLabels(merged.id, allLabelIds, userId);
+
+  const full = await prisma.timeEntry.findUniqueOrThrow({
+    where: { id: merged.id },
+    include: timeEntryInclude,
+  });
+  const formatted = formatTimeEntryForClient(full);
+
+  await logTaskActivity(
+    taskId,
+    "time_entry_merged",
+    `${actorName} merged ${entries.length} time entries`
+  );
+  await emitTimeEvent("time:updated", formatted, actorId);
+  return formatted;
+}
+
+export async function duplicateLastTimeEntry(
+  actorId: string,
+  taskId?: string
+) {
+  const where: Prisma.TimeEntryWhereInput = {
+    userId: actorId,
+    isRunning: false,
+  };
+  if (taskId) where.taskId = taskId;
+
+  const last = await prisma.timeEntry.findFirst({
+    where,
+    include: timeEntryInclude,
+    orderBy: { startTime: "desc" },
+  });
+  if (!last) throw new Error("No time entries to duplicate");
+
+  const targetTaskId = taskId ?? last.taskId;
+  if (!(await canStartTimer(actorId, targetTaskId))) throw new Error("Forbidden");
+
+  const now = new Date();
+  const endTime = new Date(now);
+  endTime.setHours(12, 0, 0, 0);
+  const startTime = new Date(endTime.getTime() - last.duration * 1000);
+
+  const entry = await prisma.timeEntry.create({
+    data: {
+      userId: actorId,
+      taskId: targetTaskId,
+      description: last.description,
+      startTime,
+      endTime,
+      duration: last.duration,
+      isRunning: false,
+    },
+    include: timeEntryInclude,
+  });
+
+  const labelIds = (last.labels ?? []).map((t) => t.label.id);
+  if (labelIds.length) await syncEntryLabels(entry.id, labelIds, actorId);
+
+  const full = await prisma.timeEntry.findUniqueOrThrow({
+    where: { id: entry.id },
+    include: timeEntryInclude,
+  });
+  const formatted = formatTimeEntryForClient(full);
+  const actorName = await getUserName(actorId);
+
+  await logTaskActivity(
+    targetTaskId,
+    "time_duplicated",
+    `${actorName} duplicated last time entry (${formatDurationShort(last.duration)})`
+  );
+  await emitTimeEvent("time:updated", formatted, actorId);
+  return formatted;
 }

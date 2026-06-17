@@ -73,6 +73,7 @@ export async function PUT(request: Request, context: RouteContext) {
         categoryId: taskData.categoryId || null,
         boardColumnId: taskData.boardColumnId ?? null,
         recurrenceRule: taskData.recurrenceRule || null,
+        estimatedMinutes: taskData.estimatedMinutes ?? null,
         position: taskData.position,
         ...(completedAt !== undefined && { completedAt }),
       },
