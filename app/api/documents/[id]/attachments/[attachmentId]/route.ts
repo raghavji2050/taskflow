@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { unlink } from "fs/promises";
-import path from "path";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { canAccessDocument, canEditDocument } from "@/lib/documents";
+import { deleteAttachmentUrl } from "@/lib/blob-storage";
 
 type RouteContext = { params: Promise<{ id: string; attachmentId: string }> };
 
@@ -28,11 +27,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     }
 
     await prisma.documentAttachment.delete({ where: { id: attachmentId } });
-
-    if (attachment.url.startsWith("/uploads/")) {
-      const filepath = path.join(process.cwd(), "public", attachment.url);
-      await unlink(filepath).catch(() => undefined);
-    }
+    await deleteAttachmentUrl(attachment.url);
 
     return NextResponse.json({ success: true });
   } catch (error) {

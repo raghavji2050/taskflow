@@ -21,6 +21,7 @@ import {
   isImageAttachment,
   isPdfAttachment,
 } from "@/lib/attachments";
+import { getAttachmentServeUrl } from "@/lib/blob-url";
 import { formatRelativeDate, cn } from "@/lib/utils";
 
 export interface DocumentAttachmentRow {
@@ -190,7 +191,7 @@ export function DocumentAttachmentsPanel({
                         className="h-7 w-7 p-0"
                         aria-label="Preview"
                         onClick={() => {
-                          if (isImage) setLightboxUrl(file.url);
+                          if (isImage) setLightboxUrl(getAttachmentServeUrl(file.url));
                           else setPreviewId(file.id);
                         }}
                       >
@@ -198,7 +199,7 @@ export function DocumentAttachmentsPanel({
                       </Button>
                     )}
                     <a
-                      href={file.url}
+                      href={getAttachmentServeUrl(file.url)}
                       download={file.filename}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -256,7 +257,7 @@ export function DocumentAttachmentsPanel({
             </button>
           </div>
           <iframe
-            src={`${preview.url}#toolbar=1&navpanes=0`}
+            src={`${getAttachmentServeUrl(preview.url)}#toolbar=1&navpanes=0`}
             title={preview.filename}
             className="h-[min(420px,55vh)] w-full bg-white"
           />

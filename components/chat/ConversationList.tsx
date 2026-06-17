@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Bookmark, ChevronDown, Hash, LogOut, MessageCircle, MessageSquarePlus, MoreHorizontal, Search, Trash2, Users } from "lucide-react";
+import { toast } from "sonner";
+import { ChatFileDropOverlay } from "@/components/chat/ChatFileDropOverlay";
 import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
 import { PushSubscribe } from "@/components/PushSubscribe";
 import { useRealtime } from "@/components/RealtimeProvider";
 import { formatConversationListTime } from "@/lib/chat-dates";
+import { useFileDragDrop } from "@/lib/chat-file-drop";
 import { cn } from "@/lib/utils";
 import type { ChatConversation } from "@/components/chat/ChatThread";
 
@@ -32,6 +35,7 @@ interface ConversationListProps {
   onNewGroup?: () => void;
   onSearch?: () => void;
   onDelete?: (conversationId: string, type: string) => void | Promise<void>;
+  onDropFiles?: (conversationId: string, files: File[]) => void;
 }
 
 type SectionKey = "personal" | "team" | "groups" | "direct";
@@ -84,12 +88,14 @@ function ConversationRow({
   onSelect,
   currentUserId,
   onDelete,
+  onDropFiles,
 }: {
   conv: ConversationListItem;
   selectedId: string | null;
   onSelect: (id: string) => void;
   currentUserId?: string;
   onDelete?: (conversationId: string, type: string) => void | Promise<void>;
+  onDropFiles?: (conversationId: string, files: File[]) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -124,15 +130,37 @@ function ConversationRow({
     Boolean(onDelete);
   const showMenu = canRemove;
 
+  const handleRowDropFiles = useCallback(
+    (files: File[]) => {
+      if (!conv.canPost) {
+        toast.error("You cannot attach files here");
+        return;
+      }
+      onDropFiles?.(conv.id, files);
+    },
+    [conv.canPost, conv.id, onDropFiles]
+  );
+
+  const { isDragging, dragHandlers } = useFileDragDrop({
+    disabled: !onDropFiles,
+    onFiles: handleRowDropFiles,
+  });
+
   return (
     <div
       className={cn(
         "group relative flex items-stretch gap-1 rounded-lg px-1",
         selectedId === conv.id
           ? "bg-[var(--accent)]/10"
-          : "hover:bg-[var(--surface-hover)]"
+          : "hover:bg-[var(--surface-hover)]",
+        isDragging && "ring-2 ring-[var(--accent)] ring-inset",
+        isDragging && "cursor-copy"
       )}
+      {...dragHandlers}
     >
+      {isDragging && (
+        <ChatFileDropOverlay label="Drop to attach" compact className="rounded-lg" />
+      )}
       <button
         type="button"
         onClick={() => onSelect(conv.id)}
@@ -325,6 +353,7 @@ function Section({
   onSelect,
   currentUserId,
   onDelete,
+  onDropFiles,
   collapsed,
   onToggle,
 }: {
@@ -336,6 +365,7 @@ function Section({
   onSelect: (id: string) => void;
   currentUserId?: string;
   onDelete?: (conversationId: string, type: string) => void | Promise<void>;
+  onDropFiles?: (conversationId: string, files: File[]) => void;
   collapsed: boolean;
   onToggle: (key: SectionKey) => void;
 }) {
@@ -365,6 +395,7 @@ function Section({
                 onSelect={onSelect}
                 currentUserId={currentUserId}
                 onDelete={onDelete}
+                onDropFiles={onDropFiles}
               />
             </li>
           ))}
@@ -383,6 +414,7 @@ export function ConversationList({
   onNewGroup,
   onSearch,
   onDelete,
+  onDropFiles,
 }: ConversationListProps) {
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
@@ -470,10 +502,10 @@ export function ConversationList({
             No conversations yet. Start a new chat!
           </p>
         )}
-        <Section sectionKey="personal" title="Personal" icon={Bookmark} items={personal} selectedId={selectedId} onSelect={onSelect} currentUserId={currentUserId} onDelete={onDelete} collapsed={collapsedSections.personal} onToggle={toggleSection} />
-        <Section sectionKey="team" title="Team" icon={Hash} items={workspace} selectedId={selectedId} onSelect={onSelect} currentUserId={currentUserId} onDelete={onDelete} collapsed={collapsedSections.team} onToggle={toggleSection} />
-        <Section sectionKey="groups" title="Groups" icon={Users} items={groups} selectedId={selectedId} onSelect={onSelect} currentUserId={currentUserId} onDelete={onDelete} collapsed={collapsedSections.groups} onToggle={toggleSection} />
-        <Section sectionKey="direct" title="Direct" icon={MessageCircle} items={direct} selectedId={selectedId} onSelect={onSelect} currentUserId={currentUserId} onDelete={onDelete} collapsed={collapsedSections.direct} onToggle={toggleSection} />
+        <Section sectionKey="personal" title="Personal" icon={Bookmark} items={personal} selectedId={selectedId} onSelect={onSelect} currentUserId={currentUserId} onDelete={onDelete} onDropFiles={onDropFiles} collapsed={collapsedSections.personal} onToggle={toggleSection} />
+        <Section sectionKey="team" title="Team" icon={Hash} items={workspace} selectedId={selectedId} onSelect={onSelect} currentUserId={currentUserId} onDelete={onDelete} onDropFiles={onDropFiles} collapsed={collapsedSections.team} onToggle={toggleSection} />
+        <Section sectionKey="groups" title="Groups" icon={Users} items={groups} selectedId={selectedId} onSelect={onSelect} currentUserId={currentUserId} onDelete={onDelete} onDropFiles={onDropFiles} collapsed={collapsedSections.groups} onToggle={toggleSection} />
+        <Section sectionKey="direct" title="Direct" icon={MessageCircle} items={direct} selectedId={selectedId} onSelect={onSelect} currentUserId={currentUserId} onDelete={onDelete} onDropFiles={onDropFiles} collapsed={collapsedSections.direct} onToggle={toggleSection} />
       </div>
     </div>
   );

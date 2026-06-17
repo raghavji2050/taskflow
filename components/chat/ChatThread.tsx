@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { ArrowLeft, Bookmark, Calendar, ChevronDown, Eraser, Loader2, MessageCircle, MoreVertical, Pin, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ChatComposer } from "@/components/chat/ChatComposer";
+import { ChatFileDropOverlay } from "@/components/chat/ChatFileDropOverlay";
 import { ChatDateJumpModal } from "@/components/chat/ChatDateJumpModal";
 import { ChatSearchPanel } from "@/components/chat/ChatSearchPanel";
 import { GroupInfoModal } from "@/components/chat/GroupInfoModal";
@@ -22,6 +23,7 @@ import {
   type ParticipantReceipt,
 } from "@/lib/chat-receipts";
 import { MomBuilderModal } from "@/components/chat/MomBuilderModal";
+import { attachmentPlaceholderBody, isImageAttachment } from "@/lib/attachments";
 import { isDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
 import { setActiveConversationId } from "@/lib/active-chat";
 import { sendTypingIndicator } from "@/lib/realtime-ws-client";
@@ -29,6 +31,7 @@ import {
   subscribeConversationChannel,
   unsubscribeConversationChannel,
 } from "@/lib/pusher-client";
+import { chatFileKey, mergeChatUploadFiles, useFileDragDrop } from "@/lib/chat-file-drop";
 import { cn } from "@/lib/utils";
 import { useMediaQuery, useVisualViewport } from "@/lib/use-visual-viewport";
 
@@ -60,9 +63,27 @@ interface ChatThreadProps {
       user: { id: string; name: string };
     }
   ) => void;
+  stagedDrop?: File[] | null;
+  onStagedDropConsumed?: () => void;
 }
 
-export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, onCleared, onBack, onConversationUpdated, onMessageSent }: ChatThreadProps) {
+function buildOptimisticAttachments(tempId: string, files: File[]) {
+  return files.map((f, i) => ({
+    id: `temp-att-${tempId}-${i}`,
+    filename: f.name,
+    url: isImageAttachment(f.type) ? URL.createObjectURL(f) : "",
+    mimeType: f.type || "application/octet-stream",
+    size: f.size,
+  }));
+}
+
+function revokeOptimisticAttachments(attachments?: ChatMessage["attachments"]) {
+  for (const a of attachments ?? []) {
+    if (a.url.startsWith("blob:")) URL.revokeObjectURL(a.url);
+  }
+}
+
+export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, onCleared, onBack, onConversationUpdated, onMessageSent, stagedDrop, onStagedDropConsumed }: ChatThreadProps) {
   const { data: session } = useSession();
   const { selectedWorkspaceId } = useWorkspace();
   const userId = session?.user?.id;
@@ -73,8 +94,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
   const [body, setBody] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -102,12 +123,43 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const fetchGenRef = useRef(0);
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSendsRef = useRef<
-    Map<string, { body: string; parentId: string | null; file?: File | null }>
+    Map<string, { body: string; parentId: string | null; files: File[] }>
   >(new Map());
 
   const SCROLL_BOTTOM_THRESHOLD = 120;
 
   onReadRef.current = onRead;
+
+  const addPendingFiles = useCallback((incoming: File[]) => {
+    if (incoming.length === 0) return;
+    setPendingFiles((prev) => mergeChatUploadFiles(prev, incoming));
+  }, []);
+
+  const handleThreadDropFiles = useCallback(
+    (incoming: File[]) => {
+      if (readOnly) {
+        toast.error("You cannot attach files here");
+        return;
+      }
+      addPendingFiles(incoming);
+    },
+    [readOnly, addPendingFiles]
+  );
+
+  const { isDragging: isThreadDragging, dragHandlers: threadDragHandlers } = useFileDragDrop({
+    disabled: readOnly || !conversation,
+    onFiles: handleThreadDropFiles,
+  });
+
+  useEffect(() => {
+    setPendingFiles([]);
+  }, [conversation?.id]);
+
+  useEffect(() => {
+    if (!stagedDrop || stagedDrop.length === 0) return;
+    setPendingFiles(mergeChatUploadFiles([], stagedDrop));
+    onStagedDropConsumed?.();
+  }, [stagedDrop, onStagedDropConsumed]);
 
   useEffect(() => {
     receiptsRef.current = receipts;
@@ -443,11 +495,31 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
       if (detail.type === "message:created" && detail.message) {
         const incoming = detail.message;
+        if (incoming.user.id === userId) return;
+
         const wasNearBottom = updateStickToBottom();
         const shouldStick = wasNearBottom || incoming.user.id === userId;
 
         setMessages((prev) => {
-          if (prev.some((m) => m.id === incoming.id)) return prev;
+          const existingById = prev.find((m) => m.id === incoming.id);
+          if (existingById) {
+            const existingAtt = existingById.attachments?.length ?? 0;
+            const incomingAtt = incoming.attachments?.length ?? 0;
+            if (existingAtt > 0 && incomingAtt === 0) return prev;
+            if (existingAtt > 0 && incomingAtt > 0) return prev;
+          }
+
+          let merged = incoming;
+          const optimistic = prev.find(
+            (m) =>
+              m.sendStatus &&
+              m.user.id === incoming.user.id &&
+              m.body === incoming.body
+          );
+          if (optimistic?.attachments?.length && !incoming.attachments?.length) {
+            merged = { ...incoming, attachments: optimistic.attachments };
+          }
+
           const withoutOptimistic = prev.filter(
             (m) =>
               !(
@@ -456,7 +528,19 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
                 m.body === incoming.body
               )
           );
-          return withReceipts([...withoutOptimistic, incoming]);
+
+          if (withoutOptimistic.some((m) => m.id === merged.id)) {
+            return withReceipts(
+              withoutOptimistic.map((m) => {
+                if (m.id !== merged.id) return m;
+                const mAtt = m.attachments?.length ?? 0;
+                const mergedAtt = merged.attachments?.length ?? 0;
+                return mergedAtt >= mAtt ? merged : m;
+              })
+            );
+          }
+
+          return withReceipts([...withoutOptimistic, merged]);
         });
 
         if (shouldStick) {
@@ -641,13 +725,15 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     convId: string,
     text: string,
     parentId: string | null,
-    file?: File | null
+    files: File[] = []
   ) => {
-    if (file) {
+    if (files.length > 0) {
       const formData = new FormData();
       formData.set("body", text);
       if (parentId) formData.set("parentId", parentId);
-      formData.set("file", file);
+      for (const file of files) {
+        formData.append("files", file);
+      }
       return fetch(`/api/conversations/${convId}/messages`, { method: "POST", body: formData });
     }
     return fetch(`/api/conversations/${convId}/messages`, {
@@ -676,18 +762,20 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           conversation.id,
           pending.body,
           pending.parentId,
-          pending.file
+          pending.files
         );
         const data = await res.json();
         if (res.ok) {
           pendingSendsRef.current.delete(clientTempId);
-          setMessages((prev) =>
-            withReceipts(
+          setMessages((prev) => {
+            const old = prev.find((m) => m.clientTempId === clientTempId);
+            revokeOptimisticAttachments(old?.attachments);
+            return withReceipts(
               prev.map((m) =>
                 m.clientTempId === clientTempId ? (data.message as ChatMessage) : m
               )
-            )
-          );
+            );
+          });
         } else {
           setMessages((prev) =>
             prev.map((m) =>
@@ -706,17 +794,20 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     [conversation, userId, session?.user?.name, withReceipts]
   );
 
-  const handleSend = async (opts?: { file?: File | null }) => {
-    if (!conversation || readOnly || !userId || !session?.user?.name || sending) return;
+  const handleSend = async (opts?: { files?: File[] }) => {
+    if (!conversation || readOnly || !userId || !session?.user?.name) return;
     const text = body.trim();
-    const file = opts?.file;
-    if (!text && !file) return;
+    const files = opts?.files ?? [];
+    if (!text && files.length === 0) return;
 
     const tempId = `temp-${crypto.randomUUID()}`;
     const parentId = replyTo?.id ?? null;
-    const optimisticBody = text || (file ? `📎 ${file.name}` : "");
+    const optimisticBody =
+      text || attachmentPlaceholderBody(files.length, files.map((f) => f.name));
+    const optimisticAttachments =
+      files.length > 0 ? buildOptimisticAttachments(tempId, files) : undefined;
 
-    pendingSendsRef.current.set(tempId, { body: text, parentId, file: file ?? null });
+    pendingSendsRef.current.set(tempId, { body: text, parentId, files });
     stickToBottomRef.current = true;
     setNewMessagesBelow(0);
     setMessages((prev) => [
@@ -728,6 +819,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         createdAt: new Date().toISOString(),
         user: { id: userId, name: session.user.name ?? "You", image: session.user.image ?? null },
         sendStatus: "sending" as const,
+        attachments: optimisticAttachments,
         parent: replyTo
           ? {
               id: replyTo.id,
@@ -740,6 +832,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     ]);
     setBody("");
     setReplyTo(null);
+    setPendingFiles([]);
     if (conversation.id) sendTypingIndicator(conversation.id, false);
 
     onMessageSent?.(conversation.id, {
@@ -749,18 +842,19 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       user: { id: userId, name: session.user.name ?? "You" },
     });
 
-    setSending(true);
     try {
-      const res = await sendMessageRequest(conversation.id, text, parentId, file);
+      const res = await sendMessageRequest(conversation.id, text, parentId, files);
       const data = await res.json();
 
       if (res.ok) {
         pendingSendsRef.current.delete(tempId);
-        setMessages((prev) =>
-          withReceipts(
+        setMessages((prev) => {
+          const old = prev.find((m) => m.clientTempId === tempId);
+          revokeOptimisticAttachments(old?.attachments);
+          return withReceipts(
             prev.map((m) => (m.clientTempId === tempId ? (data.message as ChatMessage) : m))
-          )
-        );
+          );
+        });
         const sent = data.message as ChatMessage;
         onMessageSent?.(conversation.id, {
           id: sent.id,
@@ -783,8 +877,6 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         )
       );
       toast.error("Could not send message");
-    } finally {
-      setSending(false);
     }
   };
 
@@ -1185,7 +1277,14 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        className={cn(
+          "relative flex min-h-0 flex-1 flex-col",
+          isThreadDragging && "cursor-copy"
+        )}
+        {...threadDragHandlers}
+      >
+      {isThreadDragging && <ChatFileDropOverlay label="Drop to attach here" />}
       <div
         ref={scrollContainerRef}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-3 md:px-5 md:py-4"
@@ -1288,7 +1387,6 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           onBodyChange={setBody}
           onSend={handleSend}
           onTyping={handleTyping}
-          sending={sending}
           readOnly={readOnly}
           members={conversation.participants}
           showMentions={showMentions}
@@ -1296,6 +1394,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
           onOpenMom={readOnly ? undefined : () => setMomModalOpen(true)}
+          pendingFiles={pendingFiles}
+          onAddFiles={addPendingFiles}
+          onRemoveFile={(file) =>
+            setPendingFiles((prev) => prev.filter((f) => chatFileKey(f) !== chatFileKey(file)))
+          }
         />
       </div>
 

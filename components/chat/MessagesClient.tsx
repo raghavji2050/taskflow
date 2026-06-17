@@ -30,6 +30,9 @@ export function MessagesClient() {
   const [showDmModal, setShowDmModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [stagedDrop, setStagedDrop] = useState<{ conversationId: string; files: File[] } | null>(
+    null
+  );
 
   const showMobileThread = Boolean(selectedId);
   const isMobile = useMediaQuery("(max-width: 767px)");
@@ -271,12 +274,40 @@ export function MessagesClient() {
     [loadConversations, router, selectedId]
   );
 
+  const openConversation = useCallback(
+    (id: string) => {
+      if (!confirmLeaveActiveMomMeeting()) return false;
+      setSelectedId(id);
+      router.replace(`/dashboard/messages?c=${id}`, { scroll: false });
+      return true;
+    },
+    [router]
+  );
+
   const handleSelect = (id: string) => {
     if (id === selectedId) return;
-    if (!confirmLeaveActiveMomMeeting()) return;
-    setSelectedId(id);
-    router.replace(`/dashboard/messages?c=${id}`, { scroll: false });
+    openConversation(id);
   };
+
+  const handleDropOnConversation = useCallback(
+    (convId: string, files: File[]) => {
+      const conv = conversations.find((c) => c.id === convId);
+      if (!conv) return;
+      if (!conv.canPost) {
+        toast.error("You cannot attach files here");
+        return;
+      }
+      setStagedDrop({ conversationId: convId, files: [...files] });
+      if (convId !== selectedId) {
+        openConversation(convId);
+      }
+    },
+    [conversations, selectedId, openConversation]
+  );
+
+  const handleStagedDropConsumed = useCallback(() => {
+    setStagedDrop(null);
+  }, []);
 
   const handleBack = () => {
     if (!confirmLeaveActiveMomMeeting()) return;
@@ -397,6 +428,7 @@ export function MessagesClient() {
             onNewGroup={() => setShowGroupModal(true)}
             onSearch={() => setGlobalSearchOpen(true)}
             onDelete={handleListDelete}
+            onDropFiles={handleDropOnConversation}
           />
         </div>
 
@@ -420,6 +452,10 @@ export function MessagesClient() {
               onConversationUpdated={loadConversations}
               onMessageSent={handleMessageSent}
               onBack={showMobileThread ? handleBack : undefined}
+              stagedDrop={
+                stagedDrop?.conversationId === selectedId ? stagedDrop.files : null
+              }
+              onStagedDropConsumed={handleStagedDropConsumed}
             />
           )}
         </div>

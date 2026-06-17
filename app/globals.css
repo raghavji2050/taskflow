@@ -69,6 +69,25 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a[href] {
+  cursor: pointer;
+}
+
+input:not(:disabled),
+textarea:not(:disabled),
+select:not(:disabled) {
+  cursor: text;
+}
+
 .app-bg {
   background-color: var(--background);
 }

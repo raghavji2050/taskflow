@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import {
@@ -9,6 +7,7 @@ import {
   documentAttachmentSelect,
 } from "@/lib/documents";
 import { MAX_DOCUMENT_ATTACHMENT_BYTES } from "@/lib/attachments";
+import { uploadAttachment } from "@/lib/blob-storage";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -56,24 +55,21 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "File exceeds 20 MB limit" }, { status: 400 });
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "documents", id);
-    await mkdir(uploadDir, { recursive: true });
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const storedName = `${Date.now()}-${safeName}`;
-    const filepath = path.join(uploadDir, storedName);
-    await writeFile(filepath, buffer);
+    const saved = await uploadAttachment({
+      file,
+      filename: file.name,
+      mimeType: file.type || "application/octet-stream",
+      prefix: `documents/${id}`,
+    });
 
     const attachment = await prisma.documentAttachment.create({
       data: {
         documentId: id,
         userId: user.id,
         filename: file.name,
-        url: `/uploads/documents/${id}/${storedName}`,
+        url: saved.url,
         mimeType: file.type || "application/octet-stream",
-        size: buffer.length,
+        size: saved.size,
       },
       select: documentAttachmentSelect,
     });

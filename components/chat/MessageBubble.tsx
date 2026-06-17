@@ -15,7 +15,7 @@ import { ForwardedMessageCard } from "@/components/chat/ForwardedMessageCard";
 import type { SharedMomPreview } from "@/lib/mom-format";
 import { Button } from "@/components/ui/Button";
 import type { FormattedForwardedFrom } from "@/lib/message-format";
-import { isAttachmentOnlyBody, isImageAttachment } from "@/lib/attachments";
+import { isAttachmentOnlyBody } from "@/lib/attachments";
 import { isDefaultDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
 
 export interface MessageAttachment {
@@ -152,13 +152,12 @@ export function MessageBubble({
 
   const isFailed = message.sendStatus === "failed";
   const isSending = message.sendStatus === "sending";
+  const hideAttachmentPlaceholderBody =
+    Boolean(message.attachments?.length) &&
+    message.attachments!.some((a) => isAttachmentOnlyBody(message.body, a.filename));
   const showBody =
     Boolean(message.body) &&
-    !(
-      message.attachments?.length &&
-      message.attachments.every((a) => isImageAttachment(a.mimeType)) &&
-      message.attachments.some((a) => isAttachmentOnlyBody(message.body, a.filename))
-    ) &&
+    !hideAttachmentPlaceholderBody &&
     !(
       message.sharedDocument &&
       isDefaultDocumentShareBody(
@@ -168,6 +167,22 @@ export function MessageBubble({
       )
     ) &&
     !(message.sharedMom && isMomShareBody(message.body));
+
+  const hasAttachments =
+    !message.forwardedFrom &&
+    Boolean(message.attachments?.length) &&
+    !isDeleted &&
+    !editing;
+  const hasBubbleContent =
+    isDeleted ||
+    editing ||
+    Boolean(message.parent) ||
+    Boolean(message.forwardedFrom) ||
+    Boolean(message.sharedDocument) ||
+    Boolean(message.sharedMom) ||
+    showBody;
+  const attachmentsInBubble = hasAttachments && hasBubbleContent;
+  const attachmentsStandalone = hasAttachments && !hasBubbleContent;
 
   return (
     <div className={cn("group flex w-full px-0.5 sm:px-1", isOwn ? "justify-end" : "justify-start")}>
@@ -214,7 +229,8 @@ export function MessageBubble({
           </p>
         )}
 
-        <div className="relative">
+        <div className="relative flex flex-col">
+          {hasBubbleContent && (
           <div
             className={cn(
               "rounded-2xl px-3 py-2 text-sm leading-relaxed",
@@ -253,7 +269,7 @@ export function MessageBubble({
                   type="button"
                   onClick={() => onJumpToMessage(message.parent!.id, message.parent!.createdAt!)}
                   className={cn(
-                    "mb-2 w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs opacity-90 transition-opacity hover:opacity-100",
+                    "mb-2 w-full cursor-pointer rounded-lg border-l-2 px-2 py-1 text-left text-xs opacity-90 transition-opacity hover:opacity-100",
                     isOwn ? "border-white/50 bg-white/10" : "border-[var(--accent)] bg-[var(--surface-hover)]"
                   )}
                   aria-label="Jump to quoted message"
@@ -324,14 +340,6 @@ export function MessageBubble({
                   />
                 )}
 
-                {!message.forwardedFrom && message.attachments && message.attachments.length > 0 && (
-                  <MessageAttachmentPreview
-                    attachments={message.attachments}
-                    isOwn={isOwn}
-                    messageBody={message.body}
-                  />
-                )}
-
                 {!message.forwardedFrom && message.sharedDocument && !isDeleted && (
                   <DocumentShareCard document={message.sharedDocument} isOwn={isOwn} />
                 )}
@@ -339,18 +347,39 @@ export function MessageBubble({
                 {!message.forwardedFrom && message.sharedMom && !isDeleted && (
                   <MomShareCard mom={message.sharedMom} isOwn={isOwn} />
                 )}
+
+                {attachmentsInBubble && message.attachments && (
+                  <MessageAttachmentPreview
+                    attachments={message.attachments}
+                    isOwn={isOwn}
+                    messageBody={message.body}
+                    isSending={isSending}
+                    variant="inBubble"
+                  />
+                )}
               </>
             )}
           </div>
+          )}
+
+          {attachmentsStandalone && message.attachments && (
+            <MessageAttachmentPreview
+              attachments={message.attachments}
+              isOwn={isOwn}
+              messageBody={message.body}
+              isSending={isSending}
+              variant="standalone"
+            />
+          )}
 
           {!readOnly && !isDeleted && !editing && (
             <div
               className={cn(
-                "hidden gap-0.5 md:flex",
-                "md:absolute md:top-0 md:mt-0 md:opacity-0 md:transition-opacity md:group-hover:opacity-100",
+                "relative hidden gap-0.5 md:flex",
+                "md:absolute md:top-1/2 md:-translate-y-1/2 md:opacity-0 md:transition-opacity md:group-hover:opacity-100",
                 isOwn
-                  ? "md:left-0 md:-translate-x-full md:pr-1"
-                  : "md:right-0 md:translate-x-full md:pl-1 md:justify-end"
+                  ? "md:left-0 md:-translate-x-[calc(100%+0.25rem)] md:-translate-y-1/2"
+                  : "md:right-0 md:translate-x-[calc(100%+0.25rem)] md:-translate-y-1/2 md:justify-end"
               )}
             >
               <div className="relative">
@@ -382,7 +411,7 @@ export function MessageBubble({
                   <div className="fixed inset-0 z-40 hidden md:block" onClick={() => setMenuOpen(false)} />
                   <div
                     className={cn(
-                      "absolute z-50 mt-1 hidden min-w-[8rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg md:block",
+                      "absolute top-full z-50 mt-1 hidden min-w-[8rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg md:block",
                       isOwn ? "left-0" : "right-0"
                     )}
                   >
@@ -447,7 +476,7 @@ export function MessageBubble({
                 disabled={readOnly || !onReact}
                 onClick={() => onReact?.(message.id, g.emoji)}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:bg-[var(--surface-hover)]",
+                  "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed",
                   g.mine
                     ? "border-[var(--accent)] bg-[var(--accent)]/10"
                     : "border-[var(--card-border)] bg-[var(--card)]"
@@ -460,7 +489,12 @@ export function MessageBubble({
           </div>
         )}
 
-        <p className={cn("mt-0.5 flex items-center gap-1 px-1 text-[10px] text-[var(--muted)]", isOwn && "justify-end")}>
+        <div
+          className={cn(
+            "mt-0.5 flex items-center gap-1 px-1 text-[10px] tabular-nums text-[var(--muted)]",
+            isOwn && "justify-end"
+          )}
+        >
           <span>
             {time}
             {message.editedAt && !isDeleted && (
@@ -471,7 +505,7 @@ export function MessageBubble({
             <button
               type="button"
               onClick={() => onRetrySend(message.clientTempId!)}
-              className="text-red-400 underline"
+              className="cursor-pointer text-red-400 underline"
             >
               Failed — retry
             </button>
@@ -481,7 +515,7 @@ export function MessageBubble({
             <MessageReceiptTicks status={message.receiptStatus} />
           )}
           {!readOnly && !isDeleted && !editing && (
-            <span className="ml-0.5 inline-flex items-center gap-0.5 md:hidden">
+            <div className="ml-0.5 inline-flex items-center gap-0.5 md:hidden">
               <div className="relative">
                 <button
                   type="button"
@@ -512,9 +546,9 @@ export function MessageBubble({
               >
                 <MoreHorizontal className="h-3 w-3" />
               </button>
-            </span>
+            </div>
           )}
-        </p>
+        </div>
         {!readOnly && !isDeleted && !editing && menuOpen && (
           <>
             <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMenuOpen(false)} />

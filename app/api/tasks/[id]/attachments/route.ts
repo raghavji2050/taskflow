@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { canAccessTask, canEditTask } from "@/lib/workspace";
 import { broadcastTaskEvent } from "@/lib/realtime";
+import { uploadAttachment } from "@/lib/blob-storage";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -24,21 +23,19 @@ export async function POST(request: Request, context: RouteContext) {
     const file = formData.get("file") as File | null;
     if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const uploadDir = path.join(process.cwd(), "public", "uploads", user.id);
-    await mkdir(uploadDir, { recursive: true });
-
-    const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-    const filepath = path.join(uploadDir, filename);
-    await writeFile(filepath, buffer);
+    const saved = await uploadAttachment({
+      file,
+      filename: file.name,
+      mimeType: file.type || "application/octet-stream",
+      prefix: `tasks/${id}`,
+    });
 
     const attachment = await prisma.attachment.create({
       data: {
         filename: file.name,
-        url: `/uploads/${user.id}/${filename}`,
+        url: saved.url,
         mimeType: file.type || "application/octet-stream",
-        size: buffer.length,
+        size: saved.size,
         taskId: id,
       },
     });

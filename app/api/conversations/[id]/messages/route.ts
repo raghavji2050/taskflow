@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { messageSchema, messagesQuerySchema } from "@/lib/validations";
-import { canAccessConversation, canPostToConversation, getConversationParticipantIds } from "@/lib/chat-access";
+import { canAccessConversation, canPostToConversation } from "@/lib/chat-access";
 import { getConversationDisplayName } from "@/lib/conversations";
 import {
-  addMessageAttachment,
+  addMessageAttachments,
   getMessagesForDate,
   listMessages,
+  notifyParticipants,
   searchMessages,
   sendMessage,
 } from "@/lib/messages";
+import {
+  attachmentPlaceholderBody,
+  parseChatUploadFiles,
+  validateChatUploadFiles,
+} from "@/lib/attachments";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -64,25 +70,37 @@ export async function POST(request: Request, context: RouteContext) {
     const contentType = request.headers.get("content-type") ?? "";
     let body = "";
     let parentId: string | null = null;
-    let file: File | null = null;
+    let files: File[] = [];
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
       body = String(formData.get("body") ?? "");
       parentId = formData.get("parentId") ? String(formData.get("parentId")) : null;
-      const f = formData.get("file");
-      file = f instanceof File && f.size > 0 ? f : null;
+      files = parseChatUploadFiles(formData);
     } else {
       const data = messageSchema.parse(await request.json());
       body = data.body ?? "";
       parentId = data.parentId ?? null;
     }
 
-    if (!body.trim() && !file) {
+    if (!body.trim() && files.length === 0) {
       return NextResponse.json({ error: "Message or attachment required" }, { status: 400 });
     }
 
-    const messageBody = body.trim() || (file ? `📎 ${file.name}` : "");
+    const uploadError = validateChatUploadFiles(files);
+    if (uploadError) {
+      return NextResponse.json({ error: uploadError }, { status: 400 });
+    }
+
+    const messageBody =
+      body.trim() ||
+      attachmentPlaceholderBody(
+        files.length,
+        files.map((f) => f.name)
+      );
+
+    const conversationTitle = getConversationDisplayName(conversation, user.id);
+    const mentionCandidates = conversation.participants.map((p) => p.user);
 
     let message = await sendMessage({
       conversationId: id,
@@ -90,27 +108,34 @@ export async function POST(request: Request, context: RouteContext) {
       userName: user.name,
       body: messageBody,
       parentId,
-      conversationTitle: getConversationDisplayName(conversation, user.id),
-      mentionCandidates: conversation.participants.map((p) => p.user),
+      conversationTitle,
+      mentionCandidates,
+      skipNotify: files.length > 0,
     });
 
-    if (file) {
-      const result = await addMessageAttachment({
+    if (files.length > 0) {
+      message = await addMessageAttachments({
         messageId: message.id,
+        userId: user.id,
+        files,
+      });
+
+      const preview =
+        files.length === 1
+          ? `📎 ${files[0]!.name}`
+          : `📎 ${files.length} files`;
+
+      await notifyParticipants({
         conversationId: id,
         userId: user.id,
-        file,
-      });
-      message = result.message;
-
-      const participantIds = await getConversationParticipantIds(id);
-      const { broadcastMessageToConversation } = await import("@/lib/realtime");
-      broadcastMessageToConversation(participantIds, {
-        conversationId: id,
+        userName: user.name,
+        preview,
+        conversationTitle,
+        mentionCandidates,
+        body: messageBody,
         messageId: message.id,
-        actorId: user.id,
-        preview: `📎 ${file.name}`,
-        type: "message:updated",
+        message,
+        type: "message:created",
       });
     }
 

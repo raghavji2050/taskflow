@@ -10,6 +10,7 @@ import type { TaskEvent } from "@/lib/realtime";
 import { MentionInput } from "@/components/MentionInput";
 import { formatActivityAction } from "@/lib/activity-labels";
 import { formatRelativeDate } from "@/lib/utils";
+import { getAttachmentServeUrl } from "@/lib/blob-url";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -344,7 +345,7 @@ export function TaskDetail({ taskId, readOnly = false, members = [] }: TaskDetai
             {attachments.map((a) => (
               <a
                 key={a.id}
-                href={a.url}
+                href={getAttachmentServeUrl(a.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block truncate text-sm text-indigo-500 hover:underline"

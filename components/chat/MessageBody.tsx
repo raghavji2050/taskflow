@@ -21,7 +21,7 @@ function renderTextWithUrls(text: string, linkClassName?: string) {
         href={part.value}
         target="_blank"
         rel="noopener noreferrer"
-        className={cn("underline break-all", linkClassName ?? "text-[var(--accent)]")}
+        className={cn("underline break-all cursor-pointer", linkClassName ?? "text-[var(--accent)]")}
         onClick={(e) => e.stopPropagation()}
       >
         {part.value}

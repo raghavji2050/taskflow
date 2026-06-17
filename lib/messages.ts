@@ -291,9 +291,18 @@ export async function sendMessage(params: {
   parentId?: string | null;
   conversationTitle: string;
   mentionCandidates: { id: string; name: string }[];
+  skipNotify?: boolean;
 }) {
-  const { conversationId, userId, userName, body, parentId, conversationTitle, mentionCandidates } =
-    params;
+  const {
+    conversationId,
+    userId,
+    userName,
+    body,
+    parentId,
+    conversationTitle,
+    mentionCandidates,
+    skipNotify,
+  } = params;
 
   const trimmed = body.trim();
   if (!trimmed) {
@@ -330,18 +339,20 @@ export async function sendMessage(params: {
   const preview = trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
   const formatted = formatMessageForClient(message);
 
-  await notifyParticipants({
-    conversationId,
-    userId,
-    userName,
-    preview,
-    conversationTitle,
-    mentionCandidates,
-    body: trimmed,
-    messageId: message.id,
-    message: formatted,
-    type: "message:created",
-  });
+  if (!skipNotify) {
+    await notifyParticipants({
+      conversationId,
+      userId,
+      userName,
+      preview,
+      conversationTitle,
+      mentionCandidates,
+      body: trimmed,
+      messageId: message.id,
+      message: formatted,
+      type: "message:created",
+    });
+  }
 
   return formatted;
 }
@@ -620,6 +631,32 @@ export async function addMessageAttachment(params: {
   });
 
   return { attachment, message: formatMessageForClient(message) };
+}
+
+export async function addMessageAttachments(params: {
+  messageId: string;
+  userId: string;
+  files: File[];
+}) {
+  for (const file of params.files) {
+    const saved = await saveMessageAttachmentFile(params.userId, file);
+    await prisma.messageAttachment.create({
+      data: {
+        messageId: params.messageId,
+        filename: saved.filename,
+        url: saved.url,
+        mimeType: saved.mimeType,
+        size: saved.size,
+      },
+    });
+  }
+
+  const message = await prisma.message.findUniqueOrThrow({
+    where: { id: params.messageId },
+    include: messageInclude,
+  });
+
+  return formatMessageForClient(message);
 }
 
 export async function toggleMessageReaction(params: {
