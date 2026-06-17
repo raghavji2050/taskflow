@@ -1,6 +1,7 @@
 import { ConversationType, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getWorkspaceMembership } from "@/lib/workspace";
+import { broadcastConversationRemoved } from "@/lib/realtime";
 
 const conversationInclude = {
   workspace: { select: { id: true, name: true } },
@@ -521,6 +522,7 @@ export async function deleteConversationForUser(userId: string, conversationId: 
       where: { conversationId_userId: { conversationId, userId } },
     });
     const remaining = await prisma.conversationParticipant.count({ where: { conversationId } });
+    broadcastConversationRemoved(userId, conversationId);
     if (remaining === 0) {
       await prisma.conversation.delete({ where: { id: conversationId } });
       return { deleted: true as const };
@@ -530,12 +532,14 @@ export async function deleteConversationForUser(userId: string, conversationId: 
 
   if (conv.participants.length <= 1) {
     await prisma.conversation.delete({ where: { id: conversationId } });
+    broadcastConversationRemoved(userId, conversationId);
     return { deleted: true as const };
   }
 
   await prisma.conversationParticipant.delete({
     where: { conversationId_userId: { conversationId, userId } },
   });
+  broadcastConversationRemoved(userId, conversationId);
   return { deleted: false as const, left: true as const };
 }
 

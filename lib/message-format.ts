@@ -1,4 +1,5 @@
 import { getConversationDisplayName } from "@/lib/conversations";
+import { formatMomPreviewFromRecord } from "@/lib/mom-format";
 
 export const messageUserSelect = { id: true, name: true, image: true } as const;
 
@@ -12,7 +13,27 @@ const forwardedFromSelect = {
   documentLinks: {
     take: 1,
     include: {
-      document: { select: { id: true, title: true, type: true, icon: true } },
+      document: {
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          icon: true,
+          meetingMinutes: {
+            select: {
+              id: true,
+              documentId: true,
+              title: true,
+              startedAt: true,
+              endedAt: true,
+              points: true,
+              content: true,
+              attendeeUserIds: true,
+              allAttendees: true,
+            },
+          },
+        },
+      },
     },
   },
   conversation: {
@@ -45,7 +66,33 @@ export const messageInclude = {
   documentLinks: {
     take: 1,
     include: {
-      document: { select: { id: true, title: true, type: true, icon: true } },
+      document: {
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          icon: true,
+          meetingMinutes: {
+            select: {
+              id: true,
+              documentId: true,
+              title: true,
+              startedAt: true,
+              endedAt: true,
+              points: true,
+              content: true,
+              attendeeUserIds: true,
+              allAttendees: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  conversation: {
+    select: {
+      type: true,
+      participants: { select: { user: { select: { id: true, name: true } } } },
     },
   },
 };
@@ -58,7 +105,23 @@ type ForwardedFromSource = {
   user: { id: string; name: string };
   attachments?: { id: string; filename: string; url: string; mimeType: string; size: number }[];
   documentLinks?: {
-    document: { id: string; title: string; type: string; icon: string | null };
+    document: {
+      id: string;
+      title: string;
+      type: string;
+      icon: string | null;
+      meetingMinutes?: {
+        id: string;
+        documentId: string;
+        title: string;
+        startedAt: Date;
+        endedAt: Date | null;
+        points: import("@prisma/client").Prisma.JsonValue;
+        content?: import("@prisma/client").Prisma.JsonValue | null;
+        attendeeUserIds: import("@prisma/client").Prisma.JsonValue;
+        allAttendees: boolean;
+      } | null;
+    };
   }[];
   conversation: {
     type: import("@prisma/client").ConversationType;
@@ -88,8 +151,28 @@ type MessageWithRelations = {
   attachments?: { id: string; filename: string; url: string; mimeType: string; size: number }[];
   reactions?: { id: string; emoji: string; user: { id: string; name: string } }[];
   documentLinks?: {
-    document: { id: string; title: string; type: string; icon: string | null };
+    document: {
+      id: string;
+      title: string;
+      type: string;
+      icon: string | null;
+      meetingMinutes?: {
+        id: string;
+        documentId: string;
+        title: string;
+        startedAt: Date;
+        endedAt: Date | null;
+        points: import("@prisma/client").Prisma.JsonValue;
+        content?: import("@prisma/client").Prisma.JsonValue | null;
+        attendeeUserIds: import("@prisma/client").Prisma.JsonValue;
+        allAttendees: boolean;
+      } | null;
+    };
   }[];
+  conversation?: {
+    type: import("@prisma/client").ConversationType;
+    participants: { user: { id: string; name: string } }[];
+  };
 };
 
 function formatSharedDocument(
@@ -151,10 +234,19 @@ export function formatMessageForClient(message: MessageWithRelations, viewerUser
         : null,
     attachments: deleted ? [] : (message.attachments ?? []),
     reactions: message.reactions ?? [],
+    sharedMom:
+      deleted || !message.documentLinks?.[0]?.document?.meetingMinutes
+        ? null
+        : formatMomPreviewFromRecord(message.documentLinks[0].document.meetingMinutes, {
+            conversationType: message.conversation?.type,
+            participants: message.conversation?.participants.map((p) => p.user),
+          }),
     sharedDocument: deleted
       ? null
-      : message.documentLinks?.[0]?.document
-        ? formatSharedDocument(message.documentLinks)
-        : null,
+      : message.documentLinks?.[0]?.document?.meetingMinutes
+        ? null
+        : message.documentLinks?.[0]?.document
+          ? formatSharedDocument(message.documentLinks)
+          : null,
   };
 }

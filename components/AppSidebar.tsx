@@ -23,22 +23,77 @@ import {
   Shield,
   MessageSquare,
   BookOpen,
+  Users,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useRealtime } from "@/components/RealtimeProvider";
-import { clearWorkspaceSelection } from "@/components/WorkspaceProvider";
+import { clearWorkspaceSelection, useWorkspace } from "@/components/WorkspaceProvider";
 import { useChatUnread } from "@/lib/useChatUnread";
+import {
+  MOBILE_SIDEBAR_DRAWER_ID,
+  MOBILE_SIDEBAR_OVERLAY_ID,
+  useMobileSidebarSwipe,
+} from "@/lib/use-mobile-sidebar-swipe";
 import { cn, getInitials } from "@/lib/utils";
 
-const navItems = [
-  { href: "/dashboard", label: "List", icon: LayoutList, match: (p: string) => p === "/dashboard" },
-  { href: "/dashboard/board", label: "Board", icon: Columns3, match: (p: string) => p.startsWith("/dashboard/board") },
-  { href: "/dashboard/calendar", label: "Calendar", icon: Calendar, match: (p: string) => p.startsWith("/dashboard/calendar") },
-  { href: "/dashboard/my-work", label: "My Work", icon: UserCircle, match: (p: string) => p.startsWith("/dashboard/my-work") },
-  { href: "/dashboard/timeline", label: "Timeline", icon: GanttChart, match: (p: string) => p.startsWith("/dashboard/timeline") },
-  { href: "/dashboard/messages", label: "Messages", icon: MessageSquare, match: (p: string) => p.startsWith("/dashboard/messages") },
-  { href: "/dashboard/docs", label: "Docs", icon: BookOpen, match: (p: string) => p.startsWith("/dashboard/docs") },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutList;
+  match: (pathname: string) => boolean;
+};
+
+const taskNavItems: NavItem[] = [
+  { href: "/dashboard", label: "List", icon: LayoutList, match: (p) => p === "/dashboard" },
+  {
+    href: "/dashboard/board",
+    label: "Board",
+    icon: Columns3,
+    match: (p) => p.startsWith("/dashboard/board"),
+  },
+  {
+    href: "/dashboard/calendar",
+    label: "Calendar",
+    icon: Calendar,
+    match: (p) => p.startsWith("/dashboard/calendar"),
+  },
+  {
+    href: "/dashboard/my-work",
+    label: "My Work",
+    icon: UserCircle,
+    match: (p) => p.startsWith("/dashboard/my-work"),
+  },
+  {
+    href: "/dashboard/timeline",
+    label: "Timeline",
+    icon: GanttChart,
+    match: (p) => p.startsWith("/dashboard/timeline"),
+  },
+];
+
+const collaborateNavItems: NavItem[] = [
+  {
+    href: "/dashboard/messages",
+    label: "Messages",
+    icon: MessageSquare,
+    match: (p) => p.startsWith("/dashboard/messages"),
+  },
+  {
+    href: "/dashboard/docs",
+    label: "Docs",
+    icon: BookOpen,
+    match: (p) => p.startsWith("/dashboard/docs"),
+  },
+];
+
+const workspaceNavItems: NavItem[] = [
+  {
+    href: "/dashboard/team",
+    label: "Team",
+    icon: Users,
+    match: (p) => p.startsWith("/dashboard/team"),
+  },
 ];
 
 function SidebarUserMenu() {
@@ -155,6 +210,13 @@ function SidebarContent({
   const pathname = usePathname();
   const { connected } = useRealtime();
   const { totalUnread } = useChatUnread();
+  const { isPersonal } = useWorkspace();
+
+  const sections = [
+    { label: "Tasks", items: taskNavItems },
+    ...(isPersonal ? [] : [{ label: "Workspace", items: workspaceNavItems }]),
+    { label: "Collaboration", items: collaborateNavItems },
+  ];
 
   return (
     <div className="flex h-full flex-col">
@@ -200,30 +262,40 @@ function SidebarContent({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3">
-        <p className="sidebar-section-label mb-2">Views</p>
-        <div className="space-y-0.5">
-          {navItems.map(({ href, label, icon: Icon, match }) => {
-            const active = match(pathname);
-            const unreadBadge = href === "/dashboard/messages" ? totalUnread : 0;
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={onNavigate}
-                className={cn("sidebar-nav-item", active && "active")}
-              >
-                <Icon className={cn("sidebar-nav-icon h-[18px] w-[18px] shrink-0", active ? "text-[var(--accent)]" : "text-[var(--muted)]")} strokeWidth={active ? 2.25 : 2} />
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-                {unreadBadge > 0 && (
-                  <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 text-[10px] font-bold tabular-nums text-white">
-                    {unreadBadge > 99 ? "99+" : unreadBadge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </div>
+      <nav className="flex-1 overflow-y-auto px-3 pb-2">
+        {sections.map((section, sectionIndex) => (
+          <div key={section.label} className={cn(sectionIndex > 0 && "mt-5")}>
+            <p className="sidebar-section-label mb-2">{section.label}</p>
+            <div className="space-y-0.5">
+              {section.items.map(({ href, label, icon: Icon, match }) => {
+                const active = match(pathname);
+                const unreadBadge = href === "/dashboard/messages" ? totalUnread : 0;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onNavigate}
+                    className={cn("sidebar-nav-item", active && "active")}
+                  >
+                    <Icon
+                      className={cn(
+                        "sidebar-nav-icon h-[18px] w-[18px] shrink-0",
+                        active ? "text-[var(--accent)]" : "text-[var(--muted)]"
+                      )}
+                      strokeWidth={active ? 2.25 : 2}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                    {unreadBadge > 0 && (
+                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 text-[10px] font-bold tabular-nums text-white">
+                        {unreadBadge > 99 ? "99+" : unreadBadge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* User */}
@@ -236,6 +308,12 @@ function SidebarContent({
 
 export function AppSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useMobileSidebarSwipe({
+    isOpen: mobileOpen,
+    onOpen: () => setMobileOpen(true),
+    onClose: () => setMobileOpen(false),
+  });
 
   return (
     <>
@@ -260,9 +338,12 @@ export function AppSidebar() {
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div id={MOBILE_SIDEBAR_OVERLAY_ID} className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-[280px] flex-col bg-[var(--sidebar)] shadow-2xl">
+          <aside
+            id={MOBILE_SIDEBAR_DRAWER_ID}
+            className="absolute inset-y-0 left-0 flex w-[280px] flex-col bg-[var(--sidebar)] shadow-2xl transition-transform duration-200 ease-out"
+          >
             <SidebarContent
               onNavigate={() => setMobileOpen(false)}
               onClose={() => setMobileOpen(false)}

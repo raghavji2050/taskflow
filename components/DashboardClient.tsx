@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
-import { WorkspacePanel } from "@/components/WorkspacePanel";
 import { DashboardStats, CompletionRing, type DashboardStatsData } from "@/components/DashboardStats";
 import { StatsBreakdown } from "@/components/StatsBreakdown";
 import { TaskCard, type Task } from "@/components/TaskCard";
@@ -265,8 +264,6 @@ export function DashboardClient({ userName }: DashboardClientProps) {
         }
       />
 
-      <WorkspacePanel />
-
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="sm:col-span-2 xl:col-span-3">
           <DashboardStats stats={stats} />
@@ -330,7 +327,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
                 <p className="mt-1 max-w-xs text-sm text-[var(--muted)]">
                   {isPersonal
                     ? "Press N or use New Task above to get started"
-                    : "Create a team task or invite members from the panel above"}
+                    : "Create a team task or open Team in the sidebar to invite members"}
                 </p>
               </div>
             ) : (

@@ -70,6 +70,7 @@ export const documentDetailInclude = {
   _count: {
     select: { versions: true, comments: true, attachments: true },
   },
+  meetingMinutes: { select: { id: true } },
 } as const;
 
 export async function canAccessDocument(userId: string, documentId: string) {

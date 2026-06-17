@@ -17,6 +17,7 @@ export async function GET() {
         },
         _count: { select: { tasks: true } },
       },
+      orderBy: [{ archivedAt: "asc" }, { name: "asc" }],
     });
 
     return NextResponse.json({ workspaces });
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
 
     const normalized = name.toLowerCase();
     const userWorkspaces = await prisma.workspace.findMany({
-      where: { members: { some: { userId: user.id } } },
+      where: { members: { some: { userId: user.id } }, archivedAt: null },
       select: { id: true, name: true },
     });
     const existing = userWorkspaces.find((w) => w.name.trim().toLowerCase() === normalized);

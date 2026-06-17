@@ -237,6 +237,78 @@ export const forwardMessageSchema = z
     message: "Provide conversationId or userId, not both",
   });
 
+const momPointsSchema = z
+  .array(z.string().trim().min(1).max(2000))
+  .min(1, "Add at least one point")
+  .max(100);
+
+const momActionItemSchema = z.object({
+  id: z.string().optional(),
+  task: z.string().trim().min(1).max(500),
+  owner: z.string().max(200).optional().default(""),
+  dueDate: z.string().max(50).optional().default(""),
+  priority: z.enum(["low", "medium", "high"]).optional().default("medium"),
+  status: z.enum(["pending", "in_progress", "done"]).optional().default("pending"),
+  taskId: z.string().min(1).optional().nullable(),
+  createTask: z.boolean().optional().default(true),
+});
+
+const momDiscussionSchema = z.object({
+  id: z.string().optional(),
+  topic: z.string().trim().max(500).optional().default(""),
+  points: z.array(z.string().trim().min(1).max(2000)).max(50).optional().default([]),
+});
+
+export const momStructuredContentSchema = z.object({
+  location: z.string().max(500).optional().default(""),
+  organizer: z.string().max(200).optional().default(""),
+  agenda: z.array(z.string().trim().max(2000)).max(50).optional().default([]),
+  discussions: z.array(momDiscussionSchema).max(30).optional().default([]),
+  decisions: z.array(z.string().trim().max(2000)).max(50).optional().default([]),
+  actionItems: z.array(momActionItemSchema).max(100).optional().default([]),
+  risks: z.array(z.string().trim().max(2000)).max(50).optional().default([]),
+  pendingItems: z.array(z.string().trim().max(2000)).max(50).optional().default([]),
+  nextMeetingDate: z.string().max(50).optional().default(""),
+  nextMeetingAgenda: z.string().max(2000).optional().default(""),
+});
+
+export const momCreateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    startedAt: z.string().datetime({ offset: true }),
+    endedAt: z.string().datetime({ offset: true }).optional().nullable(),
+    content: momStructuredContentSchema,
+    points: momPointsSchema.optional(),
+    note: z.string().max(4000).optional().default(""),
+    attendeeUserIds: z.array(z.string().min(1)).optional().default([]),
+    allAttendees: z.boolean().optional().default(false),
+  })
+  .refine(
+    (data) => {
+      if (!data.endedAt) return true;
+      return new Date(data.endedAt).getTime() >= new Date(data.startedAt).getTime();
+    },
+    { message: "End time must be after start time", path: ["endedAt"] }
+  );
+
+export const momUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    startedAt: z.string().datetime({ offset: true }).optional(),
+    endedAt: z.string().datetime({ offset: true }).optional().nullable(),
+    content: momStructuredContentSchema.optional(),
+    points: momPointsSchema.optional(),
+    attendeeUserIds: z.array(z.string().min(1)).optional(),
+    allAttendees: z.boolean().optional(),
+  })
+  .refine(
+    (data) => {
+      if (!data.startedAt || !data.endedAt) return true;
+      return new Date(data.endedAt).getTime() >= new Date(data.startedAt).getTime();
+    },
+    { message: "End time must be after start time", path: ["endedAt"] }
+  );
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type TaskInput = z.infer<typeof taskSchema>;

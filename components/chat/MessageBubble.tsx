@@ -10,11 +10,13 @@ import type { MessageReceiptStatus } from "@/lib/chat-receipts";
 import { MessageAttachmentPreview } from "@/components/chat/MessageAttachmentPreview";
 import { MessageReceiptTicks } from "@/components/chat/MessageReceiptTicks";
 import { DocumentShareCard, type SharedDocumentPreview } from "@/components/chat/DocumentShareCard";
+import { MomShareCard } from "@/components/chat/MomShareCard";
 import { ForwardedMessageCard } from "@/components/chat/ForwardedMessageCard";
+import type { SharedMomPreview } from "@/lib/mom-format";
 import { Button } from "@/components/ui/Button";
 import type { FormattedForwardedFrom } from "@/lib/message-format";
 import { isAttachmentOnlyBody, isImageAttachment } from "@/lib/attachments";
-import { isDefaultDocumentShareBody } from "@/lib/document-ui";
+import { isDefaultDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
 
 export interface MessageAttachment {
   id: string;
@@ -53,6 +55,7 @@ export interface ChatMessage {
   sendStatus?: MessageSendStatus;
   clientTempId?: string;
   sharedDocument?: SharedDocumentPreview | null;
+  sharedMom?: SharedMomPreview | null;
   forwardedFrom?: FormattedForwardedFrom | null;
 }
 
@@ -163,13 +166,14 @@ export function MessageBubble({
         message.sharedDocument.title,
         message.sharedDocument.icon
       )
-    );
+    ) &&
+    !(message.sharedMom && isMomShareBody(message.body));
 
   return (
     <div className={cn("group flex w-full px-0.5 sm:px-1", isOwn ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "flex w-max max-w-[82%] sm:max-w-[85%] md:max-w-[75%]",
+          "flex w-max max-w-[min(92%,100%)] sm:max-w-[85%] md:max-w-[75%]",
           hideAvatars ? "gap-0" : "gap-2",
           isOwn ? "flex-row-reverse" : "flex-row"
         )}
@@ -331,6 +335,10 @@ export function MessageBubble({
                 {!message.forwardedFrom && message.sharedDocument && !isDeleted && (
                   <DocumentShareCard document={message.sharedDocument} isOwn={isOwn} />
                 )}
+
+                {!message.forwardedFrom && message.sharedMom && !isDeleted && (
+                  <MomShareCard mom={message.sharedMom} isOwn={isOwn} />
+                )}
               </>
             )}
           </div>
@@ -338,11 +346,11 @@ export function MessageBubble({
           {!readOnly && !isDeleted && !editing && (
             <div
               className={cn(
-                "flex gap-0.5",
-                "mt-1.5 justify-end md:absolute md:top-0 md:mt-0 md:opacity-0 md:transition-opacity md:group-hover:opacity-100",
+                "hidden gap-0.5 md:flex",
+                "md:absolute md:top-0 md:mt-0 md:opacity-0 md:transition-opacity md:group-hover:opacity-100",
                 isOwn
                   ? "md:left-0 md:-translate-x-full md:pr-1"
-                  : "justify-start md:right-0 md:translate-x-full md:pl-1 md:justify-end"
+                  : "md:right-0 md:translate-x-full md:pl-1 md:justify-end"
               )}
             >
               <div className="relative">
@@ -371,12 +379,11 @@ export function MessageBubble({
               </button>
               {menuOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="fixed inset-0 z-40 hidden md:block" onClick={() => setMenuOpen(false)} />
                   <div
                     className={cn(
-                      "absolute z-50 mt-1 min-w-[8rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg",
-                      "max-md:fixed max-md:bottom-4 max-md:left-1/2 max-md:mt-0 max-md:w-[min(16rem,calc(100vw-2rem))] max-md:-translate-x-1/2",
-                      isOwn ? "left-0 md:left-0" : "right-0 md:right-0"
+                      "absolute z-50 mt-1 hidden min-w-[8rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg md:block",
+                      isOwn ? "left-0" : "right-0"
                     )}
                   >
                     {onReply && (
@@ -473,7 +480,105 @@ export function MessageBubble({
           {isOwn && !isDeleted && !isSending && !isFailed && message.receiptStatus && (
             <MessageReceiptTicks status={message.receiptStatus} />
           )}
+          {!readOnly && !isDeleted && !editing && (
+            <span className="ml-0.5 inline-flex items-center gap-0.5 md:hidden">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReactOpen((v) => !v);
+                    setMenuOpen(false);
+                  }}
+                  className="flex h-5 w-5 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                  aria-label="React"
+                >
+                  <Smile className="h-3 w-3" />
+                </button>
+                {reactOpen && onReact && (
+                  <ReactionPicker
+                    onSelect={(emoji) => onReact(message.id, emoji)}
+                    onClose={() => setReactOpen(false)}
+                  />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen((v) => !v);
+                  setReactOpen(false);
+                }}
+                className="flex h-5 w-5 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                aria-label="More actions"
+              >
+                <MoreHorizontal className="h-3 w-3" />
+              </button>
+            </span>
+          )}
         </p>
+        {!readOnly && !isDeleted && !editing && menuOpen && (
+          <>
+            <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMenuOpen(false)} />
+            <div className="fixed bottom-4 left-1/2 z-50 w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg md:hidden">
+              {onReply && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onReply(message);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
+                >
+                  <Reply className="h-3.5 w-3.5" /> Reply
+                </button>
+              )}
+              {onForward && !isDeleted && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onForward(message);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
+                >
+                  <Forward className="h-3.5 w-3.5" /> Forward
+                </button>
+              )}
+              {canModify && onEdit && message.body && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(true);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </button>
+              )}
+              {onPin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPin(message.id, !isPinned);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
+                >
+                  <Pin className="h-3.5 w-3.5" /> {isPinned ? "Unpin" : "Pin"}
+                </button>
+              )}
+              {canModify && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => void handleDelete()}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-500/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
       </div>
     </div>

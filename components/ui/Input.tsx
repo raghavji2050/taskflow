@@ -19,7 +19,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const [showPassword, setShowPassword] = useState(false);
 
     return (
-      <div className="space-y-1.5">
+      <div className="w-full space-y-1.5">
         {label && !hideLabel && (
           <label
             htmlFor={inputId}

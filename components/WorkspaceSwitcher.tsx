@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown, Plus, User, Users } from "lucide-react";
+import { Archive, Check, ChevronsUpDown, Plus, RotateCcw, User, Users } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -13,19 +14,23 @@ interface WorkspaceSwitcherProps {
 }
 
 export function WorkspaceSwitcher({ layout = "default" }: WorkspaceSwitcherProps) {
+  const { data: session } = useSession();
   const {
-    workspaces,
+    activeWorkspaces,
+    archivedWorkspaces,
     selectedWorkspaceId,
     selectedWorkspace,
     isPersonal,
     currentMembership,
     selectWorkspace,
     createWorkspace,
+    restoreWorkspace,
   } = useWorkspace();
 
   const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const roleLabel = !isPersonal && currentMembership
     ? ({ OWNER: "Owner", ADMIN: "Admin", MEMBER: "Member", VIEWER: "Viewer" } as const)[currentMembership.role] ?? currentMembership.role
@@ -42,6 +47,25 @@ export function WorkspaceSwitcher({ layout = "default" }: WorkspaceSwitcherProps
     } else {
       toast.error(result.error ?? "Could not create workspace");
     }
+  };
+
+  const handleRestore = async (workspaceId: string, name: string) => {
+    setRestoringId(workspaceId);
+    const result = await restoreWorkspace(workspaceId);
+    if (result.ok) {
+      toast.success(`"${name}" restored`);
+      selectWorkspace(workspaceId);
+      setOpen(false);
+    } else {
+      toast.error(result.error ?? "Could not restore workspace");
+    }
+    setRestoringId(null);
+  };
+
+  const isOwnerOf = (workspaceId: string) => {
+    const ws = archivedWorkspaces.find((w) => w.id === workspaceId);
+    if (!ws || !session?.user?.id) return false;
+    return ws.members.some((m) => m.user.id === session.user.id && m.role === "OWNER");
   };
 
   const isSidebar = layout === "sidebar";
@@ -109,7 +133,7 @@ export function WorkspaceSwitcher({ layout = "default" }: WorkspaceSwitcherProps
               {isPersonal && <Check className="h-4 w-4" />}
             </button>
 
-            {workspaces.map((ws) => (
+            {activeWorkspaces.map((ws) => (
               <button
                 key={ws.id}
                 type="button"
@@ -125,6 +149,41 @@ export function WorkspaceSwitcher({ layout = "default" }: WorkspaceSwitcherProps
                 {selectedWorkspaceId === ws.id && <Check className="h-4 w-4" />}
               </button>
             ))}
+
+            {archivedWorkspaces.length > 0 && (
+              <div className="mt-1 border-t border-[var(--card-border)] pt-1">
+                <p className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                  <Archive className="h-3 w-3" />
+                  Archived
+                </p>
+                {archivedWorkspaces.map((ws) => {
+                  const canRestore = isOwnerOf(ws.id);
+                  return (
+                    <div
+                      key={ws.id}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-[var(--muted)]"
+                    >
+                      <Users className="h-4 w-4 shrink-0 opacity-50" />
+                      <span className="min-w-0 flex-1 truncate">{ws.name}</span>
+                      {canRestore ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 shrink-0 px-2 text-[11px]"
+                          isLoading={restoringId === ws.id}
+                          onClick={() => void handleRestore(ws.id, ws.name)}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Restore
+                        </Button>
+                      ) : (
+                        <span className="shrink-0 text-[10px]">Owner only</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="mt-1 border-t border-[var(--card-border)] pt-1">
               {showCreate ? (

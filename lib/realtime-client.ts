@@ -17,6 +17,7 @@ export interface RealtimeWireMessage {
   message?: Record<string, unknown>;
   lastReadAt?: string;
   lastReceivedAt?: string;
+  clearedAt?: string;
   typing?: boolean;
   at?: string;
 }
@@ -70,6 +71,14 @@ export function dispatchRealtimeMessage(
   }
   if (data.type === "conversation:receipt" && data.conversationId && data.userId) {
     window.dispatchEvent(new CustomEvent("taskflow:receipt", { detail: data }));
+    return;
+  }
+  if (
+    (data.type === "conversation:cleared" || data.type === "conversation:removed") &&
+    data.conversationId &&
+    data.userId
+  ) {
+    window.dispatchEvent(new CustomEvent("taskflow:conversation", { detail: data }));
     return;
   }
   if (data.type === "typing:changed" && data.conversationId && data.userId) {

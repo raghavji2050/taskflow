@@ -6,6 +6,31 @@ export interface ParticipantReceipt {
   lastReceivedAt: string | null;
 }
 
+function maxIsoTimestamp(
+  a: string | null | undefined,
+  b: string | null | undefined
+): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
+}
+
+/** Merge receipt fields monotonically so out-of-order events never regress status. */
+export function mergeParticipantReceipt(
+  existing: ParticipantReceipt | undefined,
+  incoming: {
+    userId: string;
+    lastReadAt?: string | null;
+    lastReceivedAt?: string | null;
+  }
+): ParticipantReceipt {
+  return {
+    userId: incoming.userId,
+    lastReadAt: maxIsoTimestamp(incoming.lastReadAt, existing?.lastReadAt),
+    lastReceivedAt: maxIsoTimestamp(incoming.lastReceivedAt, existing?.lastReceivedAt),
+  };
+}
+
 export function computeMessageReceiptStatus(
   messageCreatedAt: string,
   senderId: string,

@@ -33,7 +33,9 @@ export type WorkspaceUpdateReason =
   | "invite_declined"
   | "invite_revoked"
   | "member_removed"
-  | "permissions_updated";
+  | "permissions_updated"
+  | "workspace_archived"
+  | "workspace_restored";
 
 export interface WorkspaceEvent {
   type: "workspace:updated";
@@ -91,6 +93,21 @@ export interface TypingChangedEvent {
   at: string;
 }
 
+export interface ConversationClearedEvent {
+  type: "conversation:cleared";
+  conversationId: string;
+  userId: string;
+  clearedAt: string;
+  at: string;
+}
+
+export interface ConversationRemovedEvent {
+  type: "conversation:removed";
+  conversationId: string;
+  userId: string;
+  at: string;
+}
+
 export type RealtimeEvent =
   | TaskEvent
   | NotificationEvent
@@ -100,7 +117,9 @@ export type RealtimeEvent =
   | PresenceSyncEvent
   | PresenceChangedEvent
   | ConversationReceiptEvent
-  | TypingChangedEvent;
+  | TypingChangedEvent
+  | ConversationClearedEvent
+  | ConversationRemovedEvent;
 
 interface RealtimeClient {
   userId: string;
@@ -432,12 +451,41 @@ export function broadcastConversationReceipt(
     at,
   };
   for (const recipientId of participantIds) {
-    if (recipientId !== userId) {
-      void triggerUserChannel(recipientId, event).then((sent) => {
-        if (!sent) getRealtimeHub().publishToUser(recipientId, event);
-      });
-    }
+    void triggerUserChannel(recipientId, event).then((sent) => {
+      if (!sent) getRealtimeHub().publishToUser(recipientId, event);
+    });
   }
+}
+
+export function broadcastConversationCleared(
+  userId: string,
+  conversationId: string,
+  clearedAt: Date
+) {
+  const at = clearedAt.toISOString();
+  const event: ConversationClearedEvent = {
+    type: "conversation:cleared",
+    conversationId,
+    userId,
+    clearedAt: at,
+    at,
+  };
+  void triggerUserChannel(userId, event).then((sent) => {
+    if (!sent) getRealtimeHub().publishToUser(userId, event);
+  });
+}
+
+export function broadcastConversationRemoved(userId: string, conversationId: string) {
+  const at = new Date().toISOString();
+  const event: ConversationRemovedEvent = {
+    type: "conversation:removed",
+    conversationId,
+    userId,
+    at,
+  };
+  void triggerUserChannel(userId, event).then((sent) => {
+    if (!sent) getRealtimeHub().publishToUser(userId, event);
+  });
 }
 
 export function setConversationTyping(

@@ -56,6 +56,7 @@ interface DocumentData {
     message: SerializedLinkedMessage;
   }[];
   attachments: DocumentAttachmentRow[];
+  meetingMinutes?: { id: string } | null;
   _count: { versions: number; comments: number; attachments: number };
 }
 
@@ -136,6 +137,7 @@ export function DocumentEditorClient({ documentId }: { documentId: string }) {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isTaskSubmitting, setIsTaskSubmitting] = useState(false);
+  const [creatingMomTasks, setCreatingMomTasks] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -269,6 +271,28 @@ export function DocumentEditorClient({ documentId }: { documentId: string }) {
       body: JSON.stringify({ kind: "task", taskId }),
     });
     void load();
+  };
+
+  const createMomTasks = async () => {
+    const momId = doc?.meetingMinutes?.id;
+    if (!momId) return;
+    setCreatingMomTasks(true);
+    try {
+      const res = await fetch(`/api/meeting-minutes/${momId}/tasks`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create tasks");
+      const count = data.created?.length ?? 0;
+      if (count === 0) {
+        toast.info("No new tasks to create");
+      } else {
+        toast.success(`${count} task${count === 1 ? "" : "s"} created from action items`);
+      }
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create tasks");
+    } finally {
+      setCreatingMomTasks(false);
+    }
   };
 
   const deleteDoc = async () => {
@@ -581,6 +605,18 @@ export function DocumentEditorClient({ documentId }: { documentId: string }) {
                             </li>
                           ))}
                         </ul>
+                        {doc.type === "MEETING_NOTES" && doc.meetingMinutes?.id && !readOnly && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="mb-3"
+                            onClick={() => void createMomTasks()}
+                            isLoading={creatingMomTasks}
+                          >
+                            Create tasks from action items
+                          </Button>
+                        )}
                         {!readOnly && (
                           <LinkTaskPicker
                             workspaceId={doc.workspaceId}

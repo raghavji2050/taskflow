@@ -16,8 +16,13 @@ import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
 import { useRealtime } from "@/components/RealtimeProvider";
 import { formatChatDateLabel, toDateKey } from "@/lib/chat-dates";
 import { formatPresenceSubtitle } from "@/lib/presence";
-import { attachReceiptStatuses, type ParticipantReceipt } from "@/lib/chat-receipts";
-import { isDocumentShareBody } from "@/lib/document-ui";
+import {
+  attachReceiptStatuses,
+  mergeParticipantReceipt,
+  type ParticipantReceipt,
+} from "@/lib/chat-receipts";
+import { MomBuilderModal } from "@/components/chat/MomBuilderModal";
+import { isDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
 import { setActiveConversationId } from "@/lib/active-chat";
 import { sendTypingIndicator } from "@/lib/realtime-ws-client";
 import {
@@ -25,11 +30,13 @@ import {
   unsubscribeConversationChannel,
 } from "@/lib/pusher-client";
 import { cn } from "@/lib/utils";
+import { useMediaQuery, useVisualViewport } from "@/lib/use-visual-viewport";
 
 export interface ChatConversation {
   id: string;
   type: string;
   name: string;
+  workspaceId?: string | null;
   participants: { id: string; name: string; email?: string; image?: string | null; lastSeenAt?: string | null }[];
   unreadCount?: number;
   canPost?: boolean;
@@ -60,6 +67,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const { selectedWorkspaceId } = useWorkspace();
   const userId = session?.user?.id;
   const { isUserOnline, presenceVersion } = useRealtime();
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const visualViewport = useVisualViewport();
+  const [layoutHeight, setLayoutHeight] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,9 +88,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const [viewMode, setViewMode] = useState<"normal" | "date">("normal");
   const [activeDateKey, setActiveDateKey] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<ParticipantReceipt[]>([]);
+  const receiptsRef = useRef<ParticipantReceipt[]>([]);
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
   const [peerLastSeenAt, setPeerLastSeenAt] = useState<string | null>(null);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
+  const [momModalOpen, setMomModalOpen] = useState(false);
   const [newMessagesBelow, setNewMessagesBelow] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -96,6 +108,28 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const SCROLL_BOTTOM_THRESHOLD = 120;
 
   onReadRef.current = onRead;
+
+  useEffect(() => {
+    receiptsRef.current = receipts;
+  }, [receipts]);
+
+  useEffect(() => {
+    const update = () => setLayoutHeight(window.innerHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const keyboardOpen =
+    isMobile && layoutHeight > 0 && visualViewport.height < layoutHeight * 0.85;
+
+  const withReceipts = useCallback(
+    (msgs: ChatMessage[]): ChatMessage[] => {
+      if (!userId) return msgs;
+      return attachReceiptStatuses(msgs, userId, receiptsRef.current) as ChatMessage[];
+    },
+    [userId]
+  );
 
   const updateStickToBottom = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -312,15 +346,20 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     [navigateToMessage]
   );
 
-  const updateMessageInState = useCallback((updated: ChatMessage) => {
-    setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-    setPinned((prev) => {
-      if (updated.deletedAt) return prev.filter((m) => m.id !== updated.id);
-      const without = prev.filter((m) => m.id !== updated.id);
-      if (updated.pinnedAt) return [updated, ...without];
-      return without;
-    });
-  }, []);
+  const updateMessageInState = useCallback(
+    (updated: ChatMessage) => {
+      setMessages((prev) =>
+        withReceipts(prev.map((m) => (m.id === updated.id ? updated : m)))
+      );
+      setPinned((prev) => {
+        if (updated.deletedAt) return prev.filter((m) => m.id !== updated.id);
+        const without = prev.filter((m) => m.id !== updated.id);
+        const next = updated.pinnedAt ? [updated, ...without] : without;
+        return withReceipts(next);
+      });
+    },
+    [withReceipts]
+  );
 
   const markRead = useCallback((convId: string) => {
     if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
@@ -417,7 +456,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
                 m.body === incoming.body
               )
           );
-          return [...withoutOptimistic, incoming];
+          return withReceipts([...withoutOptimistic, incoming]);
         });
 
         if (shouldStick) {
@@ -430,6 +469,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         markRead(convId);
 
         if (isDocumentShareBody(incoming.body) && !incoming.sharedDocument) {
+          void fetchMessages(convId, { silent: true });
+        }
+        if (isMomShareBody(incoming.body) && !incoming.sharedMom) {
           void fetchMessages(convId, { silent: true });
         }
         return;
@@ -458,7 +500,15 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener("taskflow:message", handler);
     };
-  }, [conversation?.id, fetchMessages, markRead, updateMessageInState, updateStickToBottom, userId]);
+  }, [
+    conversation?.id,
+    fetchMessages,
+    markRead,
+    updateMessageInState,
+    updateStickToBottom,
+    userId,
+    withReceipts,
+  ]);
 
   useEffect(() => {
     const convId = conversation?.id;
@@ -475,11 +525,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
       setReceipts((prev) => {
         const existing = prev.find((r) => r.userId === detail.userId);
-        const next: ParticipantReceipt = {
+        const next = mergeParticipantReceipt(existing, {
           userId: detail.userId!,
-          lastReadAt: detail.lastReadAt ?? existing?.lastReadAt ?? null,
-          lastReceivedAt: detail.lastReceivedAt ?? existing?.lastReceivedAt ?? null,
-        };
+          lastReadAt: detail.lastReadAt,
+          lastReceivedAt: detail.lastReceivedAt,
+        });
         return existing
           ? prev.map((r) => (r.userId === detail.userId ? next : r))
           : [...prev, next];
@@ -494,6 +544,26 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     if (!userId || receipts.length === 0) return;
     refreshReceiptStatuses(receipts);
   }, [receipts, userId, refreshReceiptStatuses]);
+
+  useEffect(() => {
+    const convId = conversation?.id;
+    if (!convId) return;
+
+    let focusTimer: ReturnType<typeof setTimeout> | null = null;
+    const recoverReceipts = () => {
+      if (document.hidden) return;
+      if (focusTimer) clearTimeout(focusTimer);
+      focusTimer = setTimeout(() => void fetchMessages(convId, { silent: true }), 1000);
+    };
+
+    document.addEventListener("visibilitychange", recoverReceipts);
+    window.addEventListener("focus", recoverReceipts);
+    return () => {
+      if (focusTimer) clearTimeout(focusTimer);
+      document.removeEventListener("visibilitychange", recoverReceipts);
+      window.removeEventListener("focus", recoverReceipts);
+    };
+  }, [conversation?.id, fetchMessages]);
 
   useEffect(() => {
     const convId = conversation?.id;
@@ -525,6 +595,39 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     window.addEventListener("taskflow:typing", handler);
     return () => window.removeEventListener("taskflow:typing", handler);
   }, [conversation?.id, userId]);
+
+  useEffect(() => {
+    const convId = conversation?.id;
+    if (!convId || !userId) return;
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        type?: string;
+        conversationId?: string;
+        userId?: string;
+      };
+      if (detail.conversationId !== convId || detail.userId !== userId) return;
+
+      if (detail.type === "conversation:cleared") {
+        fetchGenRef.current++;
+        setMessages([]);
+        setPinned([]);
+        setHasMore(false);
+        setCursor(null);
+        setViewMode("normal");
+        setActiveDateKey(null);
+        onCleared?.();
+        return;
+      }
+
+      if (detail.type === "conversation:removed") {
+        onDeleted?.();
+      }
+    };
+
+    window.addEventListener("taskflow:conversation", handler);
+    return () => window.removeEventListener("taskflow:conversation", handler);
+  }, [conversation?.id, userId, onCleared, onDeleted]);
 
   const handleTyping = useCallback(() => {
     const convId = conversation?.id;
@@ -579,10 +682,10 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         if (res.ok) {
           pendingSendsRef.current.delete(clientTempId);
           setMessages((prev) =>
-            prev.map((m) =>
-              m.clientTempId === clientTempId
-                ? { ...data.message, receiptStatus: "sent" as const }
-                : m
+            withReceipts(
+              prev.map((m) =>
+                m.clientTempId === clientTempId ? (data.message as ChatMessage) : m
+              )
             )
           );
         } else {
@@ -600,7 +703,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         );
       }
     },
-    [conversation, userId, session?.user?.name]
+    [conversation, userId, session?.user?.name, withReceipts]
   );
 
   const handleSend = async (opts?: { file?: File | null }) => {
@@ -654,10 +757,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       if (res.ok) {
         pendingSendsRef.current.delete(tempId);
         setMessages((prev) =>
-          prev.map((m) =>
-            m.clientTempId === tempId
-              ? { ...data.message, receiptStatus: "sent" as const }
-              : m
+          withReceipts(
+            prev.map((m) => (m.clientTempId === tempId ? (data.message as ChatMessage) : m))
           )
         );
         const sent = data.message as ChatMessage;
@@ -965,7 +1066,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--background)]">
-      <div className="relative z-10 flex shrink-0 items-center gap-1 border-b border-[var(--card-border)] bg-[var(--background)] px-3 py-2.5 md:gap-2 md:px-4 md:py-3">
+      <div className="sticky top-0 z-20 flex shrink-0 items-center gap-1 border-b border-[var(--card-border)] bg-[var(--background)] px-3 py-2.5 md:gap-2 md:px-4 md:py-3">
         {onBack && (
           <button
             type="button"
@@ -1176,7 +1277,12 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       )}
       </div>
 
-      <div className="shrink-0 border-t border-[var(--card-border)] px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-4 md:py-3">
+      <div
+        className={cn(
+          "shrink-0 border-t border-[var(--card-border)] px-2 py-2 md:px-4 md:py-3",
+          keyboardOpen ? "pb-2.5" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        )}
+      >
         <ChatComposer
           body={body}
           onBodyChange={setBody}
@@ -1189,8 +1295,22 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           currentUserId={userId}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
+          onOpenMom={readOnly ? undefined : () => setMomModalOpen(true)}
         />
       </div>
+
+      {conversation && userId && (
+        <MomBuilderModal
+          conversation={conversation}
+          workspaceId={selectedWorkspaceId ?? conversation.workspaceId ?? null}
+          currentUserId={userId}
+          isOpen={momModalOpen}
+          onClose={() => setMomModalOpen(false)}
+          onCreated={() => {
+            void fetchMessages(conversation.id, { silent: true });
+          }}
+        />
+      )}
 
       <ForwardMessageModal
         message={forwardMessage}

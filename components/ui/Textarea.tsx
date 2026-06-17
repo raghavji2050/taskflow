@@ -11,7 +11,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     const textareaId = id || props.name;
 
     return (
-      <div className="space-y-2">
+      <div className="w-full space-y-2">
         {label && (
           <label
             htmlFor={textareaId}

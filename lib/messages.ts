@@ -1,15 +1,15 @@
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { messageInclude, formatMessageForClient } from "@/lib/message-format";
 import { getMessageAudience } from "@/lib/message-audience";
-import { createNotification } from "@/lib/notifications";
-import { parseMentionsFromBody } from "@/lib/mentions";
-import { broadcastMessageEvent, broadcastMessageToConversation, broadcastConversationReceipt } from "@/lib/realtime";
+import { broadcastMessageToConversation, broadcastConversationReceipt, broadcastConversationCleared } from "@/lib/realtime";
 import { getConversationParticipantIds } from "@/lib/chat-access";
 import { ensureDirectParticipants } from "@/lib/conversations";
 import { attachReceiptStatuses, type ParticipantReceipt } from "@/lib/chat-receipts";
+import { notifyParticipants } from "@/lib/message-notify";
+import { saveMessageAttachmentFile } from "@/lib/message-upload";
+
+export { notifyParticipants };
 
 async function getParticipantClearedAt(conversationId: string, userId: string) {
   const row = await prisma.conversationParticipant.findUnique({
@@ -275,91 +275,12 @@ export async function getMessagesForDate(
 }
 
 export async function clearConversationForUser(conversationId: string, userId: string) {
+  const clearedAt = new Date();
   await prisma.conversationParticipant.update({
     where: { conversationId_userId: { conversationId, userId } },
-    data: { clearedAt: new Date(), lastReadAt: new Date() },
+    data: { clearedAt, lastReadAt: clearedAt },
   });
-}
-
-async function notifyParticipants(params: {
-  conversationId: string;
-  userId: string;
-  userName: string;
-  preview: string;
-  conversationTitle: string;
-  mentionCandidates: { id: string; name: string }[];
-  body: string;
-  messageId: string;
-  message?: ReturnType<typeof formatMessageForClient>;
-  type?: "message:created" | "message:updated";
-}) {
-  const participants = await prisma.conversationParticipant.findMany({
-    where: { conversationId: params.conversationId, userId: { not: params.userId } },
-    select: { userId: true },
-  });
-  const participantIds = participants.map((p) => p.userId);
-
-  if (params.type === "message:updated") {
-    broadcastMessageToConversation(participantIds, {
-      conversationId: params.conversationId,
-      messageId: params.messageId,
-      actorId: params.userId,
-      preview: params.preview,
-      type: "message:updated",
-      message: params.message,
-    });
-    return;
-  }
-
-  const mentioned = parseMentionsFromBody(params.body, params.mentionCandidates);
-  const mentionedIds = new Set(mentioned.map((m) => m.id));
-
-  for (const participant of participants) {
-    const participantId = participant.userId;
-    if (mentionedIds.has(participantId)) continue;
-
-    broadcastMessageEvent({
-      type: "message:created",
-      conversationId: params.conversationId,
-      messageId: params.messageId,
-      senderId: params.userId,
-      preview: params.preview,
-      recipientId: participantId,
-      message: params.message,
-    });
-
-    await createNotification({
-      userId: participantId,
-      title: params.userName,
-      body: params.preview,
-      type: "message",
-      conversationId: params.conversationId,
-      messageId: params.messageId,
-    });
-  }
-
-  for (const m of mentioned) {
-    if (m.id === params.userId) continue;
-
-    broadcastMessageEvent({
-      type: "message:created",
-      conversationId: params.conversationId,
-      messageId: params.messageId,
-      senderId: params.userId,
-      preview: params.preview,
-      recipientId: m.id,
-      message: params.message,
-    });
-
-    await createNotification({
-      userId: m.id,
-      title: `${params.userName} mentioned you`,
-      body: params.preview,
-      type: "mention",
-      conversationId: params.conversationId,
-      messageId: params.messageId,
-    });
-  }
+  broadcastConversationCleared(userId, conversationId, clearedAt);
 }
 
 export async function sendMessage(params: {
@@ -681,22 +602,15 @@ export async function addMessageAttachment(params: {
   userId: string;
   file: File;
 }) {
-  const bytes = await params.file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-  const uploadDir = path.join(process.cwd(), "public", "uploads", params.userId);
-  await mkdir(uploadDir, { recursive: true });
-
-  const filename = `${Date.now()}-${params.file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-  const filepath = path.join(uploadDir, filename);
-  await writeFile(filepath, buffer);
+  const saved = await saveMessageAttachmentFile(params.userId, params.file);
 
   const attachment = await prisma.messageAttachment.create({
     data: {
       messageId: params.messageId,
-      filename: params.file.name,
-      url: `/uploads/${params.userId}/${filename}`,
-      mimeType: params.file.type || "application/octet-stream",
-      size: buffer.length,
+      filename: saved.filename,
+      url: saved.url,
+      mimeType: saved.mimeType,
+      size: saved.size,
     },
   });
 

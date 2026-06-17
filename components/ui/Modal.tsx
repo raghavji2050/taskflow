@@ -5,6 +5,12 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import {
+  mobileModalMaxHeight,
+  mobileOverlayStyle,
+  useMediaQuery,
+  useVisualViewport,
+} from "@/lib/use-visual-viewport";
 
 const sizeClasses = {
   sm: "max-w-md",
@@ -41,6 +47,8 @@ export function Modal({
   priority = "normal",
 }: ModalProps) {
   const [mounted, setMounted] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 639px)");
+  const visualViewport = useVisualViewport();
 
   useEffect(() => setMounted(true), []);
 
@@ -66,9 +74,11 @@ export function Modal({
   return createPortal(
     <div
       className={cn(
-        "fixed inset-0 flex items-end justify-center sm:items-center",
+        "fixed flex items-end justify-center sm:inset-0 sm:items-center",
+        !isMobile && "inset-0",
         priority === "elevated" ? "z-[150]" : "z-[100]"
       )}
+      style={isMobile ? mobileOverlayStyle(visualViewport) : undefined}
       role="presentation"
     >
       <div
@@ -82,13 +92,15 @@ export function Modal({
         aria-labelledby="modal-title"
         className={cn(
           "relative z-10 flex w-full flex-col",
-          "max-h-[92dvh] sm:max-h-[min(90vh,860px)]",
+          !isMobile && "max-h-[92dvh]",
+          "sm:max-h-[min(90vh,860px)]",
           "rounded-t-2xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl",
           "sm:m-4 sm:rounded-2xl",
           "modal-enter",
           sizeClasses[size],
           className
         )}
+        style={isMobile ? { maxHeight: mobileModalMaxHeight(visualViewport) } : undefined}
       >
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--card-border)] px-5 py-4 sm:px-6">
           <div className="min-w-0">

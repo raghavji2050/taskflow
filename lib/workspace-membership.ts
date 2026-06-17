@@ -1,10 +1,24 @@
 import { prisma } from "@/lib/prisma";
 
-export async function getWorkspaceMembership(userId: string, workspaceId: string) {
+type MembershipOptions = {
+  allowArchived?: boolean;
+};
+
+export async function getWorkspaceMembership(
+  userId: string,
+  workspaceId: string,
+  options?: MembershipOptions
+) {
   return prisma.workspaceMember.findFirst({
-    where: { userId, workspaceId },
+    where: {
+      userId,
+      workspaceId,
+      ...(options?.allowArchived ? {} : { workspace: { archivedAt: null } }),
+    },
     include: {
-      workspace: { select: { id: true, name: true, allowMemberInvites: true } },
+      workspace: {
+        select: { id: true, name: true, allowMemberInvites: true, archivedAt: true },
+      },
     },
   });
 }

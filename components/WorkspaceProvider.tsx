@@ -21,6 +21,7 @@ export interface Workspace {
   id: string;
   name: string;
   allowMemberInvites: boolean;
+  archivedAt?: string | null;
   _count?: { tasks: number };
   members: WorkspaceMember[];
 }
@@ -51,6 +52,10 @@ interface WorkspaceContextValue {
   canEditTasks: boolean;
   removeMember: (memberId: string) => Promise<{ ok: boolean; error?: string }>;
   revokeInvitation: (invitationId: string) => Promise<{ ok: boolean; error?: string }>;
+  archiveWorkspace: (workspaceId: string) => Promise<{ ok: boolean; error?: string }>;
+  restoreWorkspace: (workspaceId: string) => Promise<{ ok: boolean; error?: string }>;
+  activeWorkspaces: Workspace[];
+  archivedWorkspaces: Workspace[];
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -66,7 +71,9 @@ function resolveWorkspaceSelection(
   saved: string | null
 ): string | null {
   if (!saved || saved === "personal") return null;
-  return workspaceList.some((w) => w.id === saved) ? saved : null;
+  const match = workspaceList.find((w) => w.id === saved);
+  if (!match || match.archivedAt) return null;
+  return match.id;
 }
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
@@ -89,7 +96,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const previousId = selectedWorkspaceIdRef.current;
 
     if (previousId && saved === previousId && !nextId) {
-      toast.info("You no longer have access to that workspace");
+      const archived = workspaceList.find((w) => w.id === previousId)?.archivedAt;
+      toast.info(
+        archived ? "That workspace was archived" : "You no longer have access to that workspace"
+      );
     }
 
     selectedWorkspaceIdRef.current = nextId;
@@ -235,7 +245,48 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return { ok: false, error: data.error ?? "Could not revoke invitation" };
   }, []);
 
-  const selectedWorkspace = workspaces.find((w) => w.id === selectedWorkspaceId) ?? null;
+  const setWorkspaceArchived = useCallback(
+    async (workspaceId: string, archived: boolean) => {
+      const res = await fetch(`/api/workspaces/${workspaceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { ok: false, error: data.error ?? "Could not update workspace" };
+      }
+      await refreshWorkspaces();
+      if (archived && selectedWorkspaceIdRef.current === workspaceId) {
+        selectWorkspace(null);
+      }
+      return { ok: true };
+    },
+    [refreshWorkspaces, selectWorkspace]
+  );
+
+  const archiveWorkspace = useCallback(
+    (workspaceId: string) => setWorkspaceArchived(workspaceId, true),
+    [setWorkspaceArchived]
+  );
+
+  const restoreWorkspace = useCallback(
+    (workspaceId: string) => setWorkspaceArchived(workspaceId, false),
+    [setWorkspaceArchived]
+  );
+
+  const activeWorkspaces = useMemo(
+    () => workspaces.filter((w) => !w.archivedAt),
+    [workspaces]
+  );
+
+  const archivedWorkspaces = useMemo(
+    () => workspaces.filter((w) => w.archivedAt),
+    [workspaces]
+  );
+
+  const selectedWorkspace =
+    activeWorkspaces.find((w) => w.id === selectedWorkspaceId) ?? null;
   const isPersonal = selectedWorkspaceId === null;
 
   const currentMembership = useMemo(() => {
@@ -277,6 +328,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         updateMemberRole,
         removeMember,
         revokeInvitation,
+        archiveWorkspace,
+        restoreWorkspace,
+        activeWorkspaces,
+        archivedWorkspaces,
       }}
     >
       {children}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { Archive, ArchiveRestore, Bell } from "lucide-react";
+import { Archive, ArchiveRestore, Bell, Check } from "lucide-react";
 import { toast } from "sonner";
 import { WORKSPACE_STORAGE_KEY } from "@/components/WorkspaceProvider";
 import { Button } from "@/components/ui/Button";
@@ -103,6 +103,23 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
       body: JSON.stringify({ ids: unreadIds, read: true }),
     });
     fetchNotifications();
+  };
+
+  const markAsRead = async (id: string) => {
+    setActingId(id);
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id], read: true }),
+      });
+      if (!res.ok) throw new Error("Could not mark as read");
+      await fetchNotifications();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not mark as read");
+    } finally {
+      setActingId(null);
+    }
   };
 
   const archiveNotification = async (id: string, archived: boolean) => {
@@ -219,7 +236,8 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
                     className={cn(
                       (n.type === "mention" || n.type === "message") &&
                         n.conversationId &&
-                        "cursor-pointer pr-8 hover:opacity-90"
+                        "cursor-pointer hover:opacity-90",
+                      !showArchived && (!n.read ? "pr-16" : "pr-9")
                     )}
                   >
                     <p className="text-sm font-medium text-[var(--foreground)]">{n.title}</p>
@@ -252,26 +270,45 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    disabled={actingId === n.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void archiveNotification(n.id, !showArchived);
-                    }}
-                    className={cn(
-                      "absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-md text-[var(--muted)] transition-opacity hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
-                      "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                  <div className="absolute right-2 top-2 flex items-center gap-0.5">
+                    {!showArchived && !n.read && (
+                      <button
+                        type="button"
+                        disabled={actingId === n.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void markAsRead(n.id);
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                        aria-label="Mark as read"
+                        title="Mark as read"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
                     )}
-                    aria-label={showArchived ? "Restore notification" : "Archive notification"}
-                    title={showArchived ? "Restore" : "Move to archive"}
-                  >
-                    {showArchived ? (
-                      <ArchiveRestore className="h-3.5 w-3.5" />
-                    ) : (
-                      <Archive className="h-3.5 w-3.5" />
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      disabled={actingId === n.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void archiveNotification(n.id, !showArchived);
+                      }}
+                      className={cn(
+                        "flex h-7 w-7 items-center justify-center rounded-md text-[var(--muted)] transition-opacity hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
+                        showArchived || !n.read
+                          ? "opacity-100"
+                          : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                      )}
+                      aria-label={showArchived ? "Restore notification" : "Archive notification"}
+                      title={showArchived ? "Restore" : "Move to archive"}
+                    >
+                      {showArchived ? (
+                        <ArchiveRestore className="h-3.5 w-3.5" />
+                      ) : (
+                        <Archive className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               );
             })

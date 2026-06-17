@@ -5,7 +5,7 @@ export { canEditWorkspaceTasks } from "@/lib/workspace-permissions";
 
 export async function getUserWorkspaceIds(userId: string) {
   const memberships = await prisma.workspaceMember.findMany({
-    where: { userId },
+    where: { userId, workspace: { archivedAt: null } },
     select: { workspaceId: true },
   });
   return memberships.map((m) => m.workspaceId);
@@ -13,14 +13,24 @@ export async function getUserWorkspaceIds(userId: string) {
 
 export async function isWorkspaceMember(userId: string, workspaceId: string) {
   const member = await prisma.workspaceMember.findFirst({
-    where: { userId, workspaceId },
+    where: { userId, workspaceId, workspace: { archivedAt: null } },
   });
   return !!member;
 }
 
 export async function getWorkspaceMembership(userId: string, workspaceId: string) {
   return prisma.workspaceMember.findFirst({
+    where: { userId, workspaceId, workspace: { archivedAt: null } },
+  });
+}
+
+export async function getWorkspaceMembershipIncludingArchived(
+  userId: string,
+  workspaceId: string
+) {
+  return prisma.workspaceMember.findFirst({
     where: { userId, workspaceId },
+    include: { workspace: { select: { archivedAt: true } } },
   });
 }
 

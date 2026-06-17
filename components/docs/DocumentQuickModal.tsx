@@ -17,6 +17,7 @@ import {
 } from "@/components/docs/DocumentAttachmentsPanel";
 import { DOCUMENT_TYPE_ICONS, formatDocDate } from "@/lib/document-ui";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { MomQuickModal } from "@/components/chat/MomQuickModal";
 
 interface DocumentQuickModalProps {
   documentId: string | null;
@@ -36,6 +37,7 @@ interface DocumentPreview {
   _count: { versions: number; comments: number; attachments: number };
   taskLinks: { task: { id: string; title: string } }[];
   attachments: DocumentAttachmentRow[];
+  meetingMinutes?: { id: string } | null;
 }
 
 const typeOptions = [
@@ -60,6 +62,7 @@ export function DocumentQuickModal({
   const [type, setType] = useState<DocumentType>("DOC");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [momModalOpen, setMomModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!documentId) return;
@@ -134,6 +137,11 @@ export function DocumentQuickModal({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <DocumentTypeBadge type={doc.type} />
             <div className="flex flex-wrap gap-2">
+              {doc.meetingMinutes?.id && (
+                <Button variant="secondary" size="sm" onClick={() => setMomModalOpen(true)}>
+                  Edit structured MoM
+                </Button>
+              )}
               <Link href={`/dashboard/docs/${doc.id}`} onClick={onClose}>
                 <Button variant="secondary" size="sm">
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -210,6 +218,14 @@ export function DocumentQuickModal({
             />
           )}
         </div>
+      )}
+      {doc?.meetingMinutes?.id && (
+        <MomQuickModal
+          momId={doc.meetingMinutes.id}
+          isOpen={momModalOpen}
+          onClose={() => setMomModalOpen(false)}
+          onUpdated={() => void load()}
+        />
       )}
     </Modal>
   );

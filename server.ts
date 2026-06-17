@@ -7,6 +7,7 @@ import { realtimeHub, setConversationTyping } from "./lib/realtime";
 import { getUserWorkspaceIds } from "./lib/workspace";
 import { getConversationParticipantIds } from "./lib/chat-access";
 import { prisma } from "./lib/prisma";
+import { isPusherConfigured } from "./lib/pusher-server";
 
 const dev = process.env.NODE_ENV !== "production";
 // Windows sets HOSTNAME to the machine name — use HOST for the bind URL instead.
@@ -24,12 +25,13 @@ app.prepare().then(() => {
     handle(req, res);
   });
 
-  const wss = new WebSocketServer({ noServer: true });
+  const useWebSocketRealtime = !isPusherConfigured();
+  const wss = useWebSocketRealtime ? new WebSocketServer({ noServer: true }) : null;
 
   server.on("upgrade", (req, socket, head) => {
     const { pathname } = parse(req.url ?? "");
 
-    if (pathname === "/api/ws") {
+    if (useWebSocketRealtime && pathname === "/api/ws" && wss) {
       void (async () => {
         try {
           const token = await getToken({ req: req as never, secret: authSecret });
@@ -53,7 +55,8 @@ app.prepare().then(() => {
     void upgradeHandler(req, socket, head);
   });
 
-  wss.on("connection", (ws: WebSocket, userId: string) => {
+  if (wss) {
+    wss.on("connection", (ws: WebSocket, userId: string) => {
     void (async () => {
       const connectionId = crypto.randomUUID();
       const workspaceIds = await getUserWorkspaceIds(userId);
@@ -114,10 +117,15 @@ app.prepare().then(() => {
       ws.on("close", () => void cleanup());
       ws.on("error", () => void cleanup());
     })();
-  });
+    });
+  }
 
   server.listen(port, () => {
     console.log(`> Ready on http://${hostname}:${port}`);
-    console.log(`> WebSocket realtime: ws://${hostname}:${port}/api/ws`);
+    if (isPusherConfigured()) {
+      console.log("> Realtime: Pusher");
+    } else {
+      console.log(`> Realtime: WebSocket fallback ws://${hostname}:${port}/api/ws`);
+    }
   });
 });

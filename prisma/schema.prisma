@@ -88,6 +88,8 @@ model User {
   documentVersions        DocumentVersion[]
   documentComments        DocumentComment[]
   documentAttachments     DocumentAttachment[]
+  meetingMinutesCreated   MeetingMinutes[]
+  momSuggestionPreferences MomSuggestionPreference[]
 }
 
 model Account {
@@ -321,6 +323,7 @@ model Workspace {
   id                 String                @id @default(cuid())
   name               String
   allowMemberInvites Boolean               @default(false)
+  archivedAt         DateTime?
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
   members            WorkspaceMember[]
@@ -330,6 +333,8 @@ model Workspace {
   boardColumns       BoardColumn[]
   conversation       Conversation?
   documents          Document[]
+
+  @@index([archivedAt])
 }
 
 model AutomationRule {
@@ -516,6 +521,7 @@ model Document {
   taskLinks     DocumentTask[]
   messageLinks  DocumentMessage[]
   attachments   DocumentAttachment[]
+  meetingMinutes MeetingMinutes?
 
   @@index([userId])
   @@index([workspaceId])
@@ -603,4 +609,37 @@ model DocumentAttachment {
 
   @@index([documentId])
   @@index([userId])
+}
+
+model MeetingMinutes {
+  id              String    @id @default(cuid())
+  documentId      String    @unique
+  conversationId  String?
+  createdById     String
+  title           String
+  startedAt       DateTime
+  endedAt         DateTime?
+  points          Json
+  content         Json?
+  attendeeUserIds Json
+  allAttendees    Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdById])
+}
+
+model MomSuggestionPreference {
+  userId    String
+  scopeKey  String   @db.VarChar(64)
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, scopeKey])
 }

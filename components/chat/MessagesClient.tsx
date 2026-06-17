@@ -13,6 +13,12 @@ import { NewGroupChatModal } from "@/components/chat/NewGroupChatModal";
 import { Button } from "@/components/ui/Button";
 import { PushSubscribe } from "@/components/PushSubscribe";
 import { cn } from "@/lib/utils";
+import { confirmLeaveActiveMomMeeting } from "@/lib/mom-meeting-guard";
+import {
+  mobileFixedPanelStyle,
+  useMediaQuery,
+  useVisualViewport,
+} from "@/lib/use-visual-viewport";
 
 export function MessagesClient() {
   const router = useRouter();
@@ -26,6 +32,9 @@ export function MessagesClient() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
 
   const showMobileThread = Boolean(selectedId);
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const visualViewport = useVisualViewport();
+  const mobilePanelStyle = isMobile ? mobileFixedPanelStyle(visualViewport) : undefined;
 
   const loadConversations = useCallback(async () => {
     const res = await fetch("/api/conversations");
@@ -97,6 +106,32 @@ export function MessagesClient() {
       } else if (
         detail?.type === "message:created" &&
         detail.conversationId &&
+        detail.senderId === session?.user?.id
+      ) {
+        setConversations((prev) => {
+          const idx = prev.findIndex((c) => c.id === detail.conversationId);
+          if (idx === -1) return prev;
+          const previewBody =
+            detail.message?.body ?? detail.preview ?? prev[idx].lastMessage?.body ?? "";
+          const previewUser = detail.message?.user ?? prev[idx].lastMessage?.user;
+          if (!previewUser) return prev;
+          const updated = {
+            ...prev[idx],
+            lastMessage: {
+              id: detail.messageId ?? prev[idx].lastMessage?.id ?? detail.conversationId!,
+              body: previewBody,
+              createdAt: detail.message?.createdAt ?? new Date().toISOString(),
+              user: previewUser,
+            },
+          };
+          const next = [...prev];
+          next.splice(idx, 1);
+          next.unshift(updated);
+          return next;
+        });
+      } else if (
+        detail?.type === "message:created" &&
+        detail.conversationId &&
         detail.senderId !== session?.user?.id
       ) {
         setConversations((prev) => {
@@ -131,6 +166,66 @@ export function MessagesClient() {
     };
   }, [loadConversations, selectedId, session?.user?.id]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        type?: string;
+        conversationId?: string;
+        userId?: string;
+        clearedAt?: string;
+      };
+      if (detail.userId !== session?.user?.id || !detail.conversationId) return;
+
+      if (detail.type === "conversation:cleared") {
+        setConversations((prev) => {
+          const idx = prev.findIndex((c) => c.id === detail.conversationId);
+          if (idx === -1) return prev;
+          const updated = {
+            ...prev[idx],
+            lastMessage: null,
+            unreadCount: 0,
+            updatedAt: detail.clearedAt ?? new Date().toISOString(),
+          };
+          const next = [...prev];
+          next.splice(idx, 1);
+          next.unshift(updated);
+          return next;
+        });
+        window.dispatchEvent(new CustomEvent("taskflow:chat-unread"));
+        return;
+      }
+
+      if (detail.type === "conversation:removed") {
+        setConversations((prev) => prev.filter((c) => c.id !== detail.conversationId));
+        if (selectedId === detail.conversationId) {
+          setSelectedId(null);
+          router.replace("/dashboard/messages", { scroll: false });
+        }
+        window.dispatchEvent(new CustomEvent("taskflow:chat-unread"));
+      }
+    };
+
+    window.addEventListener("taskflow:conversation", handler);
+    return () => window.removeEventListener("taskflow:conversation", handler);
+  }, [router, selectedId, session?.user?.id]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        conversationId?: string;
+        userId?: string;
+      };
+      if (detail.userId !== session?.user?.id || !detail.conversationId) return;
+      setConversations((prev) =>
+        prev.map((c) => (c.id === detail.conversationId ? { ...c, unreadCount: 0 } : c))
+      );
+      window.dispatchEvent(new CustomEvent("taskflow:chat-unread"));
+    };
+
+    window.addEventListener("taskflow:receipt", handler);
+    return () => window.removeEventListener("taskflow:receipt", handler);
+  }, [session?.user?.id]);
+
   const selectedConversation = useMemo<ChatConversation | null>(() => {
     const found = conversations.find((c) => c.id === selectedId);
     if (!found) return null;
@@ -138,6 +233,7 @@ export function MessagesClient() {
       id: found.id,
       type: found.type,
       name: found.name,
+      workspaceId: found.workspaceId,
       participants: found.participants,
       unreadCount: found.unreadCount,
       canPost: found.canPost,
@@ -176,11 +272,14 @@ export function MessagesClient() {
   );
 
   const handleSelect = (id: string) => {
+    if (id === selectedId) return;
+    if (!confirmLeaveActiveMomMeeting()) return;
     setSelectedId(id);
     router.replace(`/dashboard/messages?c=${id}`, { scroll: false });
   };
 
   const handleBack = () => {
+    if (!confirmLeaveActiveMomMeeting()) return;
     setSelectedId(null);
     router.replace("/dashboard/messages", { scroll: false });
   };
@@ -247,8 +346,9 @@ export function MessagesClient() {
     <div
       className={cn(
         "flex h-full min-h-0 flex-col",
-        "max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:top-14 max-md:z-30 max-md:h-auto max-md:bg-[var(--background)]"
+        isMobile && "bg-[var(--background)]"
       )}
+      style={mobilePanelStyle}
     >
       <div className="mb-3 hidden shrink-0 px-4 pt-4 sm:px-6 sm:pt-5 lg:px-8 md:block">
         <div className="flex flex-wrap items-center justify-between gap-2">

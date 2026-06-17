@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Clock, Mail, Shield, UserMinus, Users, X } from "lucide-react";
+import { Archive, Clock, Mail, Shield, UserMinus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { Button } from "@/components/ui/Button";
@@ -75,9 +75,12 @@ export function WorkspacePanel() {
     updateMemberRole,
     removeMember,
     revokeInvitation,
+    archiveWorkspace,
+    currentMembership,
   } = useWorkspace();
   const [inviteEmail, setInviteEmail] = useState("");
   const [isInviting, setIsInviting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [permissions, setPermissions] = useState<WorkspacePermissions | null>(null);
   const [savingSetting, setSavingSetting] = useState(false);
@@ -199,6 +202,25 @@ export function WorkspacePanel() {
     }
     setRevokingInviteId(null);
   };
+
+  const handleArchive = async () => {
+    if (!selectedWorkspaceId || !selectedWorkspace) return;
+    const confirmed = confirm(
+      `Archive "${selectedWorkspace.name}"?\n\nMembers will lose access until the owner restores it. Tasks and messages are kept.`
+    );
+    if (!confirmed) return;
+
+    setIsArchiving(true);
+    const result = await archiveWorkspace(selectedWorkspaceId);
+    if (result.ok) {
+      toast.success(`"${selectedWorkspace.name}" archived`);
+    } else {
+      toast.error(result.error ?? "Could not archive workspace");
+    }
+    setIsArchiving(false);
+  };
+
+  const isOwner = currentMembership?.role === "OWNER";
 
   const allowMemberInvites =
     permissions?.allowMemberInvites ?? selectedWorkspace?.allowMemberInvites ?? false;
@@ -323,8 +345,7 @@ export function WorkspacePanel() {
 
       {canInvite ? (
         <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="relative min-w-0 flex-1">
-            <Mail className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+          <div className="min-w-0 flex-1">
             <Input
               hideLabel
               type="email"
@@ -332,7 +353,8 @@ export function WorkspacePanel() {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-              className="h-9 pl-8 text-sm"
+              startIcon={<Mail />}
+              className="h-9 text-sm"
             />
           </div>
           <Button size="sm" onClick={handleInvite} isLoading={isInviting} className="h-9 shrink-0 sm:px-4">
@@ -356,6 +378,28 @@ export function WorkspacePanel() {
         <div className="mt-4 space-y-4">
           <WorkloadPanel workspaceId={selectedWorkspaceId} />
           {canManageWorkspace && <AutomationRulesPanel workspaceId={selectedWorkspaceId} />}
+        </div>
+      )}
+
+      {isOwner && selectedWorkspace && (
+        <div className="mt-4 rounded-lg border border-red-200/80 bg-red-50/40 p-3 dark:border-red-900/50 dark:bg-red-950/20">
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
+            <Archive className="h-3 w-3" />
+            Danger zone
+          </p>
+          <p className="mb-2 text-xs text-zinc-600 dark:text-zinc-400">
+            Archive this workspace to hide it from everyone. Personal tasks are unaffected. You can restore it later from the workspace switcher.
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40"
+            isLoading={isArchiving}
+            onClick={() => void handleArchive()}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            Archive workspace
+          </Button>
         </div>
       )}
     </Card>

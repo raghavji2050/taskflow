@@ -127,7 +127,7 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        "group relative rounded-lg",
+        "group relative flex items-stretch gap-1 rounded-lg px-1",
         selectedId === conv.id
           ? "bg-[var(--accent)]/10"
           : "hover:bg-[var(--surface-hover)]"
@@ -137,7 +137,7 @@ function ConversationRow({
         type="button"
         onClick={() => onSelect(conv.id)}
         className={cn(
-          "flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors",
+          "flex min-w-0 flex-1 items-start gap-2.5 px-2 py-2 text-left transition-colors",
           selectedId === conv.id
             ? "text-[var(--accent)]"
             : "text-[var(--foreground)]"
@@ -171,7 +171,7 @@ function ConversationRow({
             )}
           </div>
         )}
-        <div className="min-w-0 flex-1 pr-14">
+        <div className="min-w-0 flex-1">
           <p
             className={cn(
               "truncate text-sm font-medium leading-5",
@@ -184,8 +184,7 @@ function ConversationRow({
             <p
               className={cn(
                 "mt-0.5 truncate text-xs leading-4 text-[var(--muted)]",
-                hasUnread && "font-medium text-[var(--foreground)]",
-                showMenu && "pr-7"
+                hasUnread && "font-medium text-[var(--foreground)]"
               )}
             >
               {formatLastMessagePreview(conv.lastMessage, currentUserId, conv.type)}
@@ -194,78 +193,123 @@ function ConversationRow({
         </div>
       </button>
 
-      <div className="pointer-events-none absolute right-3 top-2 flex items-center justify-end gap-1">
-        {hasUnread && (
-          <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-bold leading-none tabular-nums text-white">
-            {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
-          </span>
+      <div
+        className={cn(
+          "flex shrink-0 flex-col items-end py-2 pr-2",
+          conv.lastMessage ? "justify-between gap-1" : "justify-center"
         )}
-        {listTime && (
-          <span
-            className={cn(
-              "text-[10px] leading-none tabular-nums text-[var(--muted)]",
-              hasUnread && "font-medium text-[var(--accent)]"
+      >
+        {conv.lastMessage ? (
+          <>
+            <div className="flex items-center gap-1">
+              {hasUnread && (
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-bold leading-none tabular-nums text-white">
+                  {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+                </span>
+              )}
+              {listTime && (
+                <span
+                  className={cn(
+                    "text-[10px] leading-none tabular-nums text-[var(--muted)]",
+                    hasUnread && "font-medium text-[var(--accent)]"
+                  )}
+                >
+                  {listTime}
+                </span>
+              )}
+            </div>
+            {showMenu && (
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen((v) => !v);
+                }}
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-md text-[var(--muted)] transition-opacity hover:bg-[var(--card)] hover:text-[var(--foreground)]",
+                  menuOpen ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                )}
+                aria-label="Conversation options"
+                aria-expanded={menuOpen}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
             )}
-          >
-            {listTime}
-          </span>
+          </>
+        ) : (
+          <div className="flex items-center gap-1">
+            {hasUnread && (
+              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-bold leading-none tabular-nums text-white">
+                {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+              </span>
+            )}
+            {listTime && (
+              <span
+                className={cn(
+                  "text-[10px] leading-none tabular-nums text-[var(--muted)]",
+                  hasUnread && "font-medium text-[var(--accent)]"
+                )}
+              >
+                {listTime}
+              </span>
+            )}
+            {showMenu && (
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen((v) => !v);
+                }}
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-md text-[var(--muted)] transition-opacity hover:bg-[var(--card)] hover:text-[var(--foreground)]",
+                  menuOpen ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                )}
+                aria-label="Conversation options"
+                aria-expanded={menuOpen}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         )}
       </div>
 
-    {showMenu && (
+    {showMenu && menuOpen && (
       <>
-        <button
-          ref={menuButtonRef}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuOpen((v) => !v);
-          }}
-          className={cn(
-            "absolute bottom-1.5 right-0.5 flex h-6 w-6 items-center justify-center rounded-md text-[var(--muted)] transition-opacity hover:bg-[var(--card)] hover:text-[var(--foreground)]",
-            menuOpen ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-          )}
-          aria-label="Conversation options"
-          aria-expanded={menuOpen}
+        <div
+          className="fixed inset-0 z-[200]"
+          onClick={() => setMenuOpen(false)}
+          aria-hidden="true"
+        />
+        <div
+          className="fixed z-[201] min-w-[11rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg"
+          style={{ top: menuPos.top, left: menuPos.left }}
         >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
-        {menuOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-[200]"
-              onClick={() => setMenuOpen(false)}
-              aria-hidden="true"
-            />
-            <div
-              className="fixed z-[201] min-w-[11rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg"
-              style={{ top: menuPos.top, left: menuPos.left }}
+          {canRemove && onDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                void onDelete(conv.id, conv.type);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-500 hover:bg-red-500/10"
             >
-              {canRemove && onDelete && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    void onDelete(conv.id, conv.type);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-500 hover:bg-red-500/10"
-                >
-                  {conv.type === "DIRECT" ? (
-                    <>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete conversation
-                    </>
-                  ) : (
-                    <>
-                      <LogOut className="h-3.5 w-3.5" />
-                      Leave group
-                    </>
-                  )}
-                </button>
+              {conv.type === "DIRECT" ? (
+                <>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete conversation
+                </>
+              ) : (
+                <>
+                  <LogOut className="h-3.5 w-3.5" />
+                  Leave group
+                </>
               )}
-            </div>
-          </>
-        )}
+            </button>
+          )}
+        </div>
       </>
     )}
     </div>
