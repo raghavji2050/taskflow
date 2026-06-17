@@ -32,6 +32,11 @@ import {
   unsubscribeConversationChannel,
 } from "@/lib/pusher-client";
 import { chatFileKey, mergeChatUploadFiles, useFileDragDrop } from "@/lib/chat-file-drop";
+import {
+  mergeMessageUpdate,
+  mergeMessagesFromFetch,
+  replaceSentMessage,
+} from "@/lib/chat-message-merge";
 import { cn } from "@/lib/utils";
 import { useMediaQuery, useVisualViewport } from "@/lib/use-visual-viewport";
 
@@ -77,9 +82,20 @@ function buildOptimisticAttachments(tempId: string, files: File[]) {
   }));
 }
 
-function revokeOptimisticAttachments(attachments?: ChatMessage["attachments"]) {
+const BLOB_REVOKE_DELAY_MS = 15_000;
+
+function scheduleRevokeOptimisticAttachments(attachments?: ChatMessage["attachments"]) {
   for (const a of attachments ?? []) {
-    if (a.url.startsWith("blob:")) URL.revokeObjectURL(a.url);
+    if (!a.url.startsWith("blob:")) continue;
+    setTimeout(() => URL.revokeObjectURL(a.url), BLOB_REVOKE_DELAY_MS);
+  }
+}
+
+function revokeAllBlobAttachments(messages: ChatMessage[]) {
+  for (const m of messages) {
+    for (const a of m.attachments ?? []) {
+      if (a.url.startsWith("blob:")) URL.revokeObjectURL(a.url);
+    }
   }
 }
 
@@ -282,13 +298,15 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           }
         });
       } else {
-        setMessages(data.messages ?? []);
+        setMessages((prev) =>
+          withReceipts(mergeMessagesFromFetch(prev, data.messages ?? []))
+        );
         setPinned(data.pinned ?? []);
       }
       setHasMore(Boolean(data.hasMore));
       setCursor(data.nextCursor ?? null);
     },
-    []
+    [withReceipts]
   );
 
   const refreshReceiptStatuses = useCallback(
@@ -401,7 +419,12 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const updateMessageInState = useCallback(
     (updated: ChatMessage) => {
       setMessages((prev) =>
-        withReceipts(prev.map((m) => (m.id === updated.id ? updated : m)))
+        withReceipts(
+          prev.map((m) => {
+            if (m.id !== updated.id) return m;
+            return mergeMessageUpdate(m, updated);
+          })
+        )
       );
       setPinned((prev) => {
         if (updated.deletedAt) return prev.filter((m) => m.id !== updated.id);
@@ -444,7 +467,10 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     }
 
     setActiveConversationId(convId);
-    setMessages([]);
+    setMessages((prev) => {
+      revokeAllBlobAttachments(prev);
+      return [];
+    });
     setPinned([]);
     setReceipts([]);
     setHasMore(false);
@@ -566,8 +592,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         return;
       }
 
+      if (pendingSendsRef.current.size > 0) return;
+
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
+        if (pendingSendsRef.current.size > 0) return;
         const shouldStick = updateStickToBottom();
         void fetchMessages(convId, { silent: true }).then(() => {
           markRead(convId);
@@ -769,11 +798,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           pendingSendsRef.current.delete(clientTempId);
           setMessages((prev) => {
             const old = prev.find((m) => m.clientTempId === clientTempId);
-            revokeOptimisticAttachments(old?.attachments);
+            scheduleRevokeOptimisticAttachments(old?.attachments);
             return withReceipts(
-              prev.map((m) =>
-                m.clientTempId === clientTempId ? (data.message as ChatMessage) : m
-              )
+              replaceSentMessage(prev, clientTempId, data.message as ChatMessage)
             );
           });
         } else {
@@ -850,9 +877,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         pendingSendsRef.current.delete(tempId);
         setMessages((prev) => {
           const old = prev.find((m) => m.clientTempId === tempId);
-          revokeOptimisticAttachments(old?.attachments);
+          scheduleRevokeOptimisticAttachments(old?.attachments);
           return withReceipts(
-            prev.map((m) => (m.clientTempId === tempId ? (data.message as ChatMessage) : m))
+            replaceSentMessage(prev, tempId, data.message as ChatMessage)
           );
         });
         const sent = data.message as ChatMessage;

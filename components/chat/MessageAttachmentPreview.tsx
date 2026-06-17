@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   FileText,
   Film,
+  Loader2,
   Music,
   Presentation,
   X,
@@ -85,6 +86,15 @@ function ImageSkeleton({ className }: { className?: string }) {
       )}
       aria-hidden
     />
+  );
+}
+
+function UploadOverlay({ label = "Uploading…" }: { label?: string }) {
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-black/45 backdrop-blur-[1px]">
+      <Loader2 className="h-6 w-6 animate-spin text-white" aria-hidden />
+      <span className="text-[10px] font-medium text-white/90">{label}</span>
+    </div>
   );
 }
 
@@ -325,11 +335,13 @@ function FileAttachmentCard({
   isOwn,
   onPreview,
   variant = "standalone",
+  isSending,
 }: {
   attachment: AttachmentRow;
   isOwn?: boolean;
   onPreview?: () => void;
   variant?: "standalone" | "inBubble";
+  isSending?: boolean;
 }) {
   const kind = getAttachmentKind(attachment.mimeType, attachment.filename);
   const meta = KIND_META[kind];
@@ -340,7 +352,7 @@ function FileAttachmentCard({
   const inOwnBubble = Boolean(isOwn && variant === "inBubble");
 
   const shellClass = cn(
-    "flex min-w-[200px] max-w-[280px] overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md",
+    "relative flex min-w-[200px] max-w-[280px] overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md",
     inOwnBubble
       ? "border-white/25 bg-white/12 hover:bg-white/18"
       : isOwn
@@ -393,6 +405,7 @@ function FileAttachmentCard({
   if (previewable && onPreview && attachment.url) {
     return (
       <div className={shellClass}>
+        {isSending && <UploadOverlay />}
         {iconColumn}
         <button
           type="button"
@@ -415,6 +428,7 @@ function FileAttachmentCard({
   if (downloadHref) {
     return (
       <div className={shellClass}>
+        {isSending && <UploadOverlay />}
         {iconColumn}
         <div className="flex min-w-0 flex-1 flex-col justify-center px-2.5 py-2">{metaBlock}</div>
         <div className="flex shrink-0 items-center pr-1">
@@ -430,6 +444,7 @@ function FileAttachmentCard({
 
   return (
     <div className={shellClass}>
+      {isSending && <UploadOverlay />}
       {iconColumn}
       <div className="flex min-w-0 flex-1 flex-col justify-center px-2.5 py-2">{metaBlock}</div>
     </div>
@@ -442,16 +457,19 @@ function ChatImageThumbnail({
   single,
   onOpen,
   variant = "standalone",
+  isSending,
 }: {
   attachment: AttachmentRow;
   isOwn?: boolean;
   single: boolean;
   onOpen: () => void;
   variant?: "standalone" | "inBubble";
+  isSending?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
   const src = attachmentDisplayUrl(attachment.url);
   const downloadHref = attachmentDownloadHref(attachment.url, attachment.filename);
+  const showSkeleton = !loaded && src && !isSending;
 
   return (
     <div
@@ -459,10 +477,11 @@ function ChatImageThumbnail({
         "group relative overflow-hidden rounded-xl border",
         variant === "inBubble" && isOwn ? "border-white/20" : "border-[var(--card-border)]",
         single ? "max-w-[280px]" : "aspect-square max-w-[140px]",
-        src && "cursor-pointer"
+        src && !isSending && "cursor-pointer"
       )}
     >
-      {!loaded && src && (
+      {isSending && <UploadOverlay />}
+      {showSkeleton && (
         <ImageSkeleton
           className={cn(
             "absolute inset-0",
@@ -474,7 +493,8 @@ function ChatImageThumbnail({
         <button
           type="button"
           onClick={onOpen}
-          className="block h-full w-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          disabled={isSending}
+          className="block h-full w-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:cursor-default"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -485,7 +505,7 @@ function ChatImageThumbnail({
             className={cn(
               "bg-black/5 object-cover transition group-hover:scale-[1.02]",
               single ? "max-h-52 w-full object-contain" : "h-full w-full",
-              !loaded && "opacity-0"
+              !loaded && !isSending && "opacity-0"
             )}
           />
         </button>
@@ -535,12 +555,7 @@ export function MessageAttachmentPreview({
     images.every((img) => messageBody && isAttachmentOnlyBody(messageBody, img.filename));
 
   return (
-    <div
-      className={cn(
-        isSending && "animate-pulse opacity-90",
-        variant === "inBubble" && "mt-2"
-      )}
-    >
+    <div className={cn(variant === "inBubble" && "mt-2")}>
       {images.length > 0 && (
         <div
           className={cn(
@@ -556,6 +571,7 @@ export function MessageAttachmentPreview({
               single={images.length === 1}
               onOpen={() => setLightboxIndex(i)}
               variant={variant}
+              isSending={isSending}
             />
           ))}
         </div>
@@ -574,6 +590,7 @@ export function MessageAttachmentPreview({
               attachment={a}
               isOwn={isOwn}
               variant={variant}
+              isSending={isSending}
               onPreview={() => setMediaPreview(a)}
             />
           ))}

@@ -30,33 +30,52 @@ export async function notifyParticipants(params: {
 
   if (eventType === "message:updated") return;
 
+  void deliverParticipantNotifications(params, allParticipantIds);
+}
+
+async function deliverParticipantNotifications(
+  params: {
+    conversationId: string;
+    userId: string;
+    userName: string;
+    preview: string;
+    body: string;
+    messageId: string;
+    mentionCandidates: { id: string; name: string }[];
+  },
+  allParticipantIds: string[]
+) {
   const otherParticipantIds = allParticipantIds.filter((id) => id !== params.userId);
   const mentioned = parseMentionsFromBody(params.body, params.mentionCandidates);
   const mentionedIds = new Set(mentioned.map((m) => m.id));
 
-  for (const participantId of otherParticipantIds) {
-    if (mentionedIds.has(participantId)) continue;
+  await Promise.all(
+    otherParticipantIds
+      .filter((participantId) => !mentionedIds.has(participantId))
+      .map((participantId) =>
+        createNotification({
+          userId: participantId,
+          title: params.userName,
+          body: params.preview,
+          type: "message",
+          conversationId: params.conversationId,
+          messageId: params.messageId,
+        })
+      )
+  );
 
-    await createNotification({
-      userId: participantId,
-      title: params.userName,
-      body: params.preview,
-      type: "message",
-      conversationId: params.conversationId,
-      messageId: params.messageId,
-    });
-  }
-
-  for (const m of mentioned) {
-    if (m.id === params.userId) continue;
-
-    await createNotification({
-      userId: m.id,
-      title: `${params.userName} mentioned you`,
-      body: params.preview,
-      type: "mention",
-      conversationId: params.conversationId,
-      messageId: params.messageId,
-    });
-  }
+  await Promise.all(
+    mentioned
+      .filter((m) => m.id !== params.userId)
+      .map((m) =>
+        createNotification({
+          userId: m.id,
+          title: `${params.userName} mentioned you`,
+          body: params.preview,
+          type: "mention",
+          conversationId: params.conversationId,
+          messageId: params.messageId,
+        })
+      )
+  );
 }

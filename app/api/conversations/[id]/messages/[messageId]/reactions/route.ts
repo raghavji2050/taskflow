@@ -39,6 +39,7 @@ export async function POST(request: Request, context: RouteContext) {
       actorId: user.id,
       preview: `${emoji} reaction`,
       type: "message:updated",
+      message,
     });
 
     return NextResponse.json({ message });

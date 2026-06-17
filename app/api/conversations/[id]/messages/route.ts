@@ -114,13 +114,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     if (files.length > 0) {
-      message = await addMessageAttachments({
-        messageId: message.id,
-        userId: user.id,
-        files,
-      });
-
-      const preview =
+      const attachmentPreview =
         files.length === 1
           ? `📎 ${files[0]!.name}`
           : `📎 ${files.length} files`;
@@ -129,13 +123,32 @@ export async function POST(request: Request, context: RouteContext) {
         conversationId: id,
         userId: user.id,
         userName: user.name,
-        preview,
+        preview: attachmentPreview,
         conversationTitle,
         mentionCandidates,
         body: messageBody,
         messageId: message.id,
         message,
         type: "message:created",
+      });
+
+      message = await addMessageAttachments({
+        messageId: message.id,
+        userId: user.id,
+        files,
+      });
+
+      void notifyParticipants({
+        conversationId: id,
+        userId: user.id,
+        userName: user.name,
+        preview: attachmentPreview,
+        conversationTitle,
+        mentionCandidates,
+        body: messageBody,
+        messageId: message.id,
+        message,
+        type: "message:updated",
       });
     }
 

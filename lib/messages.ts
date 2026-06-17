@@ -638,18 +638,20 @@ export async function addMessageAttachments(params: {
   userId: string;
   files: File[];
 }) {
-  for (const file of params.files) {
-    const saved = await saveMessageAttachmentFile(params.userId, file);
-    await prisma.messageAttachment.create({
-      data: {
-        messageId: params.messageId,
-        filename: saved.filename,
-        url: saved.url,
-        mimeType: saved.mimeType,
-        size: saved.size,
-      },
-    });
-  }
+  await Promise.all(
+    params.files.map(async (file) => {
+      const saved = await saveMessageAttachmentFile(params.userId, file);
+      await prisma.messageAttachment.create({
+        data: {
+          messageId: params.messageId,
+          filename: saved.filename,
+          url: saved.url,
+          mimeType: saved.mimeType,
+          size: saved.size,
+        },
+      });
+    })
+  );
 
   const message = await prisma.message.findUniqueOrThrow({
     where: { id: params.messageId },
