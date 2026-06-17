@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 interface BreakdownItem {
   status: string;
   priority: string;
@@ -16,7 +18,7 @@ const statusColors: Record<string, string> = {
   COMPLETED: "bg-emerald-500",
 };
 
-export function StatsBreakdown({ breakdown }: StatsBreakdownProps) {
+export function StatsBreakdown({ breakdown, compact = false }: StatsBreakdownProps & { compact?: boolean }) {
   const byStatus = breakdown.reduce(
     (acc, item) => {
       acc[item.status] = (acc[item.status] ?? 0) + item._count;
@@ -27,6 +29,24 @@ export function StatsBreakdown({ breakdown }: StatsBreakdownProps) {
 
   const total = Object.values(byStatus).reduce((a, b) => a + b, 0);
   if (total === 0) return null;
+
+  if (compact) {
+    return (
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 border-l border-[var(--card-border)] pl-4">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Status</span>
+        {Object.entries(byStatus).map(([status, count]) => (
+          <span
+            key={status}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-hover)] px-2 py-0.5 text-xs"
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", statusColors[status] ?? "bg-zinc-400")} />
+            <span className="text-[var(--muted)]">{status.replace("_", " ")}</span>
+            <span className="font-semibold tabular-nums text-[var(--foreground)]">{count}</span>
+          </span>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="stat-card rounded-xl p-4">

@@ -95,5 +95,14 @@ export function dispatchRealtimeMessage(
   }
   if (data.type?.startsWith("task:") || data.type === "comment:created") {
     ctx.onTaskEvent(data as TaskEvent);
+    return;
+  }
+  if (
+    data.type === "time:started" ||
+    data.type === "time:stopped" ||
+    data.type === "time:updated"
+  ) {
+    window.dispatchEvent(new CustomEvent("taskflow:time", { detail: data }));
+    return;
   }
 }

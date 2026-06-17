@@ -3,6 +3,8 @@
 import { Calendar, Clock, Pencil, Trash2, Archive, ArchiveRestore, MessageSquare, Eye } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
+import { TaskTimeControls } from "@/components/tasks/TaskTimeControls";
+import type { ActiveTimerEntry } from "@/lib/useActiveTimer";
 import {
   cn, formatDueDateTime, formatRelativeDate, getPriorityClass,
   getPriorityColor, getStatusColor, isOverdue,
@@ -45,11 +47,16 @@ interface TaskCardProps {
   showMeta?: boolean;
   readOnly?: boolean;
   showWorkspace?: boolean;
+  showTimeControls?: boolean;
+  activeTimer?: ActiveTimerEntry | null;
+  activeTimerElapsed?: number;
+  onTimerRefresh?: () => void;
 }
 
 export function TaskCard({
   task, onEdit, onDelete, onArchive, onToggleStatus,
   isUpdating = false, selected, onSelect, bulkMode, showMeta = false, readOnly = false, showWorkspace = false,
+  showTimeControls = false, activeTimer = null, activeTimerElapsed = 0, onTimerRefresh,
 }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate, task.status);
   const isCompleted = task.status === "COMPLETED";
@@ -121,7 +128,17 @@ export function TaskCard({
           )}
         </div>
 
-        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
+        <div className="flex shrink-0 items-center gap-0.5">
+          {showTimeControls && onTimerRefresh && (
+            <TaskTimeControls
+              taskId={task.id}
+              readOnly={readOnly}
+              activeEntry={activeTimer}
+              elapsed={activeTimerElapsed}
+              onRefresh={onTimerRefresh}
+            />
+          )}
+          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
           <Button variant="ghost" size="sm" onClick={() => onEdit(task)} className="h-7 w-7 p-0" aria-label={readOnly ? "View task" : "Edit task"}>
             {readOnly ? <Eye className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
           </Button>
@@ -133,6 +150,7 @@ export function TaskCard({
             <Button variant="ghost" size="sm" onClick={() => onDelete(task)} className="h-7 w-7 p-0 text-red-500 hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></Button>
             </>
           )}
+          </div>
         </div>
       </div>
     </div>

@@ -309,6 +309,51 @@ export const momUpdateSchema = z
     { message: "End time must be after start time", path: ["endedAt"] }
   );
 
+export const timeRangeSchema = z.enum(["today", "week", "month", "custom", "all"]).optional().default("all");
+
+export const timeStartSchema = z.object({
+  taskId: z.string().min(1),
+  description: z.string().max(500).optional().nullable(),
+});
+
+export const timeStopSchema = z.object({
+  timeEntryId: z.string().optional(),
+  description: z.string().max(500).optional().nullable(),
+  taskStatus: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED"]).optional(),
+});
+
+export const timeResumeSchema = z.object({
+  taskId: z.string().min(1),
+  description: z.string().max(500).optional().nullable(),
+});
+
+export const timeManualSchema = z.object({
+  taskId: z.string().min(1),
+  date: z.string().refine((v) => !Number.isNaN(Date.parse(v)), "Invalid date"),
+  durationSeconds: z.coerce.number().int().min(60).max(86400),
+  description: z.string().max(500).optional().nullable(),
+});
+
+export const timeEntryUpdateSchema = z.object({
+  description: z.string().max(500).optional().nullable(),
+  startTime: z.string().datetime({ offset: true }).optional(),
+  endTime: z.string().datetime({ offset: true }).optional().nullable(),
+  durationSeconds: z.coerce.number().int().min(60).max(86400).optional(),
+});
+
+export const timeQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  range: timeRangeSchema,
+  from: z.string().optional(),
+  to: z.string().optional(),
+  userId: z.string().optional(),
+  taskId: z.string().optional(),
+  workspaceId: z.string().optional(),
+  personal: z.coerce.boolean().optional().default(false),
+  includeReport: z.coerce.boolean().optional().default(false),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type TaskInput = z.infer<typeof taskSchema>;

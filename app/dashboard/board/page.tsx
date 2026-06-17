@@ -22,6 +22,7 @@ import {
   defaultTaskViewFilters,
   type TaskViewFiltersState,
 } from "@/lib/task-view-filters";
+import { useOpenTaskListener } from "@/lib/open-task-event";
 
 export default function BoardPage() {
   const router = useRouter();
@@ -116,6 +117,26 @@ export default function BoardPage() {
     }
     setIsSubmitting(false);
   };
+
+  const openTaskById = useCallback(async (taskId: string) => {
+    const cached = tasks.find((t) => t.id === taskId);
+    if (cached) {
+      setEditingTask(cached);
+      setIsFormOpen(true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load task");
+      setEditingTask(data.task);
+      setIsFormOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open task");
+    }
+  }, [tasks]);
+
+  useOpenTaskListener((taskId) => { void openTaskById(taskId); });
 
   const pageTitle = isPersonal ? "Board" : `${selectedWorkspace?.name} Board`;
 

@@ -90,6 +90,7 @@ model User {
   documentAttachments     DocumentAttachment[]
   meetingMinutesCreated   MeetingMinutes[]
   momSuggestionPreferences MomSuggestionPreference[]
+  timeEntries              TimeEntry[]
 }
 
 model Account {
@@ -176,6 +177,7 @@ model Task {
   activities  TaskActivity[]
   reminders   Reminder[]
   documentLinks DocumentTask[]
+  timeEntries TimeEntry[]
 
   @@index([userId])
   @@index([status])
@@ -642,4 +644,26 @@ model MomSuggestionPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, scopeKey])
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  userId      String
+  taskId      String
+  description String?
+  startTime   DateTime
+  endTime     DateTime?
+  duration    Int       @default(0)
+  isRunning   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([taskId])
+  @@index([isRunning])
+  @@index([userId, isRunning])
+  @@index([startTime])
 }

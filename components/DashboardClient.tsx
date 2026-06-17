@@ -12,6 +12,7 @@ import { TaskFilters, type TaskFiltersState } from "@/components/TaskFilters";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { RecentTasks } from "@/components/RecentTasks";
 import { DailyUpdateCard } from "@/components/DailyUpdateCard";
+import { TimeDashboardWidgets } from "@/components/TimeDashboardWidgets";
 import type { DailyUpdateGroup } from "@/lib/daily-update-format";
 import { Pagination } from "@/components/Pagination";
 import { CategorySidebar } from "@/components/CategorySidebar";
@@ -25,6 +26,10 @@ import { cn, getTimeGreeting } from "@/lib/utils";
 import { toTaskInput } from "@/lib/task-ui";
 import { format } from "date-fns";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
+import { useActiveTimer } from "@/lib/useActiveTimer";
+import { useOpenTaskListener } from "@/lib/open-task-event";
+import { useTasksRefreshListener } from "@/lib/tasks-refresh-event";
+import { useTimeRealtime } from "@/lib/useTimeRealtime";
 
 const defaultFilters: TaskFiltersState = {
   search: "", status: "ALL", priority: "ALL", sort: "dueDate", order: "asc",
@@ -40,6 +45,7 @@ interface DashboardClientProps { userName: string; }
 export function DashboardClient({ userName }: DashboardClientProps) {
   const { data: session } = useSession();
   const { selectedWorkspaceId, selectedWorkspace, isPersonal, members, canEditTasks } = useWorkspace();
+  const { entry: activeTimer, elapsed: activeTimerElapsed, refresh: refreshActiveTimer } = useActiveTimer();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<DashboardStatsData>(defaultStats);
@@ -107,9 +113,15 @@ export function DashboardClient({ userName }: DashboardClientProps) {
     fetchTasks(filters, page, categoryId, selectedWorkspaceId, true);
   }, [fetchTasks, filters, page, categoryId, selectedWorkspaceId]);
 
+  const handleTimerRefresh = useCallback(() => {
+    void refreshActiveTimer();
+    refreshTasks();
+  }, [refreshActiveTimer, refreshTasks]);
+
   useRealtimeSync({
     workspaceId: selectedWorkspaceId,
     onRefresh: refreshTasks,
+    refreshOnAnyTaskEvent: isPersonal,
   });
 
   useEffect(() => {
@@ -222,7 +234,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
 
   const openEdit = (task: Task) => { setEditingTask(task); setIsFormOpen(true); };
 
-  const openTaskById = async (taskId: string) => {
+  const openTaskById = useCallback(async (taskId: string) => {
     const cached = tasks.find((t) => t.id === taskId) ?? recentTasks.find((t) => t.id === taskId);
     if (cached) {
       openEdit(cached);
@@ -236,7 +248,19 @@ export function DashboardClient({ userName }: DashboardClientProps) {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to open task");
     }
-  };
+  }, [tasks, recentTasks]);
+
+  useOpenTaskListener((taskId) => { void openTaskById(taskId); });
+
+  useTasksRefreshListener(refreshTasks);
+
+  useTimeRealtime({
+    onEvent: (detail) => {
+      if (detail.type === "time:stopped" || detail.type === "time:started") {
+        refreshTasks();
+      }
+    },
+  });
   const displayName = session?.user?.name ?? userName;
   const firstName = displayName.split(" ")[0];
   const pageTitle = isPersonal ? "My Tasks" : (selectedWorkspace?.name ?? "Team");
@@ -245,7 +269,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
     : `${members.length} team member${members.length !== 1 ? "s" : ""} · shared workspace`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         eyebrow={`${getTimeGreeting()}, ${firstName}`}
         title={pageTitle}
@@ -264,15 +288,20 @@ export function DashboardClient({ userName }: DashboardClientProps) {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="sm:col-span-2 xl:col-span-3">
-          <DashboardStats stats={stats} />
+      <Card className="p-3 sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+            <DashboardStats stats={stats} compact />
+            <CompletionRing stats={stats} compact />
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-4">
+            {stats.breakdown && stats.total > 0 && (
+              <StatsBreakdown breakdown={stats.breakdown} compact />
+            )}
+            <TimeDashboardWidgets compact />
+          </div>
         </div>
-        <CompletionRing stats={stats} />
-      </div>
-      {stats.breakdown && stats.total > 0 && (
-        <StatsBreakdown breakdown={stats.breakdown} />
-      )}
+      </Card>
 
       {bulkMode && selectedIds.size > 0 && (
         <div className="flex flex-wrap gap-2 rounded-xl border border-[var(--accent)]/20 bg-[var(--accent-soft)] p-3">
@@ -344,6 +373,10 @@ export function DashboardClient({ userName }: DashboardClientProps) {
                       bulkMode={bulkMode && canEditTasks}
                       showMeta={!isPersonal}
                       readOnly={!canEditTasks}
+                      showTimeControls={canEditTasks}
+                      activeTimer={activeTimer}
+                      activeTimerElapsed={activeTimerElapsed}
+                      onTimerRefresh={handleTimerRefresh}
                       selected={selectedIds.has(task.id)}
                       onSelect={(id, sel) => setSelectedIds((prev) => {
                         const next = new Set(prev);

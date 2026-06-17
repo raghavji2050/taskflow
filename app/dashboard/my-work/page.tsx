@@ -11,6 +11,9 @@ import { Card } from "@/components/ui/Card";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
+import { useActiveTimer } from "@/lib/useActiveTimer";
+import { useOpenTaskListener } from "@/lib/open-task-event";
+import { useTasksRefreshListener } from "@/lib/tasks-refresh-event";
 import type { TaskInput } from "@/lib/validations";
 import { toTaskInput } from "@/lib/task-ui";
 
@@ -34,6 +37,7 @@ export default function MyWorkPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+  const { entry: activeTimer, elapsed: activeTimerElapsed, refresh: refreshActiveTimer } = useActiveTimer();
 
   const load = useCallback(async () => {
     const [workRes, wsRes] = await Promise.all([
@@ -52,6 +56,11 @@ export default function MyWorkPage() {
       setWorkspaces(wsData.workspaces ?? []);
     }
   }, []);
+
+  const handleTimerRefresh = useCallback(() => {
+    void refreshActiveTimer();
+    void load();
+  }, [refreshActiveTimer, load]);
 
   useEffect(() => {
     if (status === "authenticated") void load();
@@ -141,6 +150,10 @@ export default function MyWorkPage() {
       showMeta
       showWorkspace
       readOnly={!canEditTask(task)}
+      showTimeControls={canEditTask(task)}
+      activeTimer={activeTimer}
+      activeTimerElapsed={activeTimerElapsed}
+      onTimerRefresh={handleTimerRefresh}
       onEdit={(t) => { setEditingTask(t); setIsFormOpen(true); }}
       onDelete={setDeletingTask}
       onArchive={handleArchive}
@@ -148,6 +161,33 @@ export default function MyWorkPage() {
       isUpdating={updatingTaskId === task.id}
     />
   );
+
+  const allTasks = useMemo(
+    () => [...assigned, ...overdue, ...Object.values(byWorkspace).flat()],
+    [assigned, overdue, byWorkspace]
+  );
+
+  const openTaskById = useCallback(async (taskId: string) => {
+    const cached = allTasks.find((t) => t.id === taskId);
+    if (cached) {
+      setEditingTask(cached);
+      setIsFormOpen(true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load task");
+      setEditingTask(data.task);
+      setIsFormOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open task");
+    }
+  }, [allTasks]);
+
+  useOpenTaskListener((taskId) => { void openTaskById(taskId); });
+
+  useTasksRefreshListener(() => { void load(); });
 
   const workspaceGroups = useMemo(() => Object.entries(byWorkspace), [byWorkspace]);
 

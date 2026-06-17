@@ -13,6 +13,7 @@ import {
   Calendar,
   UserCircle,
   GanttChart,
+  Clock,
   LogOut,
   Moon,
   Settings,
@@ -69,6 +70,12 @@ const taskNavItems: NavItem[] = [
     label: "Timeline",
     icon: GanttChart,
     match: (p) => p.startsWith("/dashboard/timeline"),
+  },
+  {
+    href: "/dashboard/reports/time",
+    label: "Time Reports",
+    icon: Clock,
+    match: (p) => p.startsWith("/dashboard/reports/time"),
   },
 ];
 

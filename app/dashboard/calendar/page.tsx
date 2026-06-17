@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { addMonths, format, subMonths } from "date-fns";
+import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { CalendarView } from "@/components/CalendarView";
 import { TaskEditModal } from "@/components/TaskEditModal";
@@ -20,6 +21,7 @@ import {
   defaultTaskViewFilters,
   type TaskViewFiltersState,
 } from "@/lib/task-view-filters";
+import { useOpenTaskListener } from "@/lib/open-task-event";
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -98,6 +100,28 @@ export default function CalendarPage() {
     }
     setIsSubmitting(false);
   };
+
+  const openTaskById = useCallback(async (taskId: string) => {
+    const cached = tasks.find((t) => t.id === taskId);
+    if (cached) {
+      setEditingTask(cached);
+      setDefaultDueDate(undefined);
+      setIsFormOpen(true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load task");
+      setEditingTask(data.task);
+      setDefaultDueDate(undefined);
+      setIsFormOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open task");
+    }
+  }, [tasks]);
+
+  useOpenTaskListener((taskId) => { void openTaskById(taskId); });
 
   if (status === "loading") {
     return (

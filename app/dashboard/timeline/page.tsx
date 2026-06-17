@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { TimelineView } from "@/components/TimelineView";
 import { TaskEditModal } from "@/components/TaskEditModal";
@@ -17,6 +18,7 @@ import {
   defaultTaskViewFilters,
   type TaskViewFiltersState,
 } from "@/lib/task-view-filters";
+import { useOpenTaskListener } from "@/lib/open-task-event";
 
 export default function TimelinePage() {
   const router = useRouter();
@@ -65,6 +67,26 @@ export default function TimelinePage() {
     }
     setIsSubmitting(false);
   };
+
+  const openTaskById = useCallback(async (taskId: string) => {
+    const cached = tasks.find((t) => t.id === taskId);
+    if (cached) {
+      setEditingTask(cached);
+      setIsFormOpen(true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load task");
+      setEditingTask(data.task);
+      setIsFormOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open task");
+    }
+  }, [tasks]);
+
+  useOpenTaskListener((taskId) => { void openTaskById(taskId); });
 
   if (status === "loading") return null;
 

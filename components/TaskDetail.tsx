@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { MessageSquare, Paperclip, Bell, ListChecks, Users, Activity, BookOpen, FileText } from "lucide-react";
+import { MessageSquare, Paperclip, Bell, ListChecks, Users, Activity, BookOpen, FileText, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
 import { renderCommentBody } from "@/lib/mentions";
@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { LinkDocumentPicker } from "@/components/docs/LinkDocumentPicker";
 import { DocumentQuickModal } from "@/components/docs/DocumentQuickModal";
+import { TimeTracker } from "@/components/tasks/TimeTracker";
+import { TimeEntryHistory } from "@/components/tasks/TimeEntryHistory";
 
 interface Subtask { id: string; title: string; completed: boolean }
 interface Comment { id: string; body: string; user: { name: string }; createdAt: string; replies?: Comment[] }
@@ -228,6 +230,19 @@ export function TaskDetail({ taskId, readOnly = false, members = [] }: TaskDetai
             onLink={linkDocument}
           />
         )}
+      </Section>
+
+      <Section icon={Clock} title="Time tracking">
+        <TimeTracker taskId={taskId} readOnly={readOnly} />
+        <div className="mt-4 border-t border-[var(--card-border)] pt-4">
+          <p className="mb-2 text-xs font-medium text-[var(--muted)]">History</p>
+          <TimeEntryHistory
+            taskId={taskId}
+            readOnly={readOnly}
+            showUserFilter={taskWorkspaceId !== null}
+            memberOptions={members}
+          />
+        </div>
       </Section>
 
       <Section icon={ListChecks} title="Subtasks">

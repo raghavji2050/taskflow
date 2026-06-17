@@ -108,12 +108,25 @@ export interface ConversationRemovedEvent {
   at: string;
 }
 
+export type TimeEventType = "time:started" | "time:stopped" | "time:updated";
+
+export interface TimeEvent {
+  type: TimeEventType;
+  workspaceId: string | null;
+  taskId: string;
+  userId: string;
+  actorId: string;
+  entry: Record<string, unknown>;
+  at: string;
+}
+
 export type RealtimeEvent =
   | TaskEvent
   | NotificationEvent
   | WorkspaceEvent
   | WorkspaceMembershipEvent
   | MessageEvent
+  | TimeEvent
   | PresenceSyncEvent
   | PresenceChangedEvent
   | ConversationReceiptEvent
@@ -506,4 +519,23 @@ export function setConversationTyping(
     return;
   }
   getRealtimeHub().setTyping(userId, conversationId, typing, participantIds);
+}
+
+export function broadcastTimeEvent(
+  event: Omit<TimeEvent, "at"> & { at?: string }
+) {
+  const payload = {
+    ...event,
+    at: event.at ?? new Date().toISOString(),
+  } satisfies TimeEvent;
+
+  void triggerUserChannel(event.userId, payload).then((sent) => {
+    if (!sent) getRealtimeHub().publishToUser(event.userId, payload);
+  });
+
+  if (event.workspaceId) {
+    void triggerWorkspaceChannel(event.workspaceId, payload).then((sent) => {
+      if (!sent) getRealtimeHub().publishToWorkspace(event.workspaceId!, payload);
+    });
+  }
 }
