@@ -1,14 +1,4 @@
 {
   "buildCommand": "npm run vercel-build",
-  "installCommand": "npm install",
-  "crons": [
-    {
-      "path": "/api/cron/reminders",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/timer-reminders",
-      "schedule": "0 * * * *"
-    }
-  ]
+  "installCommand": "npm install"
 }
