@@ -14,8 +14,12 @@ function isDesktopEnvironment() {
 
 export function useIdleTimer(prefs: TimeTrackingPrefs | null) {
   const { entry, refresh } = useActiveTimer();
-  const lastActivityRef = useRef(Date.now());
+  const lastActivityRef = useRef(0);
   const idleTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
 
   const resetActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
