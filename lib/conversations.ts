@@ -1,6 +1,6 @@
 import { ConversationType, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getWorkspaceMembership } from "@/lib/workspace";
+import { getWorkspaceMembershipIncludingArchived } from "@/lib/workspace";
 import { broadcastConversationRemoved } from "@/lib/realtime";
 
 const conversationInclude = {
@@ -273,8 +273,15 @@ async function userCanPost(
   conversation: { type: ConversationType; workspaceId: string | null }
 ) {
   if (conversation.type === ConversationType.WORKSPACE && conversation.workspaceId) {
-    const membership = await getWorkspaceMembership(userId, conversation.workspaceId);
-    return !!membership && membership.role !== WorkspaceRole.VIEWER;
+    const membership = await getWorkspaceMembershipIncludingArchived(
+      userId,
+      conversation.workspaceId
+    );
+    return (
+      !!membership &&
+      membership.role !== WorkspaceRole.VIEWER &&
+      !membership.workspace.archivedAt
+    );
   }
   return true;
 }

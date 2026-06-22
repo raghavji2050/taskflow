@@ -400,3 +400,70 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type TaskInput = z.infer<typeof taskSchema>;
 export type TaskQueryInput = z.infer<typeof taskQuerySchema>;
+
+const timezoneSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .refine((tz) => {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Invalid timezone");
+
+export const scheduledMessageCreateSchema = z
+  .object({
+    conversationId: z.string().min(1),
+    body: z.string().max(4000).default(""),
+    parentId: z.string().optional().nullable(),
+    scheduledFor: z
+      .string()
+      .optional()
+      .refine((v) => !v || !Number.isNaN(Date.parse(v)), "Invalid scheduled time"),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    time: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+      .optional(),
+    timezone: timezoneSchema,
+  })
+  .superRefine((data, ctx) => {
+    if (!data.scheduledFor && !(data.date && data.time)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide scheduledFor or both date and time",
+        path: ["scheduledFor"],
+      });
+    }
+  });
+
+export const scheduledMessageUpdateSchema = z.object({
+  body: z.string().max(4000).optional(),
+  scheduledFor: z
+    .string()
+    .optional()
+    .refine((v) => !v || !Number.isNaN(Date.parse(v)), "Invalid scheduled time"),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  time: z
+    .string()
+    .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+    .optional(),
+  timezone: timezoneSchema.optional(),
+  removeAttachmentIds: z.array(z.string()).optional(),
+});
+
+export const scheduledMessageQuerySchema = z.object({
+  status: z.enum(["PENDING", "SENT", "CANCELLED", "ALL"]).optional().default("PENDING"),
+  conversationId: z.string().optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+});

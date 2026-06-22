@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, Plus, Send, Smile, X, ClipboardList } from "lucide-react";
+import { Clock, Paperclip, Plus, Send, Smile, X, ClipboardList } from "lucide-react";
 import { MentionInput, type MentionInputHandle } from "@/components/MentionInput";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import { ChatFileDropOverlay } from "@/components/chat/ChatFileDropOverlay";
+import { ScheduleButton } from "@/components/chat/ScheduleButton";
 import { Button } from "@/components/ui/Button";
 import { isImageAttachment } from "@/lib/attachments";
 import { chatFileKey, mergeChatUploadFiles, useFileDragDrop } from "@/lib/chat-file-drop";
@@ -21,6 +22,7 @@ interface ChatComposerProps {
   body: string;
   onBodyChange: (value: string) => void;
   onSend: (opts?: { files?: File[] }) => void;
+  onSchedule?: () => void;
   onTyping?: () => void;
   readOnly?: boolean;
   members?: Member[];
@@ -78,6 +80,7 @@ export function ChatComposer({
   body,
   onBodyChange,
   onSend,
+  onSchedule,
   onTyping,
   readOnly,
   members = [],
@@ -97,6 +100,7 @@ export function ChatComposer({
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   const canSend = Boolean(body.trim() || pendingFiles.length > 0) && !readOnly;
+  const canSchedule = canSend && Boolean(onSchedule);
   const composerDisabled = readOnly;
 
   const { isDragging, dragHandlers } = useFileDragDrop({
@@ -220,6 +224,20 @@ export function ChatComposer({
                     <ClipboardList className="h-4 w-4" />
                   </button>
                 )}
+                {onSchedule && (
+                  <button
+                    type="button"
+                    disabled={!canSchedule}
+                    onClick={() => {
+                      setExtrasOpen(false);
+                      onSchedule();
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:opacity-50"
+                    aria-label="Schedule message"
+                  >
+                    <Clock className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -255,6 +273,9 @@ export function ChatComposer({
             >
               <ClipboardList className="h-4 w-4 md:h-5 md:w-5" />
             </button>
+          )}
+          {onSchedule && (
+            <ScheduleButton disabled={!canSchedule} onClick={onSchedule} />
           )}
         </div>
 

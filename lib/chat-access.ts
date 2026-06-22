@@ -1,6 +1,6 @@
 import { ConversationType, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getWorkspaceMembership } from "@/lib/workspace";
+import { getWorkspaceMembershipIncludingArchived } from "@/lib/workspace";
 import { isDirectConversationVisible } from "@/lib/conversations";
 
 export async function getConversationParticipant(userId: string, conversationId: string) {
@@ -31,7 +31,10 @@ export async function canAccessConversation(userId: string, conversationId: stri
   }
 
   if (conversation.type === ConversationType.WORKSPACE && conversation.workspaceId) {
-    const membership = await getWorkspaceMembership(userId, conversation.workspaceId);
+    const membership = await getWorkspaceMembershipIncludingArchived(
+      userId,
+      conversation.workspaceId
+    );
     if (!membership) return null;
   }
 
@@ -45,8 +48,17 @@ export async function canPostToConversation(userId: string, conversationId: stri
   const { conversation } = participant;
 
   if (conversation.type === ConversationType.WORKSPACE && conversation.workspaceId) {
-    const membership = await getWorkspaceMembership(userId, conversation.workspaceId);
-    if (!membership || membership.role === WorkspaceRole.VIEWER) return null;
+    const membership = await getWorkspaceMembershipIncludingArchived(
+      userId,
+      conversation.workspaceId
+    );
+    if (
+      !membership ||
+      membership.role === WorkspaceRole.VIEWER ||
+      membership.workspace.archivedAt
+    ) {
+      return null;
+    }
   }
 
   return participant;

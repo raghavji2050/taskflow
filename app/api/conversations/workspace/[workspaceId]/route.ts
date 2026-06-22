@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
-import { isWorkspaceMember } from "@/lib/workspace";
+import { getWorkspaceMembershipIncludingArchived } from "@/lib/workspace";
 import { ensureWorkspaceChannel, getConversationById } from "@/lib/conversations";
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
@@ -11,7 +11,8 @@ export async function GET(_request: Request, context: RouteContext) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { workspaceId } = await context.params;
-    if (!(await isWorkspaceMember(user.id, workspaceId))) {
+    const membership = await getWorkspaceMembershipIncludingArchived(user.id, workspaceId);
+    if (!membership) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

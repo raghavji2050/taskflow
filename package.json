@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "generate:vapid": "node scripts/generate-vapid.mjs",
-    "test:email": "node scripts/test-email.mjs"
+    "test:email": "node scripts/test-email.mjs",
+    "cron:scheduled-messages": "tsx scripts/run-scheduled-messages-cron.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -37,6 +38,7 @@
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
+    "date-fns-tz": "^3.2.0",
     "lucide-react": "^1.17.0",
     "motion": "^12.40.0",
     "next": "16.2.9",

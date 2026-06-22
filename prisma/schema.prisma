@@ -44,6 +44,12 @@ enum ConversationType {
   PERSONAL
 }
 
+enum ScheduledMessageStatus {
+  PENDING
+  SENT
+  CANCELLED
+}
+
 enum DocumentType {
   DOC
   SOP
@@ -92,6 +98,7 @@ model User {
   momSuggestionPreferences MomSuggestionPreference[]
   timeEntries              TimeEntry[]
   timeEntryLabels          TimeEntryLabel[]
+  scheduledMessages        ScheduledMessage[]
 }
 
 model Account {
@@ -418,6 +425,7 @@ model Conversation {
   createdBy    User                      @relation("ConversationsCreated", fields: [createdById], references: [id], onDelete: Cascade)
   participants ConversationParticipant[]
   messages     Message[]
+  scheduledMessages ScheduledMessage[]
 
   @@index([createdById])
   @@index([type])
@@ -465,6 +473,8 @@ model Message {
   attachments  MessageAttachment[]
   reactions    MessageReaction[]
   documentLinks DocumentMessage[]
+  scheduledReplies     ScheduledMessage[] @relation("ScheduledMessageReply")
+  scheduledDeliveries  ScheduledMessage[] @relation("ScheduledMessageDelivered")
 
   @@index([conversationId, createdAt])
   @@index([conversationId, pinnedAt])
@@ -693,4 +703,44 @@ model TimeEntryTag {
   label       TimeEntryLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
   @@id([timeEntryId, labelId])
+}
+
+model ScheduledMessage {
+  id             String                 @id @default(cuid())
+  body           String                 @db.Text
+  userId         String
+  conversationId String
+  parentId       String?
+  scheduledFor   DateTime
+  timezone       String
+  status         ScheduledMessageStatus @default(PENDING)
+  sentAt         DateTime?
+  messageId      String?                @unique
+  metadata       Json?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent       Message?     @relation("ScheduledMessageReply", fields: [parentId], references: [id], onDelete: SetNull)
+  message      Message?     @relation("ScheduledMessageDelivered", fields: [messageId], references: [id], onDelete: SetNull)
+  attachments  ScheduledMessageAttachment[]
+
+  @@index([scheduledFor, status])
+  @@index([userId, status])
+  @@index([conversationId, status])
+}
+
+model ScheduledMessageAttachment {
+  id                 String   @id @default(cuid())
+  scheduledMessageId String
+  filename           String
+  url                String
+  mimeType           String
+  size               Int
+  createdAt          DateTime @default(now())
+
+  scheduledMessage ScheduledMessage @relation(fields: [scheduledMessageId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledMessageId])
 }

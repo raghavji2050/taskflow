@@ -15,6 +15,24 @@ export function handleApiError(error: unknown) {
     );
   }
 
+  if (error instanceof Error) {
+    const msg = error.message;
+    if (msg === "Forbidden") {
+      return jsonError(msg, 403);
+    }
+    if (msg === "Scheduled message not found" || msg === "Not found") {
+      return jsonError(msg, 404);
+    }
+    if (
+      msg === "Message or attachment required" ||
+      msg === "Scheduled time is required" ||
+      msg.includes("at least 1 minute") ||
+      msg.includes("Invalid timezone")
+    ) {
+      return jsonError(msg, 400);
+    }
+  }
+
   console.error(error);
   return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 }

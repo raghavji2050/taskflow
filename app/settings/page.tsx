@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Clock } from "lucide-react";
 import { toast } from "sonner";
 import { profileSchema, passwordSchema } from "@/lib/validations";
 import { Button } from "@/components/ui/Button";
@@ -25,6 +27,7 @@ export default function SettingsPage() {
     hasPassword?: boolean;
     oauthProviders?: string[];
   } | null>(null);
+  const [pendingScheduledCount, setPendingScheduledCount] = useState(0);
 
   const profileForm = useForm<ProfileInput>({ resolver: zodResolver(profileSchema) });
   const passwordForm = useForm<PasswordInput>({ resolver: zodResolver(passwordSchema) });
@@ -38,6 +41,12 @@ export default function SettingsPage() {
           profileForm.reset({ name: d.user.name });
         }
       });
+    fetch("/api/conversations/scheduled-messages?status=PENDING&limit=1")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.pagination?.total != null) setPendingScheduledCount(d.pagination.total);
+      })
+      .catch(() => undefined);
   }, [profileForm]);
 
   const onProfileSubmit = async (data: ProfileInput) => {
@@ -86,6 +95,24 @@ export default function SettingsPage() {
           />
           <Button type="submit">Save Profile</Button>
         </form>
+      </Card>
+
+      <Card className="mb-6 p-6">
+        <h2 className="section-label mb-2">Scheduled Messages</h2>
+        <p className="mb-4 text-sm text-[var(--muted)]">
+          View and manage chat messages scheduled to send later.
+        </p>
+        <Link href="/settings/scheduled-messages">
+          <Button variant="secondary" className="gap-2">
+            <Clock className="h-4 w-4" />
+            Manage scheduled messages
+            {pendingScheduledCount > 0 && (
+              <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--accent)]">
+                {pendingScheduledCount}
+              </span>
+            )}
+          </Button>
+        </Link>
       </Card>
 
       <Card className="mb-6 p-6">

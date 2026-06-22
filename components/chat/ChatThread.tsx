@@ -23,6 +23,9 @@ import {
   type ParticipantReceipt,
 } from "@/lib/chat-receipts";
 import { MomBuilderModal } from "@/components/chat/MomBuilderModal";
+import { ScheduleMessageDialog } from "@/components/chat/ScheduleMessageDialog";
+import { ScheduledMessageCard } from "@/components/chat/ScheduledMessageCard";
+import type { ScheduledMessageClient } from "@/lib/scheduled-message-types";
 import { attachmentPlaceholderBody, isImageAttachment } from "@/lib/attachments";
 import { isDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
 import { setActiveConversationId } from "@/lib/active-chat";
@@ -130,6 +133,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const [peerLastSeenAt, setPeerLastSeenAt] = useState<string | null>(null);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [momModalOpen, setMomModalOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [editingScheduled, setEditingScheduled] = useState<ScheduledMessageClient | null>(null);
+  const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessageClient[]>([]);
   const [newMessagesBelow, setNewMessagesBelow] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -275,6 +281,22 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     };
     setTimeout(run, 80);
   }, []);
+
+  const fetchScheduledMessages = useCallback(async (convId: string) => {
+    if (readOnly) {
+      setScheduledMessages([]);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/conversations/${convId}/scheduled-messages`);
+      const data = await res.json();
+      if (res.ok) {
+        setScheduledMessages(data.scheduledMessages ?? []);
+      }
+    } catch {
+      setScheduledMessages([]);
+    }
+  }, [readOnly]);
 
   const applyMessageData = useCallback(
     (
@@ -459,6 +481,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       setMessages([]);
       setPinned([]);
       setReceipts([]);
+      setScheduledMessages([]);
       setLoading(false);
       setReplyTo(null);
       if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
@@ -484,6 +507,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
     void (async () => {
       await fetchMessages(convId);
+      await fetchScheduledMessages(convId);
       markRead(convId);
     })();
 
@@ -491,7 +515,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
       setActiveConversationId(null);
     };
-  }, [conversation?.id, fetchMessages, markRead]);
+  }, [conversation?.id, fetchMessages, fetchScheduledMessages, markRead]);
 
   useEffect(() => {
     const convId = conversation?.id;
@@ -521,7 +545,14 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
       if (detail.type === "message:created" && detail.message) {
         const incoming = detail.message;
-        if (incoming.user.id === userId) return;
+        if (incoming.user.id === userId) {
+          void fetchScheduledMessages(convId);
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === incoming.id)) return prev;
+            return withReceipts([...prev, incoming]);
+          });
+          return;
+        }
 
         const wasNearBottom = updateStickToBottom();
         const shouldStick = wasNearBottom || incoming.user.id === userId;
@@ -616,6 +647,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   }, [
     conversation?.id,
     fetchMessages,
+    fetchScheduledMessages,
     markRead,
     updateMessageInState,
     updateStickToBottom,
@@ -820,6 +852,33 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     },
     [conversation, userId, session?.user?.name, withReceipts]
   );
+
+  const handleScheduleOpen = () => {
+    if (!body.trim() && pendingFiles.length === 0) return;
+    setEditingScheduled(null);
+    setScheduleDialogOpen(true);
+  };
+
+  const handleScheduled = () => {
+    setBody("");
+    setReplyTo(null);
+    setPendingFiles([]);
+    if (conversation?.id) void fetchScheduledMessages(conversation.id);
+  };
+
+  const handleDeleteScheduled = async (item: ScheduledMessageClient) => {
+    try {
+      const res = await fetch(`/api/conversations/scheduled-messages/${item.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not delete");
+      toast.success("Scheduled message deleted");
+      if (conversation?.id) void fetchScheduledMessages(conversation.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete");
+    }
+  };
 
   const handleSend = async (opts?: { files?: File[] }) => {
     if (!conversation || readOnly || !userId || !session?.user?.name) return;
@@ -1422,10 +1481,27 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           keyboardOpen ? "pb-2.5" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
         )}
       >
+        {scheduledMessages.length > 0 && (
+          <div className="mb-1.5 space-y-1">
+            {scheduledMessages.map((item) => (
+              <ScheduledMessageCard
+                key={item.id}
+                item={item}
+                compact
+                onEdit={(scheduled) => {
+                  setEditingScheduled(scheduled);
+                  setScheduleDialogOpen(true);
+                }}
+                onDelete={(scheduled) => void handleDeleteScheduled(scheduled)}
+              />
+            ))}
+          </div>
+        )}
         <ChatComposer
           body={body}
           onBodyChange={setBody}
           onSend={handleSend}
+          onSchedule={readOnly ? undefined : handleScheduleOpen}
           onTyping={handleTyping}
           readOnly={readOnly}
           members={conversation.participants}
@@ -1441,6 +1517,22 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           }
         />
       </div>
+
+      {conversation && userId && (
+        <ScheduleMessageDialog
+          isOpen={scheduleDialogOpen}
+          onClose={() => {
+            setScheduleDialogOpen(false);
+            setEditingScheduled(null);
+          }}
+          conversationId={conversation.id}
+          parentId={replyTo?.id ?? null}
+          initialBody={body}
+          pendingFiles={editingScheduled ? [] : pendingFiles}
+          editing={editingScheduled}
+          onScheduled={handleScheduled}
+        />
+      )}
 
       {conversation && userId && (
         <MomBuilderModal

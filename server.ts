@@ -127,5 +127,9 @@ app.prepare().then(() => {
     } else {
       console.log(`> Realtime: WebSocket fallback ws://${hostname}:${port}/api/ws`);
     }
+
+    if (dev) {
+      void import("./lib/dev-cron").then(({ startDevCron }) => startDevCron());
+    }
   });
 });

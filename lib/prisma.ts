@@ -12,7 +12,14 @@ const globalForPrisma = globalThis as unknown as {
 
 function getPrisma(): PrismaClient {
   const existing = globalForPrisma.prisma;
-  if (existing && "document" in existing && "documentAttachment" in existing) return existing;
+  if (
+    existing &&
+    "document" in existing &&
+    "documentAttachment" in existing &&
+    "scheduledMessage" in existing
+  ) {
+    return existing;
+  }
 
   const client = createPrismaClient();
   if (process.env.NODE_ENV !== "production") {

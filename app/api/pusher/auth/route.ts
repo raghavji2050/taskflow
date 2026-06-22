@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { canAccessConversation } from "@/lib/chat-access";
-import { getWorkspaceMembership } from "@/lib/workspace";
+import { getWorkspaceMembershipIncludingArchived } from "@/lib/workspace";
 import { getPusherServer } from "@/lib/pusher-server";
 
 export async function POST(request: Request) {
@@ -50,13 +50,13 @@ async function authorizeChannel(userId: string, channelName: string): Promise<bo
 
   if (channelName.startsWith("private-workspace-")) {
     const workspaceId = channelName.slice("private-workspace-".length);
-    const membership = await getWorkspaceMembership(userId, workspaceId);
+    const membership = await getWorkspaceMembershipIncludingArchived(userId, workspaceId);
     return !!membership;
   }
 
   if (channelName.startsWith("presence-workspace-")) {
     const workspaceId = channelName.slice("presence-workspace-".length);
-    const membership = await getWorkspaceMembership(userId, workspaceId);
+    const membership = await getWorkspaceMembershipIncludingArchived(userId, workspaceId);
     return !!membership;
   }
 
