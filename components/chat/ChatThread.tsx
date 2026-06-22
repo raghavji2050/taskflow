@@ -552,8 +552,18 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         if (incoming.user.id === userId) {
           void fetchScheduledMessages(convId);
           setMessages((prev) => {
-            if (prev.some((m) => m.id === incoming.id)) return prev;
-            return withReceipts([...prev, incoming]);
+            const withoutOptimistic = prev.filter(
+              (m) =>
+                !(
+                  m.sendStatus &&
+                  m.user.id === incoming.user.id &&
+                  m.body === incoming.body
+                )
+            );
+            if (withoutOptimistic.some((m) => m.id === incoming.id)) {
+              return withReceipts(withoutOptimistic);
+            }
+            return withReceipts([...withoutOptimistic, incoming]);
           });
           return;
         }

@@ -51,10 +51,14 @@ export function replaceSentMessage(
   clientTempId: string,
   sent: ChatMessage
 ): ChatMessage[] {
+  const withoutTemp = prev.filter((m) => m.clientTempId !== clientTempId);
+  if (withoutTemp.some((m) => m.id === sent.id)) {
+    return withoutTemp.map((m) => (m.id === sent.id ? sent : m));
+  }
   if (prev.some((m) => m.clientTempId === clientTempId)) {
     return prev.map((m) => (m.clientTempId === clientTempId ? sent : m));
   }
-  return [...prev, sent];
+  return [...withoutTemp, sent];
 }
 
 export function mergeMessageUpdate(existing: ChatMessage, updated: ChatMessage): ChatMessage {
