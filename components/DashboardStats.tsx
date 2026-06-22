@@ -36,9 +36,16 @@ export function DashboardStats({ stats, compact = false }: DashboardStatsProps &
           </div>
         ))}
         {stats.inProgress !== undefined && stats.inProgress > 0 && (
-          <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-            <Loader2 className="h-3.5 w-3.5 text-[var(--accent)]" />
-            {stats.inProgress} in progress
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent-soft)]">
+              <Loader2 className="h-3.5 w-3.5 text-[var(--accent)]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">Active</p>
+              <p className="text-base font-bold tabular-nums leading-tight text-[var(--foreground)]">
+                {stats.inProgress} in progress
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -80,7 +87,7 @@ export function CompletionRing({ stats, compact = false }: DashboardStatsProps &
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2.5 border-l border-[var(--card-border)] pl-4">
+      <div className="flex items-center gap-2.5 border-[var(--card-border)] sm:border-l sm:pl-4">
         <div className="relative shrink-0" style={{ width: size, height: size }}>
           <svg className="-rotate-90" width={size} height={size} viewBox={`0 0 ${viewBox} ${viewBox}`}>
             <circle cx={center} cy={center} r={radius} fill="none" stroke="currentColor" strokeWidth="5" className="text-[var(--surface-hover)]" />

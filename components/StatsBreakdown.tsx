@@ -32,7 +32,7 @@ export function StatsBreakdown({ breakdown, compact = false }: StatsBreakdownPro
 
   if (compact) {
     return (
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 border-l border-[var(--card-border)] pl-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 border-[var(--card-border)] sm:border-l sm:pl-4">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Status</span>
         {Object.entries(byStatus).map(([status, count]) => (
           <span

@@ -24,7 +24,7 @@ interface TaskFiltersProps {
   showAssigneeFilter?: boolean;
 }
 
-const filterSelectClass = "h-8 min-w-[7.5rem] text-xs";
+const filterSelectClass = "h-8 min-w-0 truncate pr-8 text-xs sm:min-w-[7.5rem]";
 
 export function TaskFilters({ filters, onChange, taskCount, searchRef, showAssigneeFilter }: TaskFiltersProps) {
   const internalRef = useRef<HTMLInputElement>(null);

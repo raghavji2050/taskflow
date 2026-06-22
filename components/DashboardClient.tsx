@@ -294,12 +294,12 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       />
 
       <Card className="p-3 sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-3">
             <DashboardStats stats={stats} compact />
             <CompletionRing stats={stats} compact />
           </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
             {stats.breakdown && stats.total > 0 && (
               <StatsBreakdown breakdown={stats.breakdown} compact />
             )}

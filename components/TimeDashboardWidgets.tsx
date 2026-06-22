@@ -36,7 +36,7 @@ export function TimeDashboardWidgets({ compact = false }: TimeDashboardWidgetsPr
 
   if (compact) {
     return (
-      <div className="flex shrink-0 items-center gap-4 border-l border-[var(--card-border)] pl-4">
+      <div className="flex shrink-0 items-center gap-4 border-[var(--card-border)] sm:border-l sm:pl-4">
         <div className="flex items-center gap-2">
           <Clock className="h-3.5 w-3.5 text-[var(--muted)]" />
           <div>
