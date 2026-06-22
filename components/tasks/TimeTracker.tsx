@@ -188,34 +188,34 @@ export function TimeTracker({ taskId, readOnly = false, taskStatus }: TimeTracke
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-[var(--surface-hover)] px-2 py-2">
+            <div className="rounded-lg bg-[var(--surface-3)] px-2 py-2">
               <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Running</p>
               <p className="mt-0.5 font-mono text-sm font-semibold text-[var(--foreground)]">
                 {isRunning ? formatDurationHms(elapsed) : "—"}
               </p>
             </div>
-            <div className="rounded-lg bg-[var(--surface-hover)] px-2 py-2">
+            <div className="rounded-lg bg-[var(--surface-3)] px-2 py-2">
               <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Today</p>
               <p className="mt-0.5 text-sm font-semibold text-[var(--foreground)]">
                 {formatDurationShort(summary.today)}
               </p>
             </div>
-            <div className="rounded-lg bg-[var(--surface-hover)] px-2 py-2">
+            <div className="rounded-lg bg-[var(--surface-3)] px-2 py-2">
               <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total</p>
               <p
                 className={cn(
                   "mt-0.5 text-sm font-semibold tabular-nums",
-                  overBudget ? "text-amber-600 dark:text-amber-400" : "text-[var(--foreground)]"
+                  overBudget ? "text-[var(--warning)]" : "text-[var(--foreground)]"
                 )}
               >
                 {formatLoggedVsEstimated(displayTotal, summary.estimatedMinutes)}
               </p>
               {hasEstimate && (
-                <div className="mx-auto mt-1.5 h-1 w-full max-w-[72px] overflow-hidden rounded-full bg-[var(--card-border)]">
+                <div className="mx-auto mt-1.5 h-1 w-full max-w-[72px] overflow-hidden rounded-full bg-[var(--surface-3)]">
                   <div
                     className={cn(
                       "h-full rounded-full transition-all",
-                      overBudget ? "bg-amber-500" : "bg-[var(--accent)]"
+                      overBudget ? "bg-[var(--warning)]" : "bg-[var(--accent)]"
                     )}
                     style={{ width: `${progressPct}%` }}
                   />

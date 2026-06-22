@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/PageHeader";
 import { appPageMetadata } from "@/lib/metadata";
 
 export const metadata: Metadata = appPageMetadata(
@@ -23,29 +24,35 @@ export default async function AdminPage() {
   });
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="mb-6 text-2xl font-bold">Admin Panel</h1>
+    <div className="app-mesh-bg mx-auto min-h-[calc(100dvh-4rem)] max-w-4xl px-4 py-8">
+      <PageHeader title="Admin Panel" subtitle="Manage users and roles" className="mb-6" />
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium">Name</th>
-              <th className="px-4 py-3 text-left font-medium">Email</th>
-              <th className="px-4 py-3 text-left font-medium">Role</th>
-              <th className="px-4 py-3 text-left font-medium">Tasks</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-b border-zinc-100 dark:border-zinc-800">
-                <td className="px-4 py-3">{user.name}</td>
-                <td className="px-4 py-3 text-zinc-500">{user.email}</td>
-                <td className="px-4 py-3"><span className="rounded bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">{user.role}</span></td>
-                <td className="px-4 py-3">{user._count.tasks}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-[var(--border)] bg-[var(--surface-3)]">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Name</th>
+                <th className="px-4 py-3 text-left font-medium">Email</th>
+                <th className="px-4 py-3 text-left font-medium">Role</th>
+                <th className="px-4 py-3 text-left font-medium">Tasks</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-hover)]">
+                  <td className="px-4 py-3">{user.name}</td>
+                  <td className="px-4 py-3 text-[var(--muted)]">{user.email}</td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--accent)]">
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">{user._count.tasks}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );

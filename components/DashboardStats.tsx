@@ -48,7 +48,7 @@ export function DashboardStats({ stats, compact = false }: DashboardStatsProps &
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {statCards.map(({ key, label, icon: Icon, accent, iconBg }) => (
-        <div key={key} className="stat-card rounded-xl p-4">
+        <div key={key} className="widget-card rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", iconBg)}>
               <Icon className={cn("h-4 w-4", accent)} />
@@ -61,7 +61,7 @@ export function DashboardStats({ stats, compact = false }: DashboardStatsProps &
         </div>
       ))}
       {stats.inProgress !== undefined && stats.inProgress > 0 && (
-        <div className="stat-card col-span-2 flex items-center gap-2 rounded-xl p-3 sm:col-span-4">
+        <div className="widget-card col-span-2 flex items-center gap-2 rounded-xl p-3 sm:col-span-4">
           <Loader2 className="h-4 w-4 text-[var(--accent)]" />
           <span className="text-sm text-[var(--muted)]">{stats.inProgress} in progress</span>
         </div>
@@ -102,7 +102,7 @@ export function CompletionRing({ stats, compact = false }: DashboardStatsProps &
   }
 
   return (
-    <div className="stat-card flex h-full items-center gap-4 rounded-xl p-4">
+    <div className="widget-card flex h-full items-center gap-4 rounded-xl p-4">
       <div className="relative h-16 w-16 shrink-0">
         <svg className="h-16 w-16 -rotate-90" viewBox="0 0 80 80">
           <circle cx="40" cy="40" r={radius} fill="none" stroke="currentColor" strokeWidth="6" className="text-[var(--surface-hover)]" />

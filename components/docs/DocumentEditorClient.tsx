@@ -354,7 +354,7 @@ export function DocumentEditorClient({ documentId }: { documentId: string }) {
   };
 
   if (loading || !doc) {
-    return <div className="h-64 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800/60" />;
+    return <div className="surface-panel h-64 animate-pulse rounded-2xl" />;
   }
 
   const readOnly = !canEditTasks;

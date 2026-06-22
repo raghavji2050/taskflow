@@ -53,10 +53,10 @@ export function OAuthButtons({ callbackUrl = "/dashboard" }: OAuthButtonsProps) 
     <>
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-zinc-200 dark:border-zinc-700" />
+          <div className="w-full border-t border-[var(--border)]" />
         </div>
         <div className="relative flex justify-center text-xs">
-          <span className="bg-white px-2 text-zinc-400 dark:bg-zinc-900">or continue with</span>
+          <span className="bg-[var(--surface-1)] px-2 text-[var(--muted)]">or continue with</span>
         </div>
       </div>
 

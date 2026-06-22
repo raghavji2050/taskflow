@@ -13,8 +13,8 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
   if (totalPages <= 1) return null;
 
   return (
-    <div className="flex items-center justify-between border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-      <p className="text-xs text-zinc-500">
+    <div className="flex items-center justify-between border-t border-[var(--border)] px-4 py-3">
+      <p className="text-xs text-[var(--muted)]">
         Page {page} of {totalPages}
       </p>
       <div className="flex gap-1">

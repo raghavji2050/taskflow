@@ -6,6 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { motion } from "motion/react";
 import {
   CheckSquare,
   LayoutList,
@@ -21,6 +22,8 @@ import {
   X,
   Menu,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Shield,
   MessageSquare,
   BookOpen,
@@ -36,7 +39,10 @@ import {
   MOBILE_SIDEBAR_OVERLAY_ID,
   useMobileSidebarSwipe,
 } from "@/lib/use-mobile-sidebar-swipe";
+import { GlowBadge } from "@/components/ui/GlowBadge";
 import { cn, getInitials } from "@/lib/utils";
+
+export const SIDEBAR_COLLAPSED_KEY = "taskflow-sidebar-collapsed";
 
 type NavItem = {
   href: string;
@@ -103,7 +109,7 @@ const workspaceNavItems: NavItem[] = [
   },
 ];
 
-function SidebarUserMenu() {
+function SidebarUserMenu({ collapsed }: { collapsed?: boolean }) {
   const { data: session } = useSession();
   const { resolvedTheme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
@@ -119,9 +125,9 @@ function SidebarUserMenu() {
     setMenuPos({
       bottom: window.innerHeight - rect.top + 8,
       left: rect.left,
-      width: rect.width,
+      width: collapsed ? 220 : rect.width,
     });
-  }, [open]);
+  }, [open, collapsed]);
 
   useEffect(() => {
     if (!open) return;
@@ -168,7 +174,7 @@ function SidebarUserMenu() {
             <span>{resolvedTheme === "dark" ? "Light mode" : "Dark mode"}</span>
           </button>
         )}
-        <div className="my-1 h-px bg-[var(--card-border)]" />
+        <div className="my-1 h-px bg-[var(--border)]" />
         <button
           type="button"
           onClick={() => {
@@ -190,17 +196,22 @@ function SidebarUserMenu() {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className="sidebar-user-trigger"
+        className={cn("sidebar-user-trigger", collapsed && "justify-center px-2")}
         aria-expanded={open}
+        title={collapsed ? session?.user?.name ?? "Account" : undefined}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-bold text-white">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-semibold text-white">
           {getInitials(session?.user?.name ?? "U")}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[var(--foreground)]">{session?.user?.name}</p>
-          <p className="truncate text-[11px] text-[var(--muted)]">{session?.user?.email}</p>
-        </div>
-        <ChevronUp className={cn("h-4 w-4 shrink-0 text-[var(--muted)] transition-transform", open && "rotate-180")} />
+        {!collapsed && (
+          <>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-[var(--foreground)]">{session?.user?.name}</p>
+              <p className="truncate text-[11px] text-[var(--muted)]">{session?.user?.email}</p>
+            </div>
+            <ChevronUp className={cn("h-4 w-4 shrink-0 text-[var(--muted)] transition-transform", open && "rotate-180")} />
+          </>
+        )}
       </button>
       {mounted && menu ? createPortal(menu, document.body) : null}
     </>
@@ -210,9 +221,13 @@ function SidebarUserMenu() {
 function SidebarContent({
   onNavigate,
   onClose,
+  collapsed = false,
+  onToggleCollapse,
 }: {
   onNavigate?: () => void;
   onClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   const pathname = usePathname();
   const { connected } = useRealtime();
@@ -227,52 +242,54 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Brand */}
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--sidebar-border)] px-3">
+      <div className={cn("flex h-14 shrink-0 items-center border-b border-[var(--sidebar-border)]", collapsed ? "justify-center px-2" : "gap-2 px-3")}>
         <Link
           href="/dashboard"
           onClick={onNavigate}
-          className="flex min-w-0 flex-1 items-center gap-2.5"
+          className={cn("flex min-w-0 items-center", collapsed ? "justify-center" : "flex-1 gap-2.5")}
+          title={collapsed ? "TaskFlow" : undefined}
         >
           <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
             <CheckSquare className="h-4 w-4" strokeWidth={2.5} />
             {connected && (
               <span
-                className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-2 border-[var(--sidebar)] bg-emerald-500"
+                className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-2 border-[var(--sidebar)] bg-[var(--status-online)]"
                 title="Live sync active"
               />
             )}
           </div>
-          <span className="truncate text-[15px] font-bold tracking-tight text-[var(--foreground)]">
-            TaskFlow
-          </span>
-        </Link>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <NotificationBell placement="sidebar" />
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]"
-              aria-label="Close menu"
-            >
-              <X className="h-4 w-4" />
-            </button>
+          {!collapsed && (
+            <span className="truncate text-[15px] font-semibold tracking-tight text-[var(--foreground)]">
+              TaskFlow
+            </span>
           )}
-        </div>
+        </Link>
+        {!collapsed && (
+          <div className="flex shrink-0 items-center gap-0.5">
+            <NotificationBell placement="sidebar" />
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]"
+                aria-label="Close menu"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Workspace */}
-      <div className="shrink-0 px-3 py-4">
-        <p className="sidebar-section-label mb-2">Workspace</p>
-        <WorkspaceSwitcher layout="sidebar" />
+      <div className={cn("shrink-0 py-3", collapsed ? "px-2" : "px-3")}>
+        {!collapsed && <p className="sidebar-section-label mb-2">Workspace</p>}
+        <WorkspaceSwitcher layout="sidebar" collapsed={collapsed} />
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 pb-2">
+      <nav className={cn("flex-1 overflow-y-auto pb-2", collapsed ? "px-2" : "px-3")}>
         {sections.map((section, sectionIndex) => (
-          <div key={section.label} className={cn(sectionIndex > 0 && "mt-5")}>
-            <p className="sidebar-section-label mb-2">{section.label}</p>
+          <div key={section.label} className={cn(sectionIndex > 0 && "mt-4")}>
+            {!collapsed && <p className="sidebar-section-label mb-2">{section.label}</p>}
             <div className="space-y-0.5">
               {section.items.map(({ href, label, icon: Icon, match }) => {
                 const active = match(pathname);
@@ -282,7 +299,12 @@ function SidebarContent({
                     key={href}
                     href={href}
                     onClick={onNavigate}
-                    className={cn("sidebar-nav-item", active && "active")}
+                    title={collapsed ? label : undefined}
+                    className={cn(
+                      "sidebar-nav-item",
+                      active && "active",
+                      collapsed && "justify-center px-2"
+                    )}
                   >
                     <Icon
                       className={cn(
@@ -291,11 +313,16 @@ function SidebarContent({
                       )}
                       strokeWidth={active ? 2.25 : 2}
                     />
-                    <span className="min-w-0 flex-1 truncate">{label}</span>
-                    {unreadBadge > 0 && (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 text-[10px] font-bold tabular-nums text-white">
-                        {unreadBadge > 99 ? "99+" : unreadBadge}
-                      </span>
+                    {!collapsed && (
+                      <>
+                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                        {unreadBadge > 0 && (
+                          <GlowBadge size="md">{unreadBadge > 99 ? "99+" : unreadBadge}</GlowBadge>
+                        )}
+                      </>
+                    )}
+                    {collapsed && unreadBadge > 0 && (
+                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--accent)]" />
                     )}
                   </Link>
                 );
@@ -305,9 +332,28 @@ function SidebarContent({
         ))}
       </nav>
 
-      {/* User */}
-      <div className="shrink-0 border-t border-[var(--sidebar-border)] p-3">
-        <SidebarUserMenu />
+      <div className={cn("shrink-0 border-t border-[var(--sidebar-border)]", collapsed ? "p-2" : "p-3")}>
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className={cn(
+              "mb-2 flex w-full items-center rounded-lg py-2 text-[var(--muted)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]",
+              collapsed ? "justify-center px-2" : "gap-2 px-3"
+            )}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" />
+                <span className="text-xs font-medium">Collapse</span>
+              </>
+            )}
+          </button>
+        )}
+        <SidebarUserMenu collapsed={collapsed} />
       </div>
     </div>
   );
@@ -315,6 +361,30 @@ function SidebarContent({
 
 export function AppSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    try {
+      const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      if (stored === "true") setCollapsed(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleCollapse = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   useMobileSidebarSwipe({
     isOpen: mobileOpen,
@@ -322,10 +392,11 @@ export function AppSidebar() {
     onClose: () => setMobileOpen(false),
   });
 
+  const sidebarWidth = collapsed ? 64 : 252;
+
   return (
     <>
-      {/* Mobile header */}
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--sidebar-border)] bg-[var(--sidebar)] px-3 lg:hidden">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--sidebar)] px-3 lg:hidden">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
@@ -338,18 +409,17 @@ export function AppSidebar() {
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-white">
             <CheckSquare className="h-3.5 w-3.5" strokeWidth={2.5} />
           </div>
-          <span className="truncate text-sm font-bold">TaskFlow</span>
+          <span className="truncate text-sm font-semibold">TaskFlow</span>
         </Link>
         <NotificationBell placement="sidebar" />
       </div>
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div id={MOBILE_SIDEBAR_OVERLAY_ID} className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
           <aside
             id={MOBILE_SIDEBAR_DRAWER_ID}
-            className="absolute inset-y-0 left-0 flex w-[280px] flex-col bg-[var(--sidebar)] shadow-2xl transition-transform duration-200 ease-out"
+            className="surface-panel absolute inset-y-0 left-0 flex w-[280px] flex-col rounded-none border-r border-[var(--border)] shadow-lg"
           >
             <SidebarContent
               onNavigate={() => setMobileOpen(false)}
@@ -359,10 +429,18 @@ export function AppSidebar() {
         </div>
       )}
 
-      {/* Desktop sidebar */}
-      <aside className="hidden w-[252px] shrink-0 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar)] lg:sticky lg:top-0 lg:z-30 lg:flex lg:h-dvh lg:overflow-visible">
-        <SidebarContent />
-      </aside>
+      {mounted && (
+        <motion.aside
+          className="surface-panel hidden shrink-0 flex-col rounded-none border-r border-[var(--border)] lg:sticky lg:top-0 lg:z-30 lg:flex lg:h-dvh lg:overflow-visible"
+          animate={{ width: sidebarWidth }}
+          transition={{ type: "spring", stiffness: 400, damping: 35 }}
+        >
+          <SidebarContent collapsed={collapsed} onToggleCollapse={toggleCollapse} />
+        </motion.aside>
+      )}
+      {!mounted && (
+        <aside className="surface-panel hidden w-[252px] shrink-0 flex-col rounded-none border-r border-[var(--border)] lg:sticky lg:top-0 lg:z-30 lg:flex lg:h-dvh" />
+      )}
     </>
   );
 }

@@ -26,6 +26,7 @@ import { useOpenTaskListener } from "@/lib/open-task-event";
 import { dispatchTasksRefresh } from "@/lib/tasks-refresh-event";
 import { saveTaskWithOptionalTimer } from "@/lib/client-task-submit";
 import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
+import { PageLoader } from "@/components/ui/PageLoader";
 import { useActiveTimer } from "@/lib/useActiveTimer";
 
 export default function BoardPage() {
@@ -100,7 +101,7 @@ export default function BoardPage() {
 
   useOpenTaskListener((taskId) => { void openTaskById(taskId); });
 
-  if (status === "loading") return null;
+  if (status === "loading") return <PageLoader />;
 
   const withWorkspace = (data: TaskInput): TaskInput => ({
     ...data,

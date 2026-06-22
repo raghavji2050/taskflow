@@ -46,7 +46,7 @@ function DraggableTask({
       {...(!readOnly ? attributes : {})}
       onClick={() => onEdit(task)}
       className={cn(
-        "rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-3 shadow-sm transition-shadow hover:shadow-md",
+        "surface-panel rounded-2xl border border-[var(--border)] p-3 transition-all hover:shadow-md",
         readOnly ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
         isDragging && "z-50 opacity-50 shadow-lg"
       )}
@@ -79,7 +79,7 @@ function DraggableTask({
 function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} className={cn("min-h-[200px] space-y-2 rounded-lg p-1", isOver && "bg-[var(--accent-soft)]")}>
+    <div ref={setNodeRef} className={cn("min-h-[200px] space-y-2 rounded-xl p-1", isOver && "bg-[var(--accent-soft)] ring-2 ring-[var(--accent)] ring-inset")}>
       {children}
     </div>
   );
@@ -140,7 +140,7 @@ export function KanbanBoard({
           return (
             <div
               key={col.id}
-              className="w-[280px] shrink-0 rounded-xl border border-[var(--card-border)] bg-[var(--background)] p-4"
+              className="surface-panel w-[280px] shrink-0 rounded-2xl border border-[var(--border)] p-4"
               style={{ borderTopWidth: 3, borderTopColor: col.color }}
             >
               <h3 className="mb-3 flex items-center justify-between gap-2">

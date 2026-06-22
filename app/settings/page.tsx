@@ -66,7 +66,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-lg">
+    <div className="mx-auto max-w-2xl">
       <PageHeader
         className="mb-6"
         title="Settings"
@@ -74,7 +74,7 @@ export default function SettingsPage() {
       />
 
       <Card className="mb-6 p-6">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <h2 className="section-label mb-4">
           Profile
         </h2>
         {user && <p className="mb-4 text-sm text-[var(--muted)]">{user.email}</p>}
@@ -89,7 +89,7 @@ export default function SettingsPage() {
       </Card>
 
       <Card className="mb-6 p-6">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <h2 className="section-label mb-4">
           Notifications
         </h2>
         <PushSubscribe />
@@ -99,7 +99,7 @@ export default function SettingsPage() {
 
       {user?.hasPassword ? (
         <Card className="p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <h2 className="section-label mb-4">
             Change Password
           </h2>
           <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
@@ -120,7 +120,7 @@ export default function SettingsPage() {
         </Card>
       ) : user?.oauthProviders && user.oauthProviders.length > 0 ? (
         <Card className="p-6">
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <h2 className="section-label mb-2">
             Sign-in method
           </h2>
           <p className="text-sm text-[var(--muted)]">

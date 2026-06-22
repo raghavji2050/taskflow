@@ -74,6 +74,8 @@ interface MessageBubbleProps {
   hideAvatars?: boolean;
   onJumpToMessage?: (messageId: string, createdAt: string) => void;
   onRetrySend?: (clientTempId: string) => void;
+  isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
   onForward?: (message: ChatMessage) => void;
 }
 
@@ -111,6 +113,8 @@ export function MessageBubble({
   onJumpToMessage,
   onRetrySend,
   onForward,
+  isFirstInGroup = true,
+  isLastInGroup = true,
 }: MessageBubbleProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
@@ -185,7 +189,14 @@ export function MessageBubble({
   const attachmentsStandalone = hasAttachments && !hasBubbleContent;
 
   return (
-    <div className={cn("group flex w-full px-0.5 sm:px-1", isOwn ? "justify-end" : "justify-start")}>
+    <div
+      className={cn(
+        "group flex w-full animate-message-in px-0.5 sm:px-1",
+        isOwn ? "justify-end" : "justify-start",
+        !isLastInGroup && "mb-0.5",
+        isLastInGroup && "mb-2"
+      )}
+    >
       <div
         className={cn(
           "flex w-max max-w-[min(92%,100%)] sm:max-w-[85%] md:max-w-[75%]",
@@ -217,14 +228,14 @@ export function MessageBubble({
       ))}
 
       <div className={cn("relative min-w-0 flex flex-col", isOwn ? "items-end" : "items-start")}>
-        {!isOwn && !hideAvatars && (
+        {!isOwn && !hideAvatars && isFirstInGroup && (
           <p className="mb-0.5 px-1 text-[11px] font-medium text-[var(--muted)]">
             {message.user.name}
           </p>
         )}
 
         {isPinned && !isDeleted && (
-          <p className="mb-0.5 flex items-center gap-1 px-1 text-[10px] font-medium text-amber-500">
+          <p className="mb-0.5 flex items-center gap-1 px-1 text-[10px] font-medium text-[var(--status-pinned)]">
             <Pin className="h-3 w-3" /> Pinned
           </p>
         )}
@@ -235,10 +246,10 @@ export function MessageBubble({
             className={cn(
               "rounded-2xl px-3 py-2 text-sm leading-relaxed",
               isDeleted
-                ? "rounded-lg border border-dashed border-[var(--card-border)] bg-[var(--surface-hover)]/50 italic text-[var(--muted)]"
+                ? "rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-hover)]/50 italic text-[var(--muted)]"
                 : isOwn
                   ? "rounded-tr-md bg-[var(--accent)] text-white"
-                  : "rounded-tl-md border border-[var(--card-border)] bg-[var(--card)] text-[var(--foreground)]"
+                  : "rounded-tl-md border border-[var(--border)] bg-[var(--surface-2)] text-[var(--foreground)]"
             )}
           >
             {message.parent && !isDeleted && (

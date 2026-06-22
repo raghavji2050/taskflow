@@ -25,13 +25,13 @@ export function TaskViewFilters({
   };
 
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+    <div className="mb-4 flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] p-3">
+      <span className="text-xs font-medium text-[var(--muted)]">
         {taskCount} {taskCount === 1 ? "task" : "tasks"}
       </span>
       <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
         <div className="relative w-full sm:w-44">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--muted)]" />
           <Input
             hideLabel
             placeholder="Search tasks..."

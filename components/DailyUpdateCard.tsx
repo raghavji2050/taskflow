@@ -34,8 +34,8 @@ export function DailyUpdateCard({ groups, onSelectTask }: DailyUpdateCardProps) 
     <Card className="p-4">
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Daily Update</h2>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-zinc-400">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Daily Update</h2>
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--muted)]">
             <CalendarDays className="h-3 w-3" />
             {todayLabel}
           </p>
@@ -55,22 +55,22 @@ export function DailyUpdateCard({ groups, onSelectTask }: DailyUpdateCardProps) 
       </div>
 
       {groups.length === 0 ? (
-        <p className="py-6 text-center text-xs text-zinc-400">No updates for today yet</p>
+        <p className="py-6 text-center text-xs text-[var(--muted)]">No updates for today yet</p>
       ) : (
         <div className="max-h-[28rem] space-y-4 overflow-y-auto pr-1 text-sm">
           {groups.map((group) => (
             <div key={group.categoryId ?? group.categoryName}>
-              <p className="font-semibold text-zinc-800 dark:text-zinc-100">
+              <p className="font-semibold text-[var(--foreground)]">
                 Worked on {group.categoryName}
               </p>
               <ol className="mt-1.5 list-none space-y-1 pl-0">
                 {group.tasks.map((task, index) => (
-                  <li key={task.id} className="text-zinc-600 dark:text-zinc-300">
+                  <li key={task.id} className="text-[var(--muted)]">
                     {onSelectTask ? (
                       <button
                         type="button"
                         onClick={() => onSelectTask(task.id)}
-                        className="w-full text-left hover:text-indigo-600 dark:hover:text-indigo-400"
+                        className="w-full text-left hover:text-[var(--accent)]"
                       >
                         {index + 1}. {task.title}
                       </button>

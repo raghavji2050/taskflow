@@ -69,13 +69,13 @@ export function TaskCard({
   );
 
   return (
-    <div className={cn("task-row group flex gap-0 overflow-hidden rounded-xl", getPriorityClass(task.priority), isCompleted && "opacity-70", selected && "ring-2 ring-[var(--accent)]")}>
+    <div className={cn("task-row group flex gap-0 overflow-hidden rounded-2xl elevate-hover", getPriorityClass(task.priority), isCompleted && "opacity-70", selected && "ring-2 ring-[var(--accent)] shadow-md")}>
       <div className="task-priority-bar my-3 ml-3" />
 
       <div className="flex flex-1 items-start gap-3 p-3 pl-2 sm:items-center sm:p-4 sm:pl-3">
         {bulkMode && onSelect && (
           <input type="checkbox" checked={selected} onChange={(e) => onSelect(task.id, e.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-zinc-300" />
+            className="mt-1 h-4 w-4 rounded border-[var(--border)]" />
         )}
 
         <button type="button" onClick={() => !readOnly && onToggleStatus(task)} disabled={isUpdating || readOnly}
@@ -88,7 +88,7 @@ export function TaskCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className={cn("text-sm font-semibold text-zinc-900 dark:text-zinc-50", isCompleted && "line-through decoration-zinc-400")}>{task.title}</h3>
+            <h3 className={cn("text-sm font-semibold text-[var(--foreground)]", isCompleted && "line-through decoration-[var(--muted)]")}>{task.title}</h3>
             <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", getPriorityColor(task.priority))}>{task.priority}</span>
             <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", getStatusColor(task.status))}>{task.status.replace("_", " ")}</span>
             {task.category && (
@@ -101,9 +101,9 @@ export function TaskCard({
             )}
           </div>
 
-          {task.description && <p className="mt-1 line-clamp-1 text-xs text-zinc-500">{task.description}</p>}
+          {task.description && <p className="mt-1 line-clamp-1 text-xs text-[var(--muted)]">{task.description}</p>}
 
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-zinc-400">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-[var(--muted)]">
             <span className="inline-flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               <span className={overdue ? "font-medium text-red-500" : ""}>{formatDueDateTime(task.dueDate)}{overdue && " · overdue"}</span>
@@ -115,7 +115,7 @@ export function TaskCard({
                 <MessageSquare className="h-3 w-3" />{task._count?.comments}
               </span>
             )}
-            {task.recurrenceRule && <span className="text-indigo-400">↻ {task.recurrenceRule.toLowerCase()}</span>}
+            {task.recurrenceRule && <span className="text-[var(--accent)]">↻ {task.recurrenceRule.toLowerCase()}</span>}
             {showMeta && task.user && <span>by {task.user.name}</span>}
           </div>
           {showMeta && task.assignees && task.assignees.length > 0 && (
@@ -127,7 +127,7 @@ export function TaskCard({
           {task.tags && task.tags.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {task.tags.map(({ tag }) => (
-                <span key={tag.id} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">#{tag.name}</span>
+                <span key={tag.id} className="rounded bg-[var(--surface-hover)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">#{tag.name}</span>
               ))}
             </div>
           )}

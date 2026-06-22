@@ -82,9 +82,9 @@ export function GlobalSearchPanel({ conversations, onClose, onSelect }: GlobalSe
         role="dialog"
         aria-modal="true"
         aria-label="Search messages"
-        className="fixed inset-x-3 top-[max(3.5rem,env(safe-area-inset-top))] z-[251] mx-auto flex max-h-[min(640px,calc(100dvh-5rem))] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl md:top-24"
+        className="fixed inset-x-3 top-[max(3.5rem,env(safe-area-inset-top))] z-[251] mx-auto flex max-h-[min(640px,calc(100dvh-5rem))] w-full max-w-xl flex-col overflow-hidden rounded-xl surface-panel border border-[var(--border)] shadow-[var(--shadow-sm)] md:top-24"
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--card-border)] px-3 py-3">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-3">
           <Search className="h-4 w-4 shrink-0 text-[var(--muted)]" />
           <input
             type="search"

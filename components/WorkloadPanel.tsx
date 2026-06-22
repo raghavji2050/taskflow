@@ -29,7 +29,7 @@ export function WorkloadPanel({ workspaceId }: { workspaceId: string }) {
 
   return (
     <Card className="p-4">
-      <p className="mb-3 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+      <p className="mb-3 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
         <BarChart3 className="h-3 w-3" /> Team workload
       </p>
       <div className="space-y-2">
@@ -37,11 +37,11 @@ export function WorkloadPanel({ workspaceId }: { workspaceId: string }) {
           <div key={w.member.id}>
             <div className="mb-0.5 flex justify-between text-xs">
               <span>{w.member.name}</span>
-              <span className="text-zinc-400">{w.taskCount} tasks</span>
+              <span className="text-[var(--muted-foreground)]">{w.taskCount} tasks</span>
             </div>
-            <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="h-2 rounded-full bg-[var(--surface-3)]">
               <div
-                className="h-2 rounded-full bg-indigo-500"
+                className="h-2 rounded-full bg-[var(--accent)]"
                 style={{ width: `${(w.taskCount / max) * 100}%` }}
               />
             </div>

@@ -58,7 +58,7 @@ export function TimeDashboardWidgets({ compact = false }: TimeDashboardWidgetsPr
 
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-4">
+      <div className="widget-card rounded-xl p-4">
         <div className="flex items-center gap-2 text-xs font-medium text-[var(--muted)]">
           <Clock className="h-3.5 w-3.5" />
           My time today
@@ -67,7 +67,7 @@ export function TimeDashboardWidgets({ compact = false }: TimeDashboardWidgetsPr
           {formatDurationShort(today)}
         </p>
       </div>
-      <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-4">
+      <div className="widget-card rounded-xl p-4">
         <div className="flex items-center gap-2 text-xs font-medium text-[var(--muted)]">
           <Clock className="h-3.5 w-3.5" />
           This week

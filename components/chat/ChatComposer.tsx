@@ -54,7 +54,7 @@ function PendingFileChip({
   }, [file]);
 
   return (
-    <div className="flex min-w-[140px] max-w-[200px] items-center gap-2 rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-2 py-1.5 text-xs">
+    <div className="flex min-w-[140px] max-w-[200px] items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1.5 text-xs">
       {previewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={previewUrl} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
@@ -136,7 +136,7 @@ export function ChatComposer({
     >
       {isDragging && <ChatFileDropOverlay />}
       {replyTo && (
-        <div className="flex items-start gap-2 rounded-lg border border-[var(--card-border)] bg-[var(--surface-hover)] px-3 py-2">
+        <div className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-hover)] px-3 py-2">
           <div className="min-w-0 flex-1 border-l-2 border-[var(--accent)] pl-2">
             <p className="text-[10px] font-semibold text-[var(--accent)]">
               Replying to {replyTo.user.name}
@@ -155,7 +155,7 @@ export function ChatComposer({
       )}
 
       {pendingFiles.length > 0 && (
-        <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto rounded-lg border border-[var(--card-border)] bg-[var(--surface-hover)]/50 p-2">
+        <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface-hover)]/50 p-2">
           {pendingFiles.map((file) => (
             <PendingFileChip
               key={chatFileKey(file)}
@@ -166,7 +166,7 @@ export function ChatComposer({
         </div>
       )}
 
-      <div className="relative flex min-w-0 items-end gap-1 md:gap-2">
+      <div className="relative flex min-w-0 flex-1 items-end gap-1 rounded-3xl surface-panel border border-[var(--border)] p-1.5 md:gap-2 md:p-2">
         <div className="relative shrink-0 md:hidden">
           <button
             type="button"
@@ -181,7 +181,7 @@ export function ChatComposer({
           {extrasOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setExtrasOpen(false)} />
-              <div className="absolute bottom-full left-0 z-50 mb-1 flex items-center gap-0.5 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-1 shadow-lg">
+              <div className="absolute bottom-full left-0 z-50 mb-1 flex items-center gap-0.5 rounded-xl surface-panel border border-[var(--border)] p-1 shadow-[var(--shadow-sm)]">
                 <button
                   type="button"
                   disabled={composerDisabled}
@@ -291,14 +291,15 @@ export function ChatComposer({
                 ? "Type a message… Use @ to mention"
                 : "Type a message… Drag files here to attach"
           }
-          className="min-h-[2.25rem] flex-1 rounded-xl border border-[var(--card-border)] bg-[var(--card)] px-2.5 py-2 text-sm md:min-h-[2.5rem] md:px-3"
+          className="min-h-[2.25rem] flex-1 rounded-2xl border-0 bg-transparent px-2.5 py-2 text-sm focus:outline-none md:min-h-[2.5rem] md:px-3"
         />
 
         <Button
+          variant="primary"
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleSend}
           disabled={!canSend}
-          className="relative h-8 w-8 shrink-0 overflow-hidden p-0 md:h-10 md:w-10"
+          className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full p-0 md:h-10 md:w-10"
           aria-label="Send message"
         >
           <Send className="h-4 w-4" />

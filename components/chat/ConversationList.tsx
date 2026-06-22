@@ -149,10 +149,11 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        "group relative flex items-stretch gap-1 rounded-lg px-1",
+        "group relative flex items-stretch gap-1 rounded-xl px-1 transition-all",
         selectedId === conv.id
-          ? "bg-[var(--accent)]/10"
-          : "hover:bg-[var(--surface-hover)]",
+          ? "surface-panel border border-[color-mix(in_oklab,var(--accent)_35%,var(--border))]"
+          : "hover:bg-[var(--surface-hover)]/80",
+        hasUnread && selectedId !== conv.id && "border-l-2 border-l-[var(--accent)]",
         isDragging && "ring-2 ring-[var(--accent)] ring-inset",
         isDragging && "cursor-copy"
       )}
@@ -191,7 +192,7 @@ function ConversationRow({
             )}
             {onlineCount > 0 && (
               <span
-                className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-[var(--card)] bg-emerald-500 px-0.5 text-[9px] font-bold text-white"
+                className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-[var(--card)] bg-[var(--status-online)] px-0.5 text-[9px] font-bold text-white"
                 title={`${onlineCount} online`}
               >
                 {onlineCount > 9 ? "9+" : onlineCount}
@@ -307,12 +308,12 @@ function ConversationRow({
     {showMenu && menuOpen && (
       <>
         <div
-          className="fixed inset-0 z-[200]"
+          className="fixed inset-0 z-40"
           onClick={() => setMenuOpen(false)}
           aria-hidden="true"
         />
         <div
-          className="fixed z-[201] min-w-[11rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg"
+          className="surface-panel fixed z-50 min-w-[11rem] overflow-hidden rounded-xl border border-[var(--border)] py-1 shadow-[var(--shadow-sm)]"
           style={{ top: menuPos.top, left: menuPos.left }}
         >
           {canRemove && onDelete && (
@@ -376,7 +377,7 @@ function Section({
       <button
         type="button"
         onClick={() => onToggle(sectionKey)}
-        className="mb-1 flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+        className="mb-1 flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-left section-label transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
         aria-expanded={!collapsed}
       >
         <ChevronDown
@@ -450,8 +451,8 @@ export function ConversationList({
   };
 
   return (
-    <div className="flex h-full flex-col bg-[var(--card)] md:border-r md:border-[var(--card-border)]">
-      <div className="shrink-0 border-b border-[var(--card-border)] px-4 py-3 md:hidden">
+    <div className="flex h-full flex-col bg-[var(--surface-1)] md:border-r md:border-[var(--border)]">
+      <div className="shrink-0 border-b border-[var(--border)] px-4 py-3 md:hidden">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-[var(--foreground)]">Messages</h2>
           <div className="flex items-center gap-1">

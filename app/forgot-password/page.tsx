@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { forgotPasswordSchema } from "@/lib/validations";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { AmbientBackground } from "@/components/ui/AmbientBackground";
 import { z } from "zod";
 
 type FormInput = z.infer<typeof forgotPasswordSchema>;
@@ -52,10 +53,10 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4 py-16">
-      <Card className="w-full max-w-sm p-8">
-        <h1 className="mb-2 text-xl font-bold">Forgot Password</h1>
-        <p className="mb-6 text-sm text-zinc-500">
+    <AmbientBackground className="flex flex-1 items-center justify-center px-4 py-16">
+      <Card className="w-full max-w-sm p-8 shadow-[var(--shadow-md)]">
+        <h1 className="mb-2 text-xl font-semibold text-[var(--foreground)]">Forgot Password</h1>
+        <p className="mb-6 text-sm text-[var(--muted)]">
           {sent
             ? "If an account exists for that email, we sent a reset link."
             : "Enter your email to receive a reset link"}
@@ -64,16 +65,16 @@ export default function ForgotPasswordPage() {
         {!sent ? (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Input label="Email" type="email" error={errors.email?.message} {...register("email")} />
-            <Button type="submit" className="w-full" isLoading={isLoading}>
+            <Button type="submit" className="w-full" variant="primary" isLoading={isLoading}>
               Send Reset Link
             </Button>
           </form>
         ) : (
           <div className="space-y-4">
             {devResetUrl && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
-                <p className="mb-2 font-medium text-amber-800 dark:text-amber-200">Dev reset link</p>
-                <a href={devResetUrl} className="break-all text-indigo-600 hover:underline dark:text-indigo-400">
+              <div className="surface-panel rounded-xl border border-[color-mix(in_oklab,var(--status-pinned)_40%,transparent)] p-3 text-sm">
+                <p className="mb-2 font-medium text-[var(--status-pinned)]">Dev reset link</p>
+                <a href={devResetUrl} className="break-all text-[var(--accent)] hover:underline">
                   {devResetUrl}
                 </a>
               </div>
@@ -84,10 +85,10 @@ export default function ForgotPasswordPage() {
           </div>
         )}
 
-        <p className="mt-4 text-center text-sm text-zinc-500">
-          <Link href="/login" className="text-indigo-500 hover:underline">Back to login</Link>
+        <p className="mt-4 text-center text-sm text-[var(--muted)]">
+          <Link href="/login" className="font-medium text-[var(--accent)] hover:underline">Back to login</Link>
         </p>
       </Card>
-    </div>
+    </AmbientBackground>
   );
 }

@@ -180,10 +180,10 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
     <>
       <div className="fixed inset-0 z-[200]" onClick={() => setOpen(false)} aria-hidden="true" />
       <div
-        className="fixed z-[201] overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl"
+        className="fixed z-[201] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-1)] shadow-[var(--shadow-lg)]"
         style={{ top: position.top, left: position.left, width: PANEL_WIDTH }}
       >
-        <div className="flex items-center justify-between border-b border-[var(--card-border)] px-4 py-3">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
           <span className="text-sm font-semibold text-[var(--foreground)]">
             {showArchived ? "Archived" : "Notifications"}
           </span>
@@ -219,8 +219,8 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
                 <div
                   key={n.id}
                   className={cn(
-                    "group relative border-b border-[var(--card-border)] px-4 py-3 last:border-0",
-                    !n.read && !showArchived && "bg-[var(--accent-soft)]/40 dark:bg-[var(--accent-muted)]/25"
+                    "group relative border-b border-[var(--border)] px-4 py-3 last:border-0",
+                    !n.read && !showArchived && "bg-[var(--accent-soft)]/50"
                   )}
                 >
                   <div

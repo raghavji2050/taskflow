@@ -11,9 +11,10 @@ import { cn } from "@/lib/utils";
 
 interface WorkspaceSwitcherProps {
   layout?: "default" | "sidebar";
+  collapsed?: boolean;
 }
 
-export function WorkspaceSwitcher({ layout = "default" }: WorkspaceSwitcherProps) {
+export function WorkspaceSwitcher({ layout = "default", collapsed = false }: WorkspaceSwitcherProps) {
   const { data: session } = useSession();
   const {
     activeWorkspaces,
@@ -78,9 +79,10 @@ export function WorkspaceSwitcher({ layout = "default" }: WorkspaceSwitcherProps
         className={cn(
           "flex items-center gap-2.5 text-sm transition-colors",
           isSidebar
-            ? "w-full rounded-lg px-2 py-2 hover:bg-[var(--sidebar-hover)]"
-            : "rounded-xl border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 shadow-sm hover:bg-[var(--surface-hover)]"
+            ? cn("rounded-lg hover:bg-[var(--sidebar-hover)]", collapsed ? "w-full justify-center p-2" : "w-full px-2 py-2")
+            : "rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 shadow-sm hover:bg-[var(--surface-hover)]"
         )}
+        title={collapsed && isSidebar ? (isPersonal ? "Personal" : selectedWorkspace?.name) : undefined}
       >
         <div className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
@@ -94,19 +96,23 @@ export function WorkspaceSwitcher({ layout = "default" }: WorkspaceSwitcherProps
         </div>
         <div className="min-w-0 flex-1 text-left">
           {!isSidebar && (
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Workspace</p>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Workspace</p>
           )}
-          <p className="truncate text-sm font-semibold text-[var(--foreground)]">
-            {isPersonal ? "Personal" : selectedWorkspace?.name}
-          </p>
-          {roleLabel && isSidebar && (
-            <p className="text-[11px] text-[var(--muted)]">{roleLabel}</p>
-          )}
-          {roleLabel && !isSidebar && (
-            <p className="text-[10px] font-medium text-[var(--accent)]">{roleLabel}</p>
+          {!collapsed && (
+            <>
+              <p className="truncate text-sm font-medium text-[var(--foreground)]">
+                {isPersonal ? "Personal" : selectedWorkspace?.name}
+              </p>
+              {roleLabel && isSidebar && (
+                <p className="text-[11px] text-[var(--muted)]">{roleLabel}</p>
+              )}
+              {roleLabel && !isSidebar && (
+                <p className="text-[10px] font-medium text-[var(--accent)]">{roleLabel}</p>
+              )}
+            </>
           )}
         </div>
-        <ChevronsUpDown className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] opacity-60" />
+        {!collapsed && <ChevronsUpDown className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] opacity-60" />}
       </button>
 
       {open && (

@@ -189,7 +189,7 @@ export function AutomationRulesPanel({
   const content = (
     <>
       {!embedded && (
-        <p className="mb-3 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+        <p className="mb-3 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
           <Zap className="h-3 w-3" /> Automations
         </p>
       )}
@@ -197,12 +197,12 @@ export function AutomationRulesPanel({
         {rules.map((r) => {
           const summary = configSummary(r, members, tags);
           return (
-          <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg bg-zinc-100 px-2.5 py-2 text-xs dark:bg-zinc-800">
+          <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-3)] px-2.5 py-2 text-xs">
             <div className="min-w-0">
               <span className="font-medium">{r.name}</span>
-              <p className="mt-0.5 text-zinc-500 dark:text-zinc-400">
+              <p className="mt-0.5 text-[var(--muted)]">
                 {triggerLabel(r.trigger)} → {actionLabel(r.action)}
-                {summary ? <span className="text-zinc-400"> · {summary}</span> : null}
+                {summary ? <span className="text-[var(--muted-foreground)]"> · {summary}</span> : null}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -281,6 +281,6 @@ export function AutomationRulesPanel({
     </>
   );
 
-  if (embedded) return <div className="rounded-xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/50">{content}</div>;
+  if (embedded) return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4">{content}</div>;
   return <Card className="p-4">{content}</Card>;
 }

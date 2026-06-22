@@ -5,11 +5,13 @@ import { useState, Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { resetPasswordSchema } from "@/lib/validations";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { AmbientBackground } from "@/components/ui/AmbientBackground";
 import { z } from "zod";
 
 type FormInput = z.infer<typeof resetPasswordSchema>;
@@ -44,23 +46,23 @@ function ResetForm() {
 
   if (!token) {
     return (
-      <Card className="w-full max-w-sm p-8 text-center">
-        <h1 className="mb-2 text-xl font-bold">Invalid link</h1>
-        <p className="mb-4 text-sm text-zinc-500">This reset link is missing or expired.</p>
-        <a href="/forgot-password" className="text-sm text-indigo-500 hover:underline">
+      <Card className="w-full max-w-sm p-8 text-center shadow-[var(--shadow-md)]">
+        <h1 className="mb-2 text-xl font-semibold text-[var(--foreground)]">Invalid link</h1>
+        <p className="mb-4 text-sm text-[var(--muted)]">This reset link is missing or expired.</p>
+        <Link href="/forgot-password" className="text-sm font-medium text-[var(--accent)] hover:underline">
           Request a new link
-        </a>
+        </Link>
       </Card>
     );
   }
 
   return (
-    <Card className="w-full max-w-sm p-8">
-      <h1 className="mb-6 text-xl font-bold">Reset Password</h1>
+    <Card className="w-full max-w-sm p-8 shadow-[var(--shadow-md)]">
+      <h1 className="mb-6 text-xl font-semibold text-[var(--foreground)]">Reset Password</h1>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <input type="hidden" {...register("token")} />
         <Input label="New Password" type="password" error={errors.password?.message} {...register("password")} />
-        <Button type="submit" className="w-full" isLoading={isLoading}>Reset Password</Button>
+        <Button type="submit" className="w-full" variant="primary" isLoading={isLoading}>Reset Password</Button>
       </form>
     </Card>
   );
@@ -68,8 +70,8 @@ function ResetForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="flex flex-1 items-center justify-center px-4 py-16">
+    <AmbientBackground className="flex flex-1 items-center justify-center px-4 py-16">
       <Suspense><ResetForm /></Suspense>
-    </div>
+    </AmbientBackground>
   );
 }

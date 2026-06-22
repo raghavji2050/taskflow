@@ -43,7 +43,7 @@ export function ChatSearchPanel({
   }, [query, conversationId]);
 
   return (
-    <div className="shrink-0 border-b border-[var(--card-border)] bg-[var(--card)] px-3 py-2 md:px-4">
+    <div className="shrink-0 border-b border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 md:px-4">
       <div className="flex items-center gap-2">
         <Search className="h-4 w-4 shrink-0 text-[var(--muted)]" />
         <input
@@ -65,7 +65,7 @@ export function ChatSearchPanel({
       </div>
 
       {(loading || results.length > 0 || query.trim().length > 0) && (
-        <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-[var(--card-border)] bg-[var(--background)]">
+        <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface-2)]">
           {loading && (
             <div className="flex items-center justify-center py-6">
               <Loader2 className="h-5 w-5 animate-spin text-[var(--muted)]" />
@@ -80,7 +80,7 @@ export function ChatSearchPanel({
                 key={msg.id}
                 type="button"
                 onClick={() => onSelectMessage(msg)}
-                className="flex w-full flex-col gap-0.5 border-b border-[var(--card-border)] px-3 py-2.5 text-left last:border-0 hover:bg-[var(--surface-hover)]"
+                className="flex w-full flex-col gap-0.5 border-b border-[var(--border)] px-3 py-2.5 text-left last:border-0 hover:bg-[var(--surface-hover)]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-[var(--foreground)]">

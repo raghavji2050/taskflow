@@ -43,7 +43,7 @@ export function MemberAssignSelect({
 
   return (
     <div>
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
         Responsible members
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -58,8 +58,8 @@ export function MemberAssignSelect({
                 className={cn(
                   "rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
                   selected
-                    ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-                    : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface-hover)]"
                 )}
               >
                 {m.name}
@@ -70,7 +70,7 @@ export function MemberAssignSelect({
                   onClick={() => setPrimary(m.id)}
                   className={cn(
                     "rounded p-1",
-                    isLead ? "text-amber-500" : "text-zinc-300 hover:text-amber-400"
+                    isLead ? "text-[var(--warning)]" : "text-[var(--muted-foreground)] hover:text-[var(--warning)]"
                   )}
                   title="Set as lead"
                 >
@@ -82,7 +82,7 @@ export function MemberAssignSelect({
         })}
       </div>
       {selectedIds.length > 0 && (
-        <p className="mt-1.5 text-[11px] text-zinc-400">
+        <p className="mt-1.5 text-[11px] text-[var(--muted-foreground)]">
           Star marks the lead responsible person
         </p>
       )}

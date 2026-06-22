@@ -96,8 +96,10 @@ export function TimeTrackingBar() {
   return (
     <>
       <div
-        className={`sticky top-0 z-30 border-b border-[var(--card-border)] border-l-4 bg-[var(--card)] shadow-sm backdrop-blur-xl px-4 py-2 ${
-          isPaused ? "border-l-amber-500" : "border-l-[var(--accent)]"
+        className={`sticky top-0 z-30 shrink-0 border-b border-[var(--border)] bg-[var(--surface-1)] px-4 py-2 border-l-4 ${
+          isPaused
+            ? "border-l-[var(--status-pinned)]"
+            : "border-l-[var(--accent)]"
         }`}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
@@ -121,7 +123,7 @@ export function TimeTrackingBar() {
           </div>
           <p
             className={`font-mono text-lg font-semibold tabular-nums ${
-              isPaused ? "text-amber-600 dark:text-amber-400" : "text-[var(--accent)]"
+              isPaused ? "text-[var(--status-pinned)]" : "text-[var(--accent)]"
             }`}
           >
             {formatDurationHms(elapsed)}

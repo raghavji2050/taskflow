@@ -8,7 +8,7 @@ export const metadata: Metadata = appPageMetadata(
 
 export default function MessagesLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="-mx-4 -my-6 flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col overflow-hidden sm:-mx-6 lg:-mx-8">
+    <div className="messages-full-bleed -mx-3 -my-4 flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col overflow-hidden sm:-mx-5 sm:-my-5 lg:-mx-6 lg:-my-6 lg:h-[calc(100dvh)]">
       {children}
     </div>
   );

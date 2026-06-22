@@ -202,7 +202,7 @@ export function DocsClient() {
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800/60" />
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-[var(--surface-3)]" />
           ))}
         </div>
       ) : documents.length === 0 ? (

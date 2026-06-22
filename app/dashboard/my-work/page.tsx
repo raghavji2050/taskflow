@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { AlertTriangle, Briefcase } from "lucide-react";
+import { PageLoader } from "@/components/ui/PageLoader";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { TaskCard, type Task } from "@/components/TaskCard";
@@ -192,7 +193,7 @@ export default function MyWorkPage() {
 
   const workspaceGroups = useMemo(() => Object.entries(byWorkspace), [byWorkspace]);
 
-  if (status === "loading") return null;
+  if (status === "loading") return <PageLoader />;
 
   return (
     <div className="space-y-6">

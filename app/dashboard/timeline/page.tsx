@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { PageLoader } from "@/components/ui/PageLoader";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { TimelineView } from "@/components/TimelineView";
@@ -89,7 +90,7 @@ export default function TimelinePage() {
 
   useOpenTaskListener((taskId) => { void openTaskById(taskId); });
 
-  if (status === "loading") return null;
+  if (status === "loading") return <PageLoader />;
 
   return (
     <div className="space-y-6">

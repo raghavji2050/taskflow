@@ -13,6 +13,7 @@ import { NewGroupChatModal } from "@/components/chat/NewGroupChatModal";
 import { Button } from "@/components/ui/Button";
 import { PushSubscribe } from "@/components/PushSubscribe";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/PageLoader";
 import { confirmLeaveActiveMomMeeting } from "@/lib/mom-meeting-guard";
 import {
   mobileFixedPanelStyle,
@@ -369,7 +370,7 @@ export function MessagesClient() {
     };
   }, []);
 
-  if (status === "loading") return null;
+  if (status === "loading") return <PageLoader className="min-h-[50vh]" />;
 
   const threadLoading = Boolean(selectedId) && !selectedConversation && loading;
 
@@ -384,7 +385,7 @@ export function MessagesClient() {
       <div className="mb-3 hidden shrink-0 px-4 pt-4 sm:px-6 sm:pt-5 lg:px-8 md:block">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-[var(--foreground)]">Messages</h1>
+            <h1 className="text-xl font-bold text-[var(--foreground)] sm:text-2xl">Messages</h1>
             <p className="hidden text-sm text-[var(--muted)] sm:block">
               Direct messages, groups, and team channels
             </p>
@@ -399,7 +400,7 @@ export function MessagesClient() {
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">New group</span>
             </Button>
-            <Button size="sm" onClick={() => setShowDmModal(true)}>
+            <Button size="sm" variant="primary" onClick={() => setShowDmModal(true)}>
               <MessageSquarePlus className="h-4 w-4" />
               <span className="hidden sm:inline">New message</span>
             </Button>
@@ -409,13 +410,13 @@ export function MessagesClient() {
 
       <div
         className={cn(
-          "flex min-h-0 flex-1 flex-col overflow-hidden border-[var(--card-border)] bg-[var(--background)]",
-          "max-md:flex-1 max-md:border-0 md:flex-row md:rounded-xl md:border"
+          "surface-panel mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] sm:mx-4 md:flex-row md:rounded-3xl lg:mx-6",
+          "max-md:flex-1 max-md:rounded-2xl"
         )}
       >
         <div
           className={cn(
-            "flex h-full min-h-0 w-full shrink-0 flex-col md:w-72 md:max-w-xs",
+            "flex h-full min-h-0 w-full shrink-0 flex-col border-[var(--border)] md:w-80 md:max-w-sm md:border-r",
             showMobileThread && "max-md:hidden"
           )}
         >

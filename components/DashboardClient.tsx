@@ -350,7 +350,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
           <div className="p-3 sm:p-4">
             {isLoading ? (
               <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800/60" />
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-[var(--surface-hover)]" />
               ))}</div>
             ) : tasks.length === 0 ? (
               <div className="flex flex-col items-center py-16 text-center">

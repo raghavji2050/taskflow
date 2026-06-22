@@ -291,17 +291,12 @@ export function startForegroundSync(userId?: string): () => void {
   window.addEventListener("blur", send);
   window.addEventListener("pagehide", send);
 
-  const interval = setInterval(() => {
-    if (userId) send();
-  }, 4000);
-
   return () => {
     navigator.serviceWorker.removeEventListener("controllerchange", onController);
     document.removeEventListener("visibilitychange", send);
     window.removeEventListener("focus", send);
     window.removeEventListener("blur", send);
     window.removeEventListener("pagehide", send);
-    clearInterval(interval);
     navigator.serviceWorker.controller?.postMessage({
       type: "taskflow:visibility",
       visible: false,

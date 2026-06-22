@@ -27,30 +27,30 @@ export function TeamContextBar() {
     : "Member";
 
   return (
-    <div className="border-b border-[var(--card-border)] bg-[var(--card)]">
+    <div className="shrink-0 border-b border-[var(--border)] bg-[var(--surface-1)]">
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:px-6 lg:px-8">
         <div className="min-w-0 flex-1 space-y-2">
           {!canEditTasks && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+            <div className="flex items-center gap-2 rounded-lg border border-[color-mix(in_oklab,var(--status-pinned)_40%,transparent)] bg-[color-mix(in_oklab,var(--status-pinned)_10%,transparent)] px-3 py-2 text-xs text-[var(--status-pinned)]">
               <Shield className="h-3.5 w-3.5 shrink-0" />
               View only — you cannot edit tasks in this workspace.
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
             <Users className="h-3.5 w-3.5 text-[var(--accent)]" />
-            <span className="font-semibold text-[var(--foreground)]">{selectedWorkspace.name}</span>
+            <span className="font-medium text-[var(--foreground)]">{selectedWorkspace.name}</span>
             <span>· {members.length} members</span>
-            <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--accent)]">
+            <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--accent)]">
               {roleLabel}
             </span>
           </div>
         </div>
         <Link
           href="/dashboard/team"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+          className="inline-flex shrink-0 touch-target items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
         >
           <Settings className="h-3.5 w-3.5" />
-          Team settings
+          <span className="hidden sm:inline">Team settings</span>
         </Link>
       </div>
     </div>

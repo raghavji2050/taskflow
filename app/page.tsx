@@ -25,13 +25,13 @@ const features = [
     icon: CheckCircle2,
     title: "Task Management",
     description: "Create, assign, and track tasks across personal and team workspaces.",
-    color: "bg-violet-500/10 text-violet-600",
+    color: "bg-[var(--accent-soft)] text-[var(--accent)]",
   },
   {
     icon: Columns3,
     title: "Multiple Views",
     description: "Switch between List, Board, Calendar, Timeline, and My Work instantly.",
-    color: "bg-blue-500/10 text-blue-600",
+    color: "bg-[var(--accent-soft)] text-[var(--accent)]",
   },
   {
     icon: Users,
@@ -55,7 +55,7 @@ const features = [
     icon: Sparkles,
     title: "Real-time Sync",
     description: "Live updates across views so your team always stays aligned.",
-    color: "bg-indigo-500/10 text-indigo-600",
+    color: "bg-[var(--accent-soft)] text-[var(--accent)]",
   },
 ];
 
@@ -67,17 +67,16 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="flex-1">
+    <div className="app-mesh-bg flex-1">
       {/* Hero */}
-      <section className="relative overflow-hidden border-b border-[var(--card-border)]">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-600/5 via-transparent to-blue-600/5" />
+      <section className="relative overflow-hidden border-b border-[var(--border)]">
         <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8 lg:py-32">
           <div className="mx-auto max-w-3xl text-center animate-fade-up">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--card-border)] bg-[var(--card)] px-4 py-1.5 text-sm font-medium text-[var(--muted)] shadow-sm">
+            <div className="surface-panel mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-[var(--muted)]">
               <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
               Professional project management
             </div>
-            <h1 className="text-4xl font-bold tracking-tight text-[var(--foreground)] sm:text-5xl lg:text-6xl">
+            <h1 className="text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl lg:text-6xl">
               Work smarter with{" "}
               <span className="text-[var(--accent)]">TaskFlow</span>
             </h1>
@@ -87,7 +86,7 @@ export default async function HomePage() {
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link href="/register">
-                <Button size="lg" className="min-w-[160px]">
+                <Button size="lg" variant="primary" className="min-w-[160px]">
                   Start for free
                   <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -102,8 +101,8 @@ export default async function HomePage() {
 
           {/* Mock dashboard preview */}
           <div className="mx-auto mt-16 max-w-4xl animate-fade-up" style={{ animationDelay: "0.15s" }}>
-            <div className="overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl">
-              <div className="flex items-center gap-2 border-b border-[var(--card-border)] bg-[var(--surface-hover)] px-4 py-3">
+            <div className="surface-panel overflow-hidden rounded-3xl shadow-[var(--shadow-md)]">
+              <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
                 <div className="h-3 w-3 rounded-full bg-red-400" />
                 <div className="h-3 w-3 rounded-full bg-amber-400" />
                 <div className="h-3 w-3 rounded-full bg-emerald-400" />
@@ -117,7 +116,7 @@ export default async function HomePage() {
                       <div key={j} className="mb-2 rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3 shadow-sm">
                         <div className="h-2 w-3/4 rounded bg-[var(--surface-hover)]" />
                         <div className="mt-2 flex gap-1">
-                          <div className="h-4 w-12 rounded-full bg-violet-500/20" />
+                          <div className="h-4 w-12 rounded-full bg-[var(--accent-soft)]" />
                           <div className="h-4 w-4 rounded-full bg-[var(--accent)]/30" />
                         </div>
                       </div>
@@ -138,7 +137,7 @@ export default async function HomePage() {
         </div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
-            <Card key={feature.title} className="p-6 transition-shadow hover:shadow-md">
+            <Card key={feature.title} className="p-6">
               <div className={`mb-4 inline-flex rounded-xl p-3 ${feature.color}`}>
                 <feature.icon className="h-5 w-5" />
               </div>
@@ -150,12 +149,12 @@ export default async function HomePage() {
       </section>
 
       {/* CTA */}
-      <section className="border-t border-[var(--card-border)] bg-[var(--card)]">
+      <section className="surface-panel border-t border-[var(--border)] rounded-none">
         <div className="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold tracking-tight">Ready to get organized?</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">Ready to get organized?</h2>
           <p className="mt-3 text-[var(--muted)]">Join TaskFlow and bring clarity to your work.</p>
           <Link href="/register" className="mt-6 inline-block">
-            <Button size="lg">Create your workspace</Button>
+            <Button size="lg" variant="primary">Create your workspace</Button>
           </Link>
         </div>
       </section>

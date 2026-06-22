@@ -88,7 +88,7 @@ export function NewDirectChatModal({ isOpen, onClose, onCreated }: NewDirectChat
                 type="button"
                 onClick={() => void startChat(user.id)}
                 disabled={creating === user.id}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[var(--surface-hover)] disabled:opacity-50"
+                className="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50"
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10 text-sm font-semibold text-[var(--accent)]">
                   {getInitials(user.name)}

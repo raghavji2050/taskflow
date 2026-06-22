@@ -71,29 +71,29 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] flex-1">
       {/* Brand panel */}
-      <div className="hidden w-1/2 flex-col justify-between bg-[var(--accent)] p-12 text-white lg:flex">
+      <div className="hidden w-1/2 flex-col justify-between border-r border-[var(--border)] bg-[var(--surface-3)] p-12 lg:flex">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
             <CheckSquare className="h-5 w-5" strokeWidth={2.5} />
           </div>
-          <span className="text-xl font-bold">TaskFlow</span>
+          <span className="text-xl font-bold text-[var(--foreground)]">TaskFlow</span>
         </div>
         <div>
-          <h2 className="text-3xl font-bold leading-tight">
+          <h2 className="text-3xl font-bold leading-tight text-[var(--foreground)]">
             Manage work the way modern teams do.
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-white/80">
+          <p className="mt-4 text-base leading-relaxed text-[var(--muted)]">
             Lists, boards, calendars, and timelines — all in one place. Collaborate with your team and stay on top of every deadline.
           </p>
         </div>
-        <p className="text-sm text-white/60">Trusted by teams who ship fast.</p>
+        <p className="text-sm text-[var(--muted-foreground)]">Trusted by teams who ship fast.</p>
       </div>
 
       {/* Form panel */}
       <div className="flex flex-1 items-center justify-center px-4 py-12">
-        <Card className="w-full max-w-sm border-0 p-8 shadow-lg sm:border sm:shadow-sm">
+        <Card className="w-full max-w-sm p-8 shadow-[var(--shadow-md)]">
           <div className="mb-8">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Welcome back</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">Welcome back</h1>
             <p className="mt-1.5 text-sm text-[var(--muted)]">Sign in to continue to TaskFlow</p>
           </div>
 
@@ -120,7 +120,7 @@ export default function LoginPage() {
               </Link>
             </div>
 
-            <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
+            <Button type="submit" className="w-full" size="lg" variant="primary" isLoading={isLoading}>
               Sign In
             </Button>
           </form>

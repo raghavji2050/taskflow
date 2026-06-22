@@ -105,7 +105,7 @@ export function GroupInfoModal({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm"
           />
         </div>
         <div>
@@ -124,7 +124,7 @@ export function GroupInfoModal({
           </ul>
         </div>
         {addOpen && (
-          <div className="space-y-2 rounded-lg border border-[var(--card-border)] p-3">
+          <div className="space-y-2 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-3">
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}

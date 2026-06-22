@@ -20,7 +20,7 @@ export function MessageReceiptTicks({ status, onAccent = false, className }: Mes
         className={cn(
           "h-3.5 w-3.5 shrink-0",
           isRead
-            ? "text-sky-400"
+            ? "text-[var(--status-read)]"
             : onAccent
               ? "text-white/70"
               : "text-[var(--muted)]",

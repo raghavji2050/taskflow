@@ -36,25 +36,31 @@ export function TimerReminderWatcher() {
       return;
     }
 
-    const shouldShow = shouldSendRunningReminder({
-      entry: {
-        startTime: new Date(entry.startTime),
-        duration: entry.duration ?? 0,
-        isRunning: true,
-        isPaused: false,
-        lastReminderAt: null,
-        reminderSnoozedUntil: entry.reminderSnoozedUntil
-          ? new Date(entry.reminderSnoozedUntil)
-          : null,
-      },
-      prefs,
-    });
+    const check = () => {
+      const shouldShow = shouldSendRunningReminder({
+        entry: {
+          startTime: new Date(entry.startTime),
+          duration: entry.duration ?? 0,
+          isRunning: true,
+          isPaused: false,
+          lastReminderAt: null,
+          reminderSnoozedUntil: entry.reminderSnoozedUntil
+            ? new Date(entry.reminderSnoozedUntil)
+            : null,
+        },
+        prefs,
+      });
 
-    if (shouldShow && shownRef.current !== entry.id) {
-      shownRef.current = entry.id;
-      setOpen(true);
-    }
-  }, [entry, elapsed, prefs]);
+      if (shouldShow && shownRef.current !== entry.id) {
+        shownRef.current = entry.id;
+        setOpen(true);
+      }
+    };
+
+    check();
+    const id = window.setInterval(check, 60_000);
+    return () => window.clearInterval(id);
+  }, [entry, prefs]);
 
   const handleContinue = async () => {
     if (!entry || !prefs) return;

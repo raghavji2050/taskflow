@@ -130,11 +130,13 @@ export function NewGroupChatModal({ isOpen, onClose, onCreated }: NewGroupChatMo
                   type="button"
                   onClick={() => toggleUser(user)}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors",
-                    isSelected ? "bg-[var(--accent)]/10" : "hover:bg-[var(--surface-hover)]"
+                    "flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left transition-colors",
+                    isSelected
+                      ? "border-[var(--border)] bg-[var(--surface-2)]"
+                      : "hover:border-[var(--border)] hover:bg-[var(--surface-hover)]"
                   )}
                 >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--surface-hover)] text-xs font-semibold">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--surface-2)] text-xs font-semibold">
                     {getInitials(user.name)}
                   </div>
                   <div className="min-w-0 flex-1">

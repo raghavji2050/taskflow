@@ -1184,8 +1184,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   ) : null;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--background)]">
-      <div className="sticky top-0 z-20 flex shrink-0 items-center gap-1 border-b border-[var(--card-border)] bg-[var(--background)] px-3 py-2.5 md:gap-2 md:px-4 md:py-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col chat-thread-bg">
+      <div className="surface-panel sticky top-0 z-20 flex shrink-0 items-center gap-1 rounded-none border-b border-[var(--border)] px-3 py-2.5 md:gap-2 md:px-4 md:py-3">
         {onBack && (
           <button
             type="button"
@@ -1217,7 +1217,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
               className={cn(
                 "truncate text-xs",
                 isDirect && directPeer && isUserOnline(directPeer.id)
-                  ? "font-medium text-emerald-600 dark:text-emerald-400"
+                  ? "font-medium text-[var(--status-online)]"
                   : "text-[var(--muted)]"
               )}
             >
@@ -1350,19 +1350,30 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           </div>
         )}
         {messages.length > 0 && (
-          <div className="space-y-4 pb-2">
+          <div className="space-y-1 pb-2">
             {messages.map((msg, index) => {
               const prev = messages[index - 1];
+              const next = messages[index + 1];
               const showDateDivider =
                 !prev || toDateKey(prev.createdAt) !== toDateKey(msg.createdAt);
+              const sameUserAsPrev =
+                prev &&
+                prev.user.id === msg.user.id &&
+                toDateKey(prev.createdAt) === toDateKey(msg.createdAt);
+              const sameUserAsNext =
+                next &&
+                next.user.id === msg.user.id &&
+                toDateKey(next.createdAt) === toDateKey(msg.createdAt);
 
               return (
                 <div key={msg.id}>
                   {showDateDivider && (
-                    <div className="mb-4 flex justify-center">
-                      <span className="rounded-full bg-[var(--surface-hover)] px-3 py-1 text-[10px] font-medium text-[var(--muted)] shadow-sm">
+                    <div className="mb-3 mt-1 flex items-center justify-center gap-3">
+                      <span className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--border)] to-transparent" />
+                      <span className="surface-panel rounded-full px-3 py-1 text-[10px] font-medium text-[var(--muted)]">
                         {formatChatDateLabel(msg.createdAt)}
                       </span>
+                      <span className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--border)] to-transparent" />
                     </div>
                   )}
                   <div id={`msg-${msg.id}`}>
@@ -1374,6 +1385,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
                       mentionMembers={mentionMembers}
                       showUserPresence={false}
                       hideAvatars={isDmStyle}
+                      isFirstInGroup={!sameUserAsPrev}
+                      isLastInGroup={!sameUserAsNext}
                       onJumpToMessage={(id, createdAt) => void navigateToMessage({ id, createdAt })}
                       onRetrySend={(tempId) => void handleRetrySend(tempId)}
                       onReply={setReplyTo}
@@ -1395,7 +1408,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         <button
           type="button"
           onClick={() => scrollToBottom("smooth")}
-          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[var(--card-border)] bg-[var(--card)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] shadow-lg hover:bg-[var(--surface-hover)]"
+          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-1)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] shadow-[var(--shadow-sm)] hover:bg-[var(--surface-hover)]"
         >
           <ChevronDown className="h-3.5 w-3.5" />
           {newMessagesBelow === 1 ? "New message" : `${newMessagesBelow} new messages`}
@@ -1405,7 +1418,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
       <div
         className={cn(
-          "shrink-0 border-t border-[var(--card-border)] px-2 py-2 md:px-4 md:py-3",
+          "shrink-0 border-t border-[var(--border)] px-2 py-2 safe-bottom md:px-4 md:py-3",
           keyboardOpen ? "pb-2.5" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
         )}
       >

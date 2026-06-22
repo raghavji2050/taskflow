@@ -12,6 +12,9 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   endIcon?: ReactNode;
 }
 
+const inputBase =
+  "flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] transition-colors focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]";
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, id, hideLabel, type, startIcon, endIcon, ...props }, ref) => {
     const inputId = id || props.name;
@@ -32,7 +35,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           className={cn(
             "relative",
             (startIcon || endIcon || isPassword) &&
-              "flex h-10 w-full items-center gap-2 rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 shadow-sm focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)]/20",
+              "flex h-10 w-full items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--ring)]",
             error && "border-red-500 focus-within:border-red-500 focus-within:ring-red-500/20"
           )}
         >
@@ -48,7 +51,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             className={cn(
               startIcon || endIcon || isPassword
                 ? "min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-0"
-                : "flex h-10 w-full rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] shadow-sm placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20",
+                : inputBase,
               error && !(startIcon || endIcon || isPassword) && "border-red-500 focus:border-red-500 focus:ring-red-500/20",
               className
             )}

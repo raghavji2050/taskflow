@@ -77,7 +77,7 @@ export function ForwardMessageModal({
     >
       {message && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-[var(--card-border)] bg-[var(--surface-hover)] p-3">
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
             <p className="mb-2 text-xs font-semibold text-[var(--muted)]">Preview</p>
             <ForwardedMessageCard forwarded={previewForwardedFrom(message)} />
           </div>

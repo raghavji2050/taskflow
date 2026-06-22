@@ -1,32 +1,35 @@
 import { ButtonHTMLAttributes, forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
+type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "glow" | "glass";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   isLoading?: boolean;
-  /** Shown beside the spinner when loading. Omit for icon-only buttons. */
   loadingText?: string;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--accent)] text-white shadow-sm hover:bg-[var(--accent-hover)] focus-visible:ring-[var(--accent)]",
+    "bg-[var(--accent)] text-white shadow-sm hover:bg-[var(--accent-hover)] focus-visible:ring-[var(--ring)] active:scale-[0.98]",
+  glow:
+    "bg-[var(--accent)] text-white shadow-sm hover:bg-[var(--accent-hover)] focus-visible:ring-[var(--ring)] active:scale-[0.98]",
+  glass:
+    "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] hover:border-[var(--border-strong)] active:scale-[0.98]",
   secondary:
-    "border border-[var(--card-border)] bg-[var(--card)] text-[var(--foreground)] shadow-sm hover:bg-[var(--surface-hover)]",
+    "border border-[var(--border)] bg-[var(--surface-1)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] hover:border-[var(--border-strong)]",
   danger:
-    "bg-red-600 text-white shadow-sm hover:bg-red-500 focus-visible:ring-red-500",
+    "bg-[var(--destructive)] text-white shadow-sm hover:opacity-90 focus-visible:ring-red-500 active:scale-[0.98]",
   ghost:
     "text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-xs rounded-md",
-  md: "h-9 px-4 text-sm rounded-lg",
-  lg: "h-10 px-5 text-sm rounded-lg",
+  sm: "h-8 min-h-8 px-3 text-xs rounded-lg touch-target",
+  md: "h-9 min-h-9 px-4 text-sm rounded-lg touch-target",
+  lg: "h-10 min-h-10 px-5 text-sm rounded-lg touch-target",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -50,7 +53,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center gap-1.5 font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50",
+          "inline-flex items-center justify-center gap-1.5 font-medium transition-all duration-[var(--duration-fast)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50",
           variantClasses[variant],
           sizeClasses[size],
           className

@@ -89,15 +89,15 @@ export function CalendarView({
       )}
 
       <Card className="overflow-hidden p-4 sm:p-5">
-        <h2 className="mb-4 text-center text-lg font-semibold text-zinc-800 dark:text-zinc-100">
+        <h2 className="mb-4 text-center text-lg font-semibold text-[var(--foreground)]">
           {format(month, "MMMM yyyy")}
         </h2>
 
-        <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-700">
+        <div className="grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--border)]">
           {WEEKDAYS.map((d) => (
             <div
               key={d}
-              className="bg-zinc-50 px-1 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:bg-zinc-900"
+              className="bg-[var(--surface-1)] px-1 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]"
             >
               {d}
             </div>
@@ -117,18 +117,18 @@ export function CalendarView({
                 type="button"
                 onClick={() => onDayClick?.(day)}
                 className={cn(
-                  "min-h-[5.5rem] bg-white p-1.5 text-left transition-colors dark:bg-zinc-900",
-                  "hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20",
-                  !inMonth && "bg-zinc-50/80 dark:bg-zinc-950/50",
-                  today && "ring-2 ring-inset ring-indigo-500/40"
+                  "min-h-[5.5rem] bg-[var(--surface-1)] p-1.5 text-left transition-colors",
+                  "hover:bg-[var(--surface-hover)]",
+                  !inMonth && "bg-[var(--surface-hover)]/50",
+                  today && "ring-2 ring-inset ring-[var(--accent)]/40"
                 )}
               >
                 <span
                   className={cn(
                     "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
-                    today && "bg-indigo-500 text-white",
-                    !today && inMonth && "text-zinc-700 dark:text-zinc-300",
-                    !inMonth && "text-zinc-400"
+                    today && "bg-[var(--accent)] text-white",
+                    !today && inMonth && "text-[var(--foreground)]",
+                    !inMonth && "text-[var(--muted)]"
                   )}
                 >
                   {format(day, "d")}
@@ -172,7 +172,7 @@ export function CalendarView({
                     </span>
                   ))}
                   {dayTasks.length > 2 && (
-                    <span className="block px-1 text-[10px] text-zinc-400">
+                    <span className="block px-1 text-[10px] text-[var(--muted)]">
                       +{dayTasks.length - 2} due
                     </span>
                   )}
@@ -205,7 +205,7 @@ export function CalendarView({
         </div>
 
         {showCreateHint && (
-          <p className="mt-3 text-center text-xs text-zinc-400">
+          <p className="mt-3 text-center text-xs text-[var(--muted)]">
             Click a day to add a task with that due date
           </p>
         )}
@@ -213,7 +213,7 @@ export function CalendarView({
 
       {unscheduled.length > 0 && (
         <Card className="p-4">
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
             No due date ({unscheduled.length})
           </h3>
           <div className="flex flex-wrap gap-2">

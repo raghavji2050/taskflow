@@ -61,28 +61,28 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] flex-1">
-      <div className="hidden w-1/2 flex-col justify-between bg-[var(--accent)] p-12 text-white lg:flex">
+      <div className="hidden w-1/2 flex-col justify-between border-r border-[var(--border)] bg-[var(--surface-3)] p-12 lg:flex">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
             <CheckSquare className="h-5 w-5" strokeWidth={2.5} />
           </div>
-          <span className="text-xl font-bold">TaskFlow</span>
+          <span className="text-xl font-bold text-[var(--foreground)]">TaskFlow</span>
         </div>
         <div>
-          <h2 className="text-3xl font-bold leading-tight">
+          <h2 className="text-3xl font-bold leading-tight text-[var(--foreground)]">
             Start organizing work in minutes.
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-white/80">
+          <p className="mt-4 text-base leading-relaxed text-[var(--muted)]">
             Create your free account and get access to lists, boards, calendars, team workspaces, and more.
           </p>
         </div>
-        <p className="text-sm text-white/60">Free to get started. No credit card required.</p>
+        <p className="text-sm text-[var(--muted-foreground)]">Free to get started. No credit card required.</p>
       </div>
 
       <div className="flex flex-1 items-center justify-center px-4 py-12">
-        <Card className="w-full max-w-sm border-0 p-8 shadow-lg sm:border sm:shadow-sm">
+        <Card className="w-full max-w-sm p-8 shadow-[var(--shadow-md)]">
           <div className="mb-8">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Create account</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">Create account</h1>
             <p className="mt-1.5 text-sm text-[var(--muted)]">Get started for free</p>
           </div>
 
@@ -90,7 +90,7 @@ export default function RegisterPage() {
             <Input label="Name" placeholder="Your name" error={errors.name?.message} {...register("name")} />
             <Input label="Email" type="email" placeholder="you@example.com" error={errors.email?.message} {...register("email")} />
             <Input label="Password" type="password" placeholder="At least 6 characters" error={errors.password?.message} {...register("password")} />
-            <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>Create Account</Button>
+            <Button type="submit" className="w-full" size="lg" variant="primary" isLoading={isLoading}>Create Account</Button>
           </form>
 
           <OAuthButtons callbackUrl="/dashboard" />

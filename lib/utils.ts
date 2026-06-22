@@ -6,6 +6,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Premium surface panel classes */
+export function surfaceClass(extra?: string) {
+  return cn("surface-panel rounded-xl", extra);
+}
+
+/** @deprecated Use surfaceClass instead */
+export function glassClass(extra?: string) {
+  return surfaceClass(extra);
+}
+
+/** Subtle elevation shadow */
+export function elevationClass(level: "sm" | "md" | "lg" = "md", extra?: string) {
+  const shadow =
+    level === "sm" ? "shadow-sm" : level === "lg" ? "shadow-lg" : "shadow-md";
+  return cn(shadow, extra);
+}
+
+/** @deprecated Use elevationClass instead */
+export function glowClass(_accent: "purple" | "cyan" = "purple", extra?: string) {
+  return elevationClass("md", extra);
+}
+
 export function getTimeGreeting(date = new Date()): string {
   const hour = date.getHours();
   if (hour < 12) return "Good morning";

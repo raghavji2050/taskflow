@@ -39,7 +39,7 @@ export function StatsBreakdown({ breakdown, compact = false }: StatsBreakdownPro
             key={status}
             className="inline-flex items-center gap-1.5 rounded-md bg-[var(--surface-hover)] px-2 py-0.5 text-xs"
           >
-            <span className={cn("h-1.5 w-1.5 rounded-full", statusColors[status] ?? "bg-zinc-400")} />
+            <span className={cn("h-1.5 w-1.5 rounded-full", statusColors[status] ?? "bg-[var(--muted)]")} />
             <span className="text-[var(--muted)]">{status.replace("_", " ")}</span>
             <span className="font-semibold tabular-nums text-[var(--foreground)]">{count}</span>
           </span>
@@ -49,21 +49,21 @@ export function StatsBreakdown({ breakdown, compact = false }: StatsBreakdownPro
   }
 
   return (
-    <div className="stat-card rounded-xl p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">By Status</p>
+    <div className="widget-card rounded-xl p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">By Status</p>
       <div className="space-y-2">
         {Object.entries(byStatus).map(([status, count]) => (
           <div key={status} className="flex items-center gap-2">
-            <span className="w-20 text-xs text-zinc-600 dark:text-zinc-400">
+            <span className="w-20 text-xs text-[var(--muted)]">
               {status.replace("_", " ")}
             </span>
-            <div className="flex-1 h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+            <div className="flex-1 h-2 rounded-full bg-[var(--surface-hover)] overflow-hidden">
               <div
-                className={`h-full rounded-full ${statusColors[status] ?? "bg-zinc-400"}`}
+                className={`h-full rounded-full ${statusColors[status] ?? "bg-[var(--muted)]"}`}
                 style={{ width: `${(count / total) * 100}%` }}
               />
             </div>
-            <span className="w-6 text-right text-xs font-medium tabular-nums">{count}</span>
+            <span className="w-6 text-right text-xs font-medium tabular-nums text-[var(--foreground)]">{count}</span>
           </div>
         ))}
       </div>
