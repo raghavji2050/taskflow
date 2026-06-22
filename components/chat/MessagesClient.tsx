@@ -360,13 +360,15 @@ export function MessagesClient() {
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
     const update = () => {
-      document.body.style.overflow = mq.matches ? "hidden" : "";
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
     };
     update();
     mq.addEventListener("change", update);
     return () => {
       mq.removeEventListener("change", update);
       document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
     };
   }, []);
 
@@ -377,7 +379,7 @@ export function MessagesClient() {
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 flex-col",
+        "flex min-h-0 flex-1 flex-col overflow-hidden",
         isMobile && "bg-[var(--background)]"
       )}
       style={mobilePanelStyle}
@@ -410,7 +412,7 @@ export function MessagesClient() {
 
       <div
         className={cn(
-          "surface-panel mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] sm:mx-4 md:flex-row md:rounded-3xl lg:mx-6",
+          "surface-panel mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] sm:mx-4 sm:mb-3 md:flex-row md:rounded-3xl lg:mx-6 lg:mb-4",
           "max-md:flex-1 max-md:rounded-2xl"
         )}
       >
@@ -435,7 +437,7 @@ export function MessagesClient() {
 
         <div
           className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col",
+            "flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
             !showMobileThread && "max-md:hidden"
           )}
         >

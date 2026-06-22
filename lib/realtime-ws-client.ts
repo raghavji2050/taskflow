@@ -13,12 +13,19 @@ export function sendRealtimePayload(payload: object) {
 }
 
 export function sendTypingIndicator(conversationId: string, typing: boolean) {
-  if (isPusherClientConfigured()) {
-    sendPusherTyping(conversationId, typing);
-    return;
-  }
-  sendRealtimePayload({
-    type: typing ? "typing:start" : "typing:stop",
-    conversationId,
+  void fetch(`/api/conversations/${conversationId}/typing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ typing }),
+    keepalive: !typing,
+  }).catch(() => {
+    if (isPusherClientConfigured()) {
+      sendPusherTyping(conversationId, typing);
+      return;
+    }
+    sendRealtimePayload({
+      type: typing ? "typing:start" : "typing:stop",
+      conversationId,
+    });
   });
 }

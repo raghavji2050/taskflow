@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { Prisma as PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { messageInclude, formatMessageForClient } from "@/lib/message-format";
 import { getMessageAudience } from "@/lib/message-audience";
@@ -8,6 +9,8 @@ import { ensureDirectParticipants } from "@/lib/conversations";
 import { attachReceiptStatuses, type ParticipantReceipt } from "@/lib/chat-receipts";
 import { notifyParticipants } from "@/lib/message-notify";
 import { saveMessageAttachmentFile } from "@/lib/message-upload";
+import { normalizeMessageContent } from "@/lib/rich-message-serialize";
+import type { RichMessageDoc } from "@/lib/rich-message-types";
 
 export { notifyParticipants };
 
@@ -288,6 +291,7 @@ export async function sendMessage(params: {
   userId: string;
   userName: string;
   body: string;
+  bodyJson?: RichMessageDoc | null;
   parentId?: string | null;
   conversationTitle: string;
   mentionCandidates: { id: string; name: string }[];
@@ -298,13 +302,15 @@ export async function sendMessage(params: {
     userId,
     userName,
     body,
+    bodyJson,
     parentId,
     conversationTitle,
     mentionCandidates,
     skipNotify,
   } = params;
 
-  const trimmed = body.trim();
+  const normalized = normalizeMessageContent({ body, bodyJson });
+  const trimmed = normalized.body.trim();
   if (!trimmed) {
     throw new Error("Message cannot be empty");
   }
@@ -316,6 +322,7 @@ export async function sendMessage(params: {
       conversationId,
       userId,
       body: trimmed,
+      bodyJson: normalized.bodyJson ?? undefined,
       parentId: parentId ?? null,
     },
     include: messageInclude,
@@ -432,6 +439,7 @@ export async function forwardMessage(params: {
   userId: string;
   userName: string;
   body?: string;
+  bodyJson?: RichMessageDoc | null;
   conversationTitle: string;
   mentionCandidates: { id: string; name: string }[];
 }) {
@@ -441,6 +449,7 @@ export async function forwardMessage(params: {
     userId,
     userName,
     body = "",
+    bodyJson,
     conversationTitle,
     mentionCandidates,
   } = params;
@@ -451,7 +460,11 @@ export async function forwardMessage(params: {
   });
   if (!source) throw new Error("Message not found");
 
-  const comment = body.trim();
+  const normalized = normalizeMessageContent({
+    body,
+    bodyJson: bodyJson ?? (body.trim() ? null : (source.bodyJson as RichMessageDoc | null)),
+  });
+  const comment = normalized.body.trim();
 
   await ensureDirectParticipants(targetConversationId, userId);
 
@@ -460,6 +473,10 @@ export async function forwardMessage(params: {
       conversationId: targetConversationId,
       userId,
       body: comment,
+      bodyJson:
+        normalized.bodyJson === null
+          ? PrismaClient.DbNull
+          : (normalized.bodyJson as Prisma.InputJsonValue),
       forwardedFromId: source.id,
     },
   });
@@ -532,6 +549,7 @@ export async function updateMessage(params: {
   conversationId: string;
   userId: string;
   body: string;
+  bodyJson?: RichMessageDoc | null;
 }) {
   const msg = await prisma.message.findFirst({
     where: { id: params.messageId, conversationId: params.conversationId },
@@ -540,12 +558,23 @@ export async function updateMessage(params: {
   if (msg.userId !== params.userId) throw new Error("Forbidden");
   if (msg.deletedAt) throw new Error("Cannot edit a deleted message");
 
-  const trimmed = params.body.trim();
+  const normalized = normalizeMessageContent({
+    body: params.body,
+    bodyJson: params.bodyJson,
+  });
+  const trimmed = normalized.body.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
 
   const message = await prisma.message.update({
     where: { id: params.messageId },
-    data: { body: trimmed, editedAt: new Date() },
+    data: {
+      body: trimmed,
+      bodyJson:
+        normalized.bodyJson === null
+          ? PrismaClient.DbNull
+          : (normalized.bodyJson as Prisma.InputJsonValue),
+      editedAt: new Date(),
+    },
     include: messageInclude,
   });
 

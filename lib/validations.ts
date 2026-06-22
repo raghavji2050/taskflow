@@ -75,6 +75,7 @@ export const commentSchema = z.object({
 
 export const messageSchema = z.object({
   body: z.string().max(4000).default(""),
+  bodyJson: z.unknown().optional().nullable(),
   parentId: z.string().optional().nullable(),
 });
 
@@ -82,8 +83,13 @@ export const messageReactionSchema = z.object({
   emoji: z.string().min(1).max(16),
 });
 
+export const typingSchema = z.object({
+  typing: z.boolean(),
+});
+
 export const updateMessageSchema = z.object({
   body: z.string().min(1).max(4000),
+  bodyJson: z.unknown().optional().nullable(),
 });
 
 export const conversationPatchSchema = z.object({
@@ -233,6 +239,7 @@ export const forwardMessageSchema = z
     conversationId: z.string().optional(),
     userId: z.string().optional(),
     body: z.string().max(4000).optional().default(""),
+    bodyJson: z.unknown().optional().nullable(),
   })
   .refine((data) => Boolean(data.conversationId) !== Boolean(data.userId), {
     message: "Provide conversationId or userId, not both",

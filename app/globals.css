@@ -492,3 +492,121 @@ select:not(:disabled) {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
 }
+
+/* Rich message editor (Tiptap) */
+.rich-message-editor {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.rich-message-editor .ProseMirror {
+  outline: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rich-message-input {
+  color: var(--foreground);
+}
+
+.rich-message-editor .ProseMirror p {
+  margin: 0;
+}
+
+.rich-message-editor .ProseMirror p + p {
+  margin-top: 0.25rem;
+}
+
+.rich-message-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.rich-message-editor .ProseMirror pre {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  margin: 0.375rem 0;
+  overflow-x: auto;
+  padding: 0.5rem 0.75rem;
+}
+
+.rich-message-editor .ProseMirror code {
+  background: var(--surface-hover);
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+}
+
+.rich-message-editor .ProseMirror blockquote {
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  margin: 0.25rem 0;
+  padding-left: 0.75rem;
+}
+
+.rich-message-editor .ProseMirror ul:not([data-type="taskList"]) {
+  list-style-type: disc;
+  margin: 0.25rem 0;
+  padding-left: 1.35rem;
+}
+
+.rich-message-editor .ProseMirror ol {
+  list-style-type: decimal;
+  margin: 0.25rem 0;
+  padding-left: 1.35rem;
+}
+
+.rich-message-editor .ProseMirror li {
+  display: list-item;
+}
+
+.rich-message-editor .ProseMirror li p {
+  margin: 0;
+}
+
+.rich-message-editor .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  margin: 0.25rem 0;
+  padding-left: 0;
+}
+
+.rich-message-editor .ProseMirror li[data-type="taskItem"] {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+}
+
+.rich-message-editor .ProseMirror li[data-type="taskItem"] > label {
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+  user-select: none;
+}
+
+.rich-message-editor .ProseMirror li[data-type="taskItem"] > label input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.rich-message-editor .ProseMirror li[data-type="taskItem"] > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.rich-mention {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted);
+}

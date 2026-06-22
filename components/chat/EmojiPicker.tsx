@@ -1,7 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
+import { Theme } from "emoji-picker-react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
+const EmojiPickerLib = dynamic(() => import("emoji-picker-react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[22rem] w-[min(20rem,calc(100vw-3rem))] items-center justify-center rounded-xl surface-panel border border-[var(--border)] text-xs text-[var(--muted)] md:w-80">
+      Loading emojis…
+    </div>
+  ),
+});
+
+/** Compact strip for message reactions. */
 export const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "✅", "🙏", "😮", "😢"];
 
 interface EmojiPickerProps {
@@ -10,23 +24,30 @@ interface EmojiPickerProps {
 }
 
 export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  const theme =
+    mounted && resolvedTheme === "dark" ? Theme.DARK : Theme.LIGHT;
+
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden="true" />
-      <div className="absolute bottom-full left-0 z-50 mb-2 grid w-[min(14rem,calc(100vw-4rem))] grid-cols-5 gap-1 rounded-xl surface-panel border border-[var(--border)] p-2 shadow-[var(--shadow-sm)] md:w-56">
-        {QUICK_EMOJIS.map((emoji) => (
-          <button
-            key={emoji}
-            type="button"
-            onClick={() => {
-              onSelect(emoji);
-              onClose();
-            }}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-lg hover:bg-[var(--surface-hover)]"
-          >
-            {emoji}
-          </button>
-        ))}
+      <div className="absolute bottom-full left-0 z-50 mb-2 overflow-hidden rounded-xl border border-[var(--border)] shadow-[var(--shadow-sm)]">
+        <EmojiPickerLib
+          onEmojiClick={(data) => {
+            onSelect(data.emoji);
+            onClose();
+          }}
+          theme={theme}
+          width={320}
+          height={352}
+          lazyLoadEmojis
+          searchPlaceholder="Search emojis…"
+          previewConfig={{ showPreview: false }}
+        />
       </div>
     </>
   );

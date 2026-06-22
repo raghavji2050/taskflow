@@ -25,6 +25,8 @@ import {
 import { MomBuilderModal } from "@/components/chat/MomBuilderModal";
 import { ScheduleMessageDialog } from "@/components/chat/ScheduleMessageDialog";
 import { ScheduledMessageCard } from "@/components/chat/ScheduledMessageCard";
+import type { RichMessageDoc } from "@/lib/rich-message-types";
+import { hasRichFormatting } from "@/lib/rich-message-serialize";
 import type { ScheduledMessageClient } from "@/lib/scheduled-message-types";
 import { attachmentPlaceholderBody, isImageAttachment } from "@/lib/attachments";
 import { isDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
@@ -114,6 +116,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [body, setBody] = useState("");
+  const [bodyJson, setBodyJson] = useState<RichMessageDoc | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
@@ -144,8 +147,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const markReadInFlightRef = useRef(false);
   const fetchGenRef = useRef(0);
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentRef = useRef(0);
   const pendingSendsRef = useRef<
-    Map<string, { body: string; parentId: string | null; files: File[] }>
+    Map<string, { body: string; bodyJson: RichMessageDoc | null; parentId: string | null; files: File[] }>
   >(new Map());
 
   const SCROLL_BOTTOM_THRESHOLD = 120;
@@ -711,6 +715,10 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   }, [conversation?.id, fetchMessages]);
 
   useEffect(() => {
+    setTypingUserIds(new Set());
+  }, [conversation?.id]);
+
+  useEffect(() => {
     const convId = conversation?.id;
     if (!convId) return;
 
@@ -777,7 +785,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const handleTyping = useCallback(() => {
     const convId = conversation?.id;
     if (!convId || readOnly) return;
-    sendTypingIndicator(convId, true);
+    const now = Date.now();
+    if (now - lastTypingSentRef.current > 2000) {
+      lastTypingSentRef.current = now;
+      sendTypingIndicator(convId, true);
+    }
     if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
     typingStopTimerRef.current = setTimeout(() => sendTypingIndicator(convId, false), 2500);
   }, [conversation?.id, readOnly]);
@@ -786,11 +798,15 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     convId: string,
     text: string,
     parentId: string | null,
-    files: File[] = []
+    files: File[] = [],
+    json: RichMessageDoc | null = null
   ) => {
     if (files.length > 0) {
       const formData = new FormData();
       formData.set("body", text);
+      if (json && hasRichFormatting(json)) {
+        formData.set("bodyJson", JSON.stringify(json));
+      }
       if (parentId) formData.set("parentId", parentId);
       for (const file of files) {
         formData.append("files", file);
@@ -800,7 +816,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     return fetch(`/api/conversations/${convId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: text, parentId }),
+      body: JSON.stringify({
+        body: text,
+        bodyJson: json && hasRichFormatting(json) ? json : null,
+        parentId,
+      }),
     });
   };
 
@@ -823,7 +843,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           conversation.id,
           pending.body,
           pending.parentId,
-          pending.files
+          pending.files,
+          pending.bodyJson
         );
         const data = await res.json();
         if (res.ok) {
@@ -861,6 +882,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
   const handleScheduled = () => {
     setBody("");
+    setBodyJson(null);
     setReplyTo(null);
     setPendingFiles([]);
     if (conversation?.id) void fetchScheduledMessages(conversation.id);
@@ -890,10 +912,16 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     const parentId = replyTo?.id ?? null;
     const optimisticBody =
       text || attachmentPlaceholderBody(files.length, files.map((f) => f.name));
+    const optimisticBodyJson = bodyJson && hasRichFormatting(bodyJson) ? bodyJson : null;
     const optimisticAttachments =
       files.length > 0 ? buildOptimisticAttachments(tempId, files) : undefined;
 
-    pendingSendsRef.current.set(tempId, { body: text, parentId, files });
+    pendingSendsRef.current.set(tempId, {
+      body: text,
+      bodyJson: optimisticBodyJson,
+      parentId,
+      files,
+    });
     stickToBottomRef.current = true;
     setNewMessagesBelow(0);
     setMessages((prev) => [
@@ -902,6 +930,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         id: tempId,
         clientTempId: tempId,
         body: optimisticBody,
+        bodyJson: optimisticBodyJson,
         createdAt: new Date().toISOString(),
         user: { id: userId, name: session.user.name ?? "You", image: session.user.image ?? null },
         sendStatus: "sending" as const,
@@ -917,6 +946,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       },
     ]);
     setBody("");
+    setBodyJson(null);
     setReplyTo(null);
     setPendingFiles([]);
     if (conversation.id) sendTypingIndicator(conversation.id, false);
@@ -929,7 +959,13 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     });
 
     try {
-      const res = await sendMessageRequest(conversation.id, text, parentId, files);
+      const res = await sendMessageRequest(
+        conversation.id,
+        text,
+        parentId,
+        files,
+        optimisticBodyJson
+      );
       const data = await res.json();
 
       if (res.ok) {
@@ -995,14 +1031,21 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     }
   };
 
-  const handleEdit = async (messageId: string, newBody: string) => {
+  const handleEdit = async (
+    messageId: string,
+    newBody: string,
+    newBodyJson?: RichMessageDoc | null
+  ) => {
     if (!conversation || readOnly) return;
     const res = await fetch(
       `/api/conversations/${conversation.id}/messages/${messageId}`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: newBody }),
+        body: JSON.stringify({
+          body: newBody,
+          bodyJson: newBodyJson && hasRichFormatting(newBodyJson) ? newBodyJson : null,
+        }),
       }
     );
     if (res.ok) {
@@ -1126,6 +1169,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const typingNames = [...typingUserIds]
     .map((id) => conversation.participants.find((p) => p.id === id)?.name)
     .filter((n): n is string => Boolean(n));
+  const isTyping = typingNames.length > 0;
 
   const subtitle = formatPresenceSubtitle({
     type: conversation.type,
@@ -1243,8 +1287,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   ) : null;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col chat-thread-bg">
-      <div className="surface-panel sticky top-0 z-20 flex shrink-0 items-center gap-1 rounded-none border-b border-[var(--border)] px-3 py-2.5 md:gap-2 md:px-4 md:py-3">
+    <div className="grid h-full min-h-0 w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden chat-thread-bg">
+      <div className="min-h-0 shrink-0">
+      <div className="surface-panel relative z-20 flex shrink-0 items-center gap-1 rounded-none border-b border-[var(--border)] px-3 py-2.5 md:gap-2 md:px-4 md:py-3">
         {onBack && (
           <button
             type="button"
@@ -1275,9 +1320,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
             <p
               className={cn(
                 "truncate text-xs",
-                isDirect && directPeer && isUserOnline(directPeer.id)
-                  ? "font-medium text-[var(--status-online)]"
-                  : "text-[var(--muted)]"
+                isTyping
+                  ? "font-medium text-[var(--accent)]"
+                  : isDirect && directPeer && isUserOnline(directPeer.id)
+                    ? "font-medium text-[var(--status-online)]"
+                    : "text-[var(--muted)]"
               )}
             >
               {subtitle}
@@ -1344,7 +1391,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       />
 
       {pinned.length > 0 && (
-        <div className="border-b border-[var(--card-border)] bg-amber-500/5 px-4 py-2">
+        <div className="shrink-0 border-b border-[var(--card-border)] bg-amber-500/5 px-4 py-2">
           <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
             <Pin className="h-3 w-3" /> Pinned
           </p>
@@ -1362,10 +1409,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           </div>
         </div>
       )}
+      </div>
 
       <div
         className={cn(
-          "relative flex min-h-0 flex-1 flex-col",
+          "relative min-h-0 overflow-hidden",
           isThreadDragging && "cursor-copy"
         )}
         {...threadDragHandlers}
@@ -1373,7 +1421,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       {isThreadDragging && <ChatFileDropOverlay label="Drop to attach here" />}
       <div
         ref={scrollContainerRef}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-3 md:px-5 md:py-4"
+        className="h-full overflow-y-auto overscroll-contain px-4 py-3 md:px-5 md:py-4"
       >
         {hasMore && (
           <div className="mb-4 flex shrink-0 justify-center">
@@ -1477,8 +1525,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
       <div
         className={cn(
-          "shrink-0 border-t border-[var(--border)] px-2 py-2 safe-bottom md:px-4 md:py-3",
-          keyboardOpen ? "pb-2.5" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          "z-20 shrink-0 border-t border-[var(--border)] bg-[var(--chat-thread-bg)] px-2 pt-2 md:px-4 md:pt-3",
+          keyboardOpen ? "pb-2.5" : "pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4"
         )}
       >
         {scheduledMessages.length > 0 && (
@@ -1499,7 +1547,11 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         )}
         <ChatComposer
           body={body}
-          onBodyChange={setBody}
+          bodyJson={bodyJson}
+          onBodyChange={({ body: nextBody, bodyJson: nextJson }) => {
+            setBody(nextBody);
+            setBodyJson(nextJson);
+          }}
           onSend={handleSend}
           onSchedule={readOnly ? undefined : handleScheduleOpen}
           onTyping={handleTyping}

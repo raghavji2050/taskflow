@@ -1,6 +1,5 @@
 import {
   isPusherConfigured,
-  triggerConversationChannel,
   triggerUserChannel,
   triggerWorkspaceChannel,
 } from "@/lib/pusher-server";
@@ -507,18 +506,22 @@ export function setConversationTyping(
   typing: boolean,
   participantIds: string[]
 ) {
-  if (isPusherConfigured()) {
-    const event: TypingChangedEvent = {
-      type: "typing:changed",
-      conversationId,
-      userId,
-      typing,
-      at: new Date().toISOString(),
-    };
-    void triggerConversationChannel(conversationId, event);
-    return;
-  }
   getRealtimeHub().setTyping(userId, conversationId, typing, participantIds);
+
+  if (!isPusherConfigured()) return;
+
+  const event: TypingChangedEvent = {
+    type: "typing:changed",
+    conversationId,
+    userId,
+    typing,
+    at: new Date().toISOString(),
+  };
+
+  for (const participantId of participantIds) {
+    if (participantId === userId) continue;
+    void triggerUserChannel(participantId, event);
+  }
 }
 
 export function broadcastTimeEvent(

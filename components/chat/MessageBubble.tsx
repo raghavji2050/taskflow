@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { Forward, MoreHorizontal, Pencil, Pin, Reply, Smile, Trash2 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { ReactionPicker } from "@/components/chat/EmojiPicker";
-import { MessageBody } from "@/components/chat/MessageBody";
+import { RichMessageRenderer } from "@/components/chat/RichMessageRenderer";
+import { RichMessageEditor } from "@/components/chat/RichMessageEditor";
+import type { RichMessageDoc } from "@/lib/rich-message-types";
+import { plainTextToRichDoc } from "@/lib/rich-message-types";
 import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
 import type { MessageReceiptStatus } from "@/lib/chat-receipts";
 import { MessageAttachmentPreview } from "@/components/chat/MessageAttachmentPreview";
@@ -37,6 +40,7 @@ export type MessageSendStatus = "sending" | "failed" | "sent";
 export interface ChatMessage {
   id: string;
   body: string;
+  bodyJson?: unknown | null;
   createdAt: string;
   editedAt?: string | null;
   deletedAt?: string | null;
@@ -45,6 +49,7 @@ export interface ChatMessage {
   parent?: {
     id: string;
     body: string;
+    bodyJson?: unknown | null;
     deleted?: boolean;
     createdAt?: string;
     user: { id: string; name: string };
@@ -67,9 +72,9 @@ interface MessageBubbleProps {
   onReply?: (message: ChatMessage) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onPin?: (messageId: string, pinned: boolean) => void;
-  onEdit?: (messageId: string, body: string) => Promise<void>;
+  onEdit?: (messageId: string, body: string, bodyJson?: RichMessageDoc | null) => Promise<void>;
   onDelete?: (messageId: string) => Promise<void>;
-  mentionMembers?: { name: string }[];
+  mentionMembers?: { id?: string; name: string }[];
   showUserPresence?: boolean;
   hideAvatars?: boolean;
   onJumpToMessage?: (messageId: string, createdAt: string) => void;
@@ -120,6 +125,9 @@ export function MessageBubble({
   const [reactOpen, setReactOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(message.body);
+  const [editBodyJson, setEditBodyJson] = useState<RichMessageDoc | null>(
+    (message.bodyJson as RichMessageDoc | null) ?? null
+  );
   const [saving, setSaving] = useState(false);
 
   const isDeleted = Boolean(message.deletedAt);
@@ -132,15 +140,18 @@ export function MessageBubble({
   const canModify = isOwn && !isDeleted && !readOnly;
 
   useEffect(() => {
-    if (!editing) setEditBody(message.body);
-  }, [message.body, editing]);
+    if (!editing) {
+      setEditBody(message.body);
+      setEditBodyJson((message.bodyJson as RichMessageDoc | null) ?? null);
+    }
+  }, [message.body, message.bodyJson, editing]);
 
   const handleSaveEdit = async () => {
     const trimmed = editBody.trim();
     if (!trimmed || !onEdit) return;
     setSaving(true);
     try {
-      await onEdit(message.id, trimmed);
+      await onEdit(message.id, trimmed, editBodyJson);
       setEditing(false);
     } finally {
       setSaving(false);
@@ -265,8 +276,9 @@ export function MessageBubble({
                     {message.parent.deleted ? (
                       "Message deleted"
                     ) : (
-                      <MessageBody
+                      <RichMessageRenderer
                         body={message.parent.body}
+                        bodyJson={message.parent.bodyJson}
                         members={mentionMembers}
                         inline
                         className="truncate"
@@ -287,8 +299,9 @@ export function MessageBubble({
                 >
                   <p className="font-semibold">{message.parent.user.name}</p>
                   <div className="truncate text-xs">
-                    <MessageBody
+                    <RichMessageRenderer
                       body={message.parent.body}
+                      bodyJson={message.parent.bodyJson}
                       members={mentionMembers}
                       inline
                       className="truncate"
@@ -303,12 +316,19 @@ export function MessageBubble({
               <p>This message was deleted</p>
             ) : editing ? (
               <div className="space-y-2">
-                <textarea
-                  value={editBody}
-                  onChange={(e) => setEditBody(e.target.value)}
-                  rows={3}
-                  className="w-full resize-none rounded-lg border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm text-[var(--foreground)]"
-                  autoFocus
+                <RichMessageEditor
+                  bodyJson={editBodyJson ?? plainTextToRichDoc(editBody)}
+                  initialContent={editBodyJson ?? plainTextToRichDoc(editBody)}
+                  onChange={({ body, bodyJson }) => {
+                    setEditBody(body);
+                    setEditBodyJson(bodyJson);
+                  }}
+                  members={mentionMembers.map((m, i) => ({
+                    id: m.id ?? `member-${i}`,
+                    name: m.name,
+                  }))}
+                  showToolbar
+                  className="rounded-lg border border-[var(--card-border)] bg-[var(--background)]"
                 />
                 <div className="flex justify-end gap-1">
                   <Button
@@ -317,6 +337,7 @@ export function MessageBubble({
                     onClick={() => {
                       setEditing(false);
                       setEditBody(message.body);
+                      setEditBodyJson((message.bodyJson as RichMessageDoc | null) ?? null);
                     }}
                     disabled={saving}
                   >
@@ -343,11 +364,13 @@ export function MessageBubble({
                 )}
 
                 {showBody && (
-                  <MessageBody
+                  <RichMessageRenderer
                     body={message.body}
+                    bodyJson={message.bodyJson}
                     members={mentionMembers}
                     mentionClassName={isOwn ? "text-white bg-white/15" : undefined}
                     linkClassName={isOwn ? "text-white underline" : undefined}
+                    inOwnBubble={isOwn}
                   />
                 )}
 

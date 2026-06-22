@@ -454,6 +454,7 @@ model Message {
   conversationId String
   userId         String
   body           String    @default("") @db.Text
+  bodyJson       Json?
   parentId       String?
   forwardedFromId String?
   pinnedAt       DateTime?

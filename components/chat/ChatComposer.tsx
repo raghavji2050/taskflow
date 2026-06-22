@@ -2,15 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Clock, Paperclip, Plus, Send, Smile, X, ClipboardList } from "lucide-react";
-import { MentionInput, type MentionInputHandle } from "@/components/MentionInput";
+import {
+  RichMessageEditor,
+  type RichMessageEditorHandle,
+} from "@/components/chat/RichMessageEditor";
+import { RichMessageRenderer } from "@/components/chat/RichMessageRenderer";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import { ChatFileDropOverlay } from "@/components/chat/ChatFileDropOverlay";
 import { ScheduleButton } from "@/components/chat/ScheduleButton";
 import { Button } from "@/components/ui/Button";
 import { isImageAttachment } from "@/lib/attachments";
-import { chatFileKey, mergeChatUploadFiles, useFileDragDrop } from "@/lib/chat-file-drop";
+import { chatFileKey, useFileDragDrop } from "@/lib/chat-file-drop";
+import type { RichMessageDoc } from "@/lib/rich-message-types";
 import { cn } from "@/lib/utils";
-import { useMediaQuery } from "@/lib/use-visual-viewport";
 import type { ChatMessage } from "@/components/chat/MessageBubble";
 
 interface Member {
@@ -20,7 +24,8 @@ interface Member {
 
 interface ChatComposerProps {
   body: string;
-  onBodyChange: (value: string) => void;
+  bodyJson: RichMessageDoc | null;
+  onBodyChange: (value: { body: string; bodyJson: RichMessageDoc | null }) => void;
   onSend: (opts?: { files?: File[] }) => void;
   onSchedule?: () => void;
   onTyping?: () => void;
@@ -78,6 +83,7 @@ function PendingFileChip({
 
 export function ChatComposer({
   body,
+  bodyJson,
   onBodyChange,
   onSend,
   onSchedule,
@@ -96,8 +102,7 @@ export function ChatComposer({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<MentionInputHandle>(null);
-  const isMobile = useMediaQuery("(max-width: 767px)");
+  const editorRef = useRef<RichMessageEditorHandle>(null);
 
   const canSend = Boolean(body.trim() || pendingFiles.length > 0) && !readOnly;
   const canSchedule = canSend && Boolean(onSchedule);
@@ -110,21 +115,16 @@ export function ChatComposer({
 
   useEffect(() => {
     if (!replyTo) return;
-    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    const id = requestAnimationFrame(() => editorRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [replyTo?.id]);
 
   const handleSend = () => {
     if (!canSend) return;
     onSend({ files: pendingFiles.length > 0 ? pendingFiles : undefined });
+    editorRef.current?.clear();
     if (fileRef.current) fileRef.current.value = "";
-    requestAnimationFrame(() => inputRef.current?.focus());
-  };
-
-  const handleBodyChange = (value: string) => {
-    if (composerDisabled) return;
-    onBodyChange(value);
-    onTyping?.();
+    requestAnimationFrame(() => editorRef.current?.focus());
   };
 
   if (readOnly) {
@@ -145,7 +145,14 @@ export function ChatComposer({
             <p className="text-[10px] font-semibold text-[var(--accent)]">
               Replying to {replyTo.user.name}
             </p>
-            <p className="truncate text-xs text-[var(--muted)]">{replyTo.body}</p>
+            <div className="truncate text-xs text-[var(--muted)]">
+              <RichMessageRenderer
+                body={replyTo.body}
+                bodyJson={replyTo.bodyJson}
+                inline
+                className="truncate"
+              />
+            </div>
           </div>
           <button
             type="button"
@@ -170,7 +177,7 @@ export function ChatComposer({
         </div>
       )}
 
-      <div className="relative flex min-w-0 flex-1 items-end gap-1 rounded-3xl surface-panel border border-[var(--border)] p-1.5 md:gap-2 md:p-2">
+      <div className="relative flex min-w-0 flex-1 items-center gap-1 rounded-3xl surface-panel border border-[var(--border)] p-1.5 md:gap-2 md:p-2">
         <div className="relative shrink-0 md:hidden">
           <button
             type="button"
@@ -241,9 +248,15 @@ export function ChatComposer({
               </div>
             </>
           )}
+          {emojiOpen && (
+            <EmojiPicker
+              onSelect={(emoji) => editorRef.current?.insertEmoji(emoji)}
+              onClose={() => setEmojiOpen(false)}
+            />
+          )}
         </div>
 
-        <div className="relative hidden shrink-0 gap-0.5 md:flex">
+        <div className="relative hidden shrink-0 items-center gap-0.5 md:flex">
           <button
             type="button"
             disabled={composerDisabled}
@@ -274,17 +287,15 @@ export function ChatComposer({
               <ClipboardList className="h-4 w-4 md:h-5 md:w-5" />
             </button>
           )}
-          {onSchedule && (
-            <ScheduleButton disabled={!canSchedule} onClick={onSchedule} />
+          {onSchedule && <ScheduleButton disabled={!canSchedule} onClick={onSchedule} />}
+          {emojiOpen && (
+            <EmojiPicker
+              onSelect={(emoji) => editorRef.current?.insertEmoji(emoji)}
+              onClose={() => setEmojiOpen(false)}
+            />
           )}
         </div>
 
-        {emojiOpen && (
-          <EmojiPicker
-            onSelect={(emoji) => onBodyChange(body + emoji)}
-            onClose={() => setEmojiOpen(false)}
-          />
-        )}
         <input
           ref={fileRef}
           type="file"
@@ -297,22 +308,18 @@ export function ChatComposer({
           }}
         />
 
-        <MentionInput
-          ref={inputRef}
-          value={body}
-          onChange={handleBodyChange}
+        <RichMessageEditor
+          ref={editorRef}
+          bodyJson={bodyJson}
+          onChange={onBodyChange}
           onSubmit={handleSend}
+          onTyping={onTyping}
           disabled={composerDisabled}
           members={showMentions ? members : []}
           currentUserId={currentUserId}
-          placeholder={
-            isMobile
-              ? "Message…"
-              : showMentions
-                ? "Type a message… Use @ to mention"
-                : "Type a message… Drag files here to attach"
-          }
-          className="min-h-[2.25rem] flex-1 rounded-2xl border-0 bg-transparent px-2.5 py-2 text-sm focus:outline-none md:min-h-[2.5rem] md:px-3"
+          placeholder="Type a message"
+          showToolbar={false}
+          className="min-h-[2.25rem] min-w-0 flex-1 self-center overflow-hidden rounded-2xl border-0 bg-transparent px-2.5 py-1.5 md:min-h-[2.5rem] md:px-3 md:py-2"
         />
 
         <Button

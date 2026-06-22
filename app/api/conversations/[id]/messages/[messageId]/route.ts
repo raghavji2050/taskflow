@@ -3,6 +3,8 @@ import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { updateMessageSchema } from "@/lib/validations";
 import { canAccessConversation, canPostToConversation } from "@/lib/chat-access";
 import { deleteMessage, getMessageInConversation, updateMessage } from "@/lib/messages";
+import { normalizeMessageContent } from "@/lib/rich-message-serialize";
+import type { RichMessageDoc } from "@/lib/rich-message-types";
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -22,12 +24,26 @@ export async function PATCH(request: Request, context: RouteContext) {
     const msg = await getMessageInConversation(messageId, id);
     if (!msg) return NextResponse.json({ error: "Message not found" }, { status: 404 });
 
-    const { body } = updateMessageSchema.parse(await request.json());
+    const parsed = updateMessageSchema.parse(await request.json());
+    let bodyJson: RichMessageDoc | null = null;
+    try {
+      const normalized = normalizeMessageContent({
+        body: parsed.body,
+        bodyJson: parsed.bodyJson,
+      });
+      bodyJson = normalized.bodyJson;
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Invalid formatting" },
+        { status: 400 }
+      );
+    }
     const message = await updateMessage({
       messageId,
       conversationId: id,
       userId: user.id,
-      body,
+      body: parsed.body,
+      bodyJson,
     });
 
     return NextResponse.json({ message });

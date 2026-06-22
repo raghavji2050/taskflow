@@ -16,6 +16,8 @@ import {
   parseChatUploadFiles,
   validateChatUploadFiles,
 } from "@/lib/attachments";
+import { normalizeMessageContent } from "@/lib/rich-message-serialize";
+import type { RichMessageDoc } from "@/lib/rich-message-types";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -69,21 +71,31 @@ export async function POST(request: Request, context: RouteContext) {
     const { conversation } = participant;
     const contentType = request.headers.get("content-type") ?? "";
     let body = "";
+    let bodyJson: unknown | null = null;
     let parentId: string | null = null;
     let files: File[] = [];
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
       body = String(formData.get("body") ?? "");
+      const rawJson = formData.get("bodyJson");
+      if (rawJson) {
+        try {
+          bodyJson = JSON.parse(String(rawJson));
+        } catch {
+          return NextResponse.json({ error: "Invalid bodyJson" }, { status: 400 });
+        }
+      }
       parentId = formData.get("parentId") ? String(formData.get("parentId")) : null;
       files = parseChatUploadFiles(formData);
     } else {
       const data = messageSchema.parse(await request.json());
       body = data.body ?? "";
+      bodyJson = data.bodyJson ?? null;
       parentId = data.parentId ?? null;
     }
 
-    if (!body.trim() && files.length === 0) {
+    if (!body.trim() && !bodyJson && files.length === 0) {
       return NextResponse.json({ error: "Message or attachment required" }, { status: 400 });
     }
 
@@ -99,6 +111,18 @@ export async function POST(request: Request, context: RouteContext) {
         files.map((f) => f.name)
       );
 
+    let parsedBodyJson: RichMessageDoc | null = null;
+    if (bodyJson) {
+      try {
+        parsedBodyJson = normalizeMessageContent({ body: messageBody, bodyJson }).bodyJson;
+      } catch (error) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : "Invalid formatting" },
+          { status: 400 }
+        );
+      }
+    }
+
     const conversationTitle = getConversationDisplayName(conversation, user.id);
     const mentionCandidates = conversation.participants.map((p) => p.user);
 
@@ -107,6 +131,7 @@ export async function POST(request: Request, context: RouteContext) {
       userId: user.id,
       userName: user.name,
       body: messageBody,
+      bodyJson: parsedBodyJson,
       parentId,
       conversationTitle,
       mentionCandidates,

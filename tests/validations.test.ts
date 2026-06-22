@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { registerSchema, taskSchema, loginSchema, scheduledMessageCreateSchema } from "@/lib/validations";
+import { registerSchema, taskSchema, loginSchema, scheduledMessageCreateSchema, messageSchema, updateMessageSchema } from "@/lib/validations";
 
 describe("validations", () => {
   it("validates register input", () => {
@@ -93,5 +93,34 @@ describe("validations", () => {
       timezone: "UTC",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("validates plain message schema", () => {
+    const result = messageSchema.safeParse({ body: "Hello" });
+    expect(result.success).toBe(true);
+  });
+
+  it("validates message schema with bodyJson", () => {
+    const result = messageSchema.safeParse({
+      body: "Hello",
+      bodyJson: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Hello", marks: [{ type: "bold" }] }],
+          },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("validates update message schema with bodyJson", () => {
+    const result = updateMessageSchema.safeParse({
+      body: "Updated",
+      bodyJson: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Updated" }] }] },
+    });
+    expect(result.success).toBe(true);
   });
 });

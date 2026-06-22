@@ -52,6 +52,7 @@ export const messageInclude = {
     select: {
       id: true,
       body: true,
+      bodyJson: true,
       deletedAt: true,
       createdAt: true,
       user: { select: { id: true, name: true } },
@@ -134,6 +135,7 @@ type ForwardedFromSource = {
 type MessageWithRelations = {
   id: string;
   body: string;
+  bodyJson?: import("@prisma/client").Prisma.JsonValue | null;
   createdAt: Date;
   updatedAt: Date;
   pinnedAt: Date | null;
@@ -143,6 +145,7 @@ type MessageWithRelations = {
   parent?: {
     id: string;
     body: string;
+    bodyJson?: import("@prisma/client").Prisma.JsonValue | null;
     deletedAt?: Date | null;
     createdAt: Date;
     user: { id: string; name: string };
@@ -213,6 +216,7 @@ export function formatMessageForClient(message: MessageWithRelations, viewerUser
   return {
     id: message.id,
     body: deleted ? "" : message.body,
+    bodyJson: deleted ? null : (message.bodyJson ?? null),
     createdAt: message.createdAt.toISOString(),
     updatedAt: message.updatedAt.toISOString(),
     pinnedAt: message.pinnedAt?.toISOString() ?? null,
@@ -223,6 +227,7 @@ export function formatMessageForClient(message: MessageWithRelations, viewerUser
       ? {
           id: message.parent.id,
           body: message.parent.deletedAt ? "" : message.parent.body,
+          bodyJson: message.parent.deletedAt ? null : (message.parent.bodyJson ?? null),
           deleted: Boolean(message.parent.deletedAt),
           createdAt: message.parent.createdAt.toISOString(),
           user: message.parent.user,

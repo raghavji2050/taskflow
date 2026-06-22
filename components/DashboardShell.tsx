@@ -21,17 +21,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <PushBootstrap />
         <ChatNotificationCatchup />
         <AmbientBackground>
-          <div className="app-mesh-content flex min-h-[100dvh] flex-col lg:flex-row">
+          <div className="app-mesh-content flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden lg:flex-row">
             <AppSidebar />
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <Suspense fallback={null}>
                 <TeamContextBar />
               </Suspense>
               <TimeTrackingBar />
               <IdleTimerProvider />
               <TimerReminderWatcher />
-              <main className="flex-1 overflow-auto max-lg:touch-pan-y">
-                <div className="dashboard-main px-3 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-6">
+              <main className="flex min-h-0 flex-1 flex-col overflow-hidden max-lg:touch-pan-y">
+                <div className="dashboard-main flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-6">
                   {children}
                 </div>
               </main>

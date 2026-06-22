@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       userId: user.id,
       userName: user.name ?? "Someone",
       body: data.body,
+      bodyJson: data.bodyJson as import("@/lib/rich-message-types").RichMessageDoc | null,
       conversationTitle,
       mentionCandidates,
     });
