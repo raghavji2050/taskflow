@@ -11,6 +11,7 @@ import { notifyParticipants } from "@/lib/message-notify";
 import { saveMessageAttachmentFile } from "@/lib/message-upload";
 import { normalizeMessageContent } from "@/lib/rich-message-serialize";
 import type { RichMessageDoc } from "@/lib/rich-message-types";
+import { assertCanEditMessage } from "@/lib/message-edit";
 import { fetchGiphyAsFile } from "@/lib/giphy";
 import { attachmentPlaceholderBody } from "@/lib/attachments";
 
