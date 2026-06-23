@@ -344,6 +344,14 @@ async function getUnreadCount(
   });
 }
 
+export async function getConversationUnreadCount(conversationId: string, userId: string) {
+  const row = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId } },
+    select: { lastReadAt: true, clearedAt: true },
+  });
+  return getUnreadCount(conversationId, userId, row?.lastReadAt ?? null, row?.clearedAt ?? null);
+}
+
 async function getLastVisibleMessage(conversationId: string, clearedAt: Date | null) {
   return prisma.message.findFirst({
     where: {

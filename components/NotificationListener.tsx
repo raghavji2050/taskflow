@@ -6,6 +6,10 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { getActiveConversationId } from "@/lib/active-chat";
 import { showBrowserNotification } from "@/lib/browser-notifications";
+import {
+  bumpChatNotificationCount,
+  formatChatPushNotification,
+} from "@/lib/chat-push-notification";
 import { hasActivePushSubscription } from "@/lib/push-client";
 
 interface NotificationDetail {
@@ -22,6 +26,7 @@ interface MessageDetail {
   messageId?: string;
   senderId?: string;
   preview?: string;
+  conversationTitle?: string;
   message?: { user?: { name?: string } };
 }
 
@@ -104,10 +109,18 @@ export function NotificationListener() {
       if (detail.conversationId === getActiveConversationId()) return;
 
       const senderName = detail.message?.user?.name ?? "New message";
+      const preview = detail.preview ?? "New message";
 
       if (document.hidden) {
-        maybeShowOsNotification(senderName, {
-          body: detail.preview,
+        const unreadCount = bumpChatNotificationCount(detail.conversationId);
+        const { title, body } = formatChatPushNotification({
+          unreadCount,
+          senderName,
+          conversationTitle: detail.conversationTitle ?? senderName,
+          preview,
+        });
+        maybeShowOsNotification(title, {
+          body,
           url: chatUrl(detail.conversationId, detail.messageId),
           conversationId: detail.conversationId,
           messageId: detail.messageId,

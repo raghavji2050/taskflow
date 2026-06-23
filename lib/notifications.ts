@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { broadcastNotification } from "@/lib/realtime";
 import { sendPushToUser } from "@/lib/push";
+import { formatChatPushNotification } from "@/lib/chat-push-notification";
 
 function chatPushUrl(conversationId?: string, messageId?: string) {
   if (!conversationId) return "/dashboard/messages";
@@ -16,13 +17,21 @@ export async function createNotification(params: {
   inviteId?: string;
   conversationId?: string;
   messageId?: string;
+  conversationTitle?: string;
+  unreadCount?: number;
 }) {
   const type = params.type ?? "general";
 
   if (type === "message") {
+    const { title, body } = formatChatPushNotification({
+      unreadCount: params.unreadCount ?? 1,
+      senderName: params.title,
+      conversationTitle: params.conversationTitle ?? params.title,
+      preview: params.body,
+    });
     await sendPushToUser(params.userId, {
-      title: params.title,
-      body: params.body,
+      title,
+      body,
       url: chatPushUrl(params.conversationId, params.messageId),
       conversationId: params.conversationId,
       messageId: params.messageId,

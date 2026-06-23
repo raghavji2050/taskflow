@@ -2,6 +2,15 @@ import type { ChatMessage } from "@/components/chat/MessageBubble";
 
 const MATCH_WINDOW_MS = 60_000;
 
+export function sortChatMessages(messages: ChatMessage[]): ChatMessage[] {
+  return [...messages].sort((a, b) => {
+    const byTime =
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (byTime !== 0) return byTime;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 function serverHasMatchingMessage(server: ChatMessage[], pending: ChatMessage): boolean {
   return server.some((s) => {
     if (s.id === pending.id) return true;
@@ -40,10 +49,7 @@ export function mergeMessagesFromFetch(
   );
 
   const combined = [...serverMessages, ...pending, ...staleLocal];
-  combined.sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
-  return combined;
+  return sortChatMessages(combined);
 }
 
 export function replaceSentMessage(
@@ -53,12 +59,14 @@ export function replaceSentMessage(
 ): ChatMessage[] {
   const withoutTemp = prev.filter((m) => m.clientTempId !== clientTempId);
   if (withoutTemp.some((m) => m.id === sent.id)) {
-    return withoutTemp.map((m) => (m.id === sent.id ? sent : m));
+    return sortChatMessages(withoutTemp.map((m) => (m.id === sent.id ? sent : m)));
   }
   if (prev.some((m) => m.clientTempId === clientTempId)) {
-    return prev.map((m) => (m.clientTempId === clientTempId ? sent : m));
+    return sortChatMessages(
+      prev.map((m) => (m.clientTempId === clientTempId ? sent : m))
+    );
   }
-  return [...withoutTemp, sent];
+  return sortChatMessages([...withoutTemp, sent]);
 }
 
 export function mergeMessageUpdate(existing: ChatMessage, updated: ChatMessage): ChatMessage {

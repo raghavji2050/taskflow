@@ -57,6 +57,7 @@ export interface MessageEvent {
   messageId: string;
   senderId: string;
   preview: string;
+  conversationTitle?: string;
   recipientId: string;
   message?: Record<string, unknown>;
   at: string;
@@ -410,6 +411,7 @@ export function broadcastMessageEvent(
     messageId: params.messageId,
     senderId: params.senderId,
     preview: params.preview,
+    conversationTitle: params.conversationTitle,
     recipientId: params.recipientId,
     message: params.message,
     at: params.at ?? new Date().toISOString(),
@@ -437,6 +439,7 @@ export function broadcastMessageToConversation(
       messageId: params.messageId,
       senderId: params.actorId,
       preview: params.preview,
+      conversationTitle: params.conversationTitle,
       recipientId,
       message: params.message,
       at,

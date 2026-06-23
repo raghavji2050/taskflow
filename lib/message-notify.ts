@@ -2,6 +2,7 @@ import { createNotification } from "@/lib/notifications";
 import { parseMentionsFromBody } from "@/lib/mentions";
 import { broadcastMessageToConversation } from "@/lib/realtime";
 import { getConversationParticipantIds } from "@/lib/chat-access";
+import { getConversationUnreadCount } from "@/lib/conversations";
 import type { formatMessageForClient } from "@/lib/message-format";
 
 export async function notifyParticipants(params: {
@@ -24,6 +25,7 @@ export async function notifyParticipants(params: {
     messageId: params.messageId,
     actorId: params.userId,
     preview: params.preview,
+    conversationTitle: params.conversationTitle,
     type: eventType,
     message: params.message,
   });
@@ -39,6 +41,7 @@ async function deliverParticipantNotifications(
     userId: string;
     userName: string;
     preview: string;
+    conversationTitle: string;
     body: string;
     messageId: string;
     mentionCandidates: { id: string; name: string }[];
@@ -52,16 +55,19 @@ async function deliverParticipantNotifications(
   await Promise.all(
     otherParticipantIds
       .filter((participantId) => !mentionedIds.has(participantId))
-      .map((participantId) =>
-        createNotification({
+      .map(async (participantId) => {
+        const unreadCount = await getConversationUnreadCount(params.conversationId, participantId);
+        return createNotification({
           userId: participantId,
           title: params.userName,
           body: params.preview,
           type: "message",
           conversationId: params.conversationId,
           messageId: params.messageId,
-        })
-      )
+          conversationTitle: params.conversationTitle,
+          unreadCount,
+        });
+      })
   );
 
   await Promise.all(

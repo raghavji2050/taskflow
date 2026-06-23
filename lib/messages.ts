@@ -52,7 +52,7 @@ export async function listMessages(
       conversationId,
       ...messageTimeFilter(clearedAt, options.cursor),
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
     include: messageInclude,
   });
@@ -102,7 +102,7 @@ export async function searchMessages(
       body: { contains: query },
       ...afterCleared(clearedAt),
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit,
     include: messageInclude,
   });
@@ -188,7 +188,7 @@ export async function listRecentMessagesGlobal(userId: string, limit = 15) {
       conversationId: { in: convIds },
       deletedAt: null,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit * 3,
     include: globalMessageInclude,
   });
@@ -208,7 +208,7 @@ export async function searchMessagesGlobal(userId: string, query: string, limit 
       deletedAt: null,
       ...messageTextSearchFilter(query),
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit * 3,
     include: globalMessageInclude,
   });
@@ -227,7 +227,7 @@ export async function listMessageDates(conversationId: string, userId: string) {
       ...afterCleared(clearedAt),
     },
     select: { createdAt: true },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 
   return [...new Set(rows.map((r) => r.createdAt.toISOString().slice(0, 10)))];
@@ -248,7 +248,7 @@ export async function getMessagesForDate(
       createdAt: { gte: start, lte: end },
       ...afterCleared(clearedAt),
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     include: messageInclude,
   });
 

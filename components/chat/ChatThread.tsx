@@ -41,6 +41,7 @@ import {
   mergeMessageUpdate,
   mergeMessagesFromFetch,
   replaceSentMessage,
+  sortChatMessages,
 } from "@/lib/chat-message-merge";
 import { cn } from "@/lib/utils";
 import { useMediaQuery, useVisualViewport } from "@/lib/use-visual-viewport";
@@ -568,7 +569,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
             if (withoutOptimistic.some((m) => m.id === incoming.id)) {
               return withReceipts(withoutOptimistic);
             }
-            return withReceipts([...withoutOptimistic, incoming]);
+            return withReceipts(sortChatMessages([...withoutOptimistic, incoming]));
           });
           return;
         }
@@ -607,16 +608,18 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
           if (withoutOptimistic.some((m) => m.id === merged.id)) {
             return withReceipts(
-              withoutOptimistic.map((m) => {
-                if (m.id !== merged.id) return m;
-                const mAtt = m.attachments?.length ?? 0;
-                const mergedAtt = merged.attachments?.length ?? 0;
-                return mergedAtt >= mAtt ? merged : m;
-              })
+              sortChatMessages(
+                withoutOptimistic.map((m) => {
+                  if (m.id !== merged.id) return m;
+                  const mAtt = m.attachments?.length ?? 0;
+                  const mergedAtt = merged.attachments?.length ?? 0;
+                  return mergedAtt >= mAtt ? merged : m;
+                })
+              )
             );
           }
 
-          return withReceipts([...withoutOptimistic, merged]);
+          return withReceipts(sortChatMessages([...withoutOptimistic, merged]));
         });
 
         if (shouldStick) {
