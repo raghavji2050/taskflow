@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Clock, Paperclip, Plus, Send, Smile, X, ClipboardList } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Check, Clock, Paperclip, Plus, Send, Smile, X, ClipboardList, Pencil } from "lucide-react";
 import {
   RichMessageEditor,
   type RichMessageEditorHandle,
@@ -10,16 +11,20 @@ import { RichMessageRenderer } from "@/components/chat/RichMessageRenderer";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
 import { ChatFileDropOverlay } from "@/components/chat/ChatFileDropOverlay";
 import { ScheduleButton } from "@/components/chat/ScheduleButton";
-import { Button } from "@/components/ui/Button";
+import { ComposerLinkPreview } from "@/components/chat/MessageLinkPreview";
 import { isImageAttachment } from "@/lib/attachments";
 import { chatFileKey, useFileDragDrop } from "@/lib/chat-file-drop";
 import type { RichMessageDoc } from "@/lib/rich-message-types";
+import { plainTextToRichDoc } from "@/lib/rich-message-types";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/lib/use-visual-viewport";
 import type { ChatMessage } from "@/components/chat/MessageBubble";
 
 interface Member {
   id: string;
   name: string;
+  image?: string | null;
+  email?: string;
 }
 
 interface ChatComposerProps {
@@ -35,10 +40,14 @@ interface ChatComposerProps {
   currentUserId?: string;
   replyTo?: ChatMessage | null;
   onCancelReply?: () => void;
+  editingMessage?: ChatMessage | null;
+  onCancelEdit?: () => void;
   onOpenMom?: () => void;
   pendingFiles: File[];
   onAddFiles: (files: File[]) => void;
   onRemoveFile: (file: File) => void;
+  conversationId?: string;
+  allowTagAll?: boolean;
 }
 
 function PendingFileChip({
@@ -81,6 +90,32 @@ function PendingFileChip({
   );
 }
 
+function ComposerExtraAction({
+  label,
+  icon,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--surface-hover)] disabled:pointer-events-none disabled:opacity-40"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-hover)] text-[var(--muted)] [&_svg]:h-4 [&_svg]:w-4">
+        {icon}
+      </span>
+      {label}
+    </button>
+  );
+}
+
 export function ChatComposer({
   body,
   bodyJson,
@@ -94,19 +129,33 @@ export function ChatComposer({
   currentUserId,
   replyTo,
   onCancelReply,
+  editingMessage,
+  onCancelEdit,
   onOpenMom,
   pendingFiles,
   onAddFiles,
   onRemoveFile,
+  conversationId,
+  allowTagAll = false,
 }: ChatComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const fileRef = useRef<HTMLInputElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const editorRef = useRef<RichMessageEditorHandle>(null);
 
-  const canSend = Boolean(body.trim() || pendingFiles.length > 0) && !readOnly;
-  const canSchedule = canSend && Boolean(onSchedule);
+  const isEditing = Boolean(editingMessage);
+  const canSend = Boolean(body.trim() || (!isEditing && pendingFiles.length > 0)) && !readOnly;
+  const canSchedule = canSend && Boolean(onSchedule) && !isEditing;
   const composerDisabled = readOnly;
+  const editorInitialContent = isEditing
+    ? (bodyJson ?? plainTextToRichDoc(body || editingMessage!.body))
+    : undefined;
+  const editorKey = isEditing
+    ? `edit-${editingMessage!.id}`
+    : (conversationId ?? "composer");
 
   const { isDragging, dragHandlers } = useFileDragDrop({
     disabled: composerDisabled,
@@ -114,16 +163,90 @@ export function ChatComposer({
   });
 
   useEffect(() => {
-    if (!replyTo) return;
+    if (!replyTo && !editingMessage) return;
     const id = requestAnimationFrame(() => editorRef.current?.focus());
     return () => cancelAnimationFrame(id);
-  }, [replyTo?.id]);
+  }, [replyTo?.id, editingMessage?.id]);
+
+  useEffect(() => setMenuMounted(true), []);
+
+  useEffect(() => {
+    if (!extrasOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExtrasOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [extrasOpen]);
+
+  const closeExtras = () => setExtrasOpen(false);
+
+  const mobileExtrasSheet =
+    extrasOpen && isMobile && menuMounted
+      ? createPortal(
+          <div className="fixed inset-0 z-[250] flex flex-col justify-end" role="presentation">
+            <div
+              className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
+              onClick={closeExtras}
+              aria-hidden="true"
+            />
+            <div
+              className="relative z-10 overflow-hidden rounded-t-2xl border-t border-[var(--border)] bg-[var(--card)] safe-bottom"
+              role="menu"
+            >
+              <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-[var(--border)]" />
+              <ComposerExtraAction
+                label="Emoji"
+                icon={<Smile />}
+                onClick={() => {
+                  closeExtras();
+                  setEmojiOpen(true);
+                }}
+              />
+              {!isEditing && (
+                <ComposerExtraAction
+                  label="Attach file"
+                  icon={<Paperclip />}
+                  onClick={() => {
+                    closeExtras();
+                    fileRef.current?.click();
+                  }}
+                />
+              )}
+              {onOpenMom && (
+                <ComposerExtraAction
+                  label="Minutes of meeting"
+                  icon={<ClipboardList />}
+                  onClick={() => {
+                    closeExtras();
+                    onOpenMom();
+                  }}
+                />
+              )}
+              {onSchedule && !isEditing && (
+                <ComposerExtraAction
+                  label="Schedule message"
+                  icon={<Clock />}
+                  disabled={!canSchedule}
+                  onClick={() => {
+                    closeExtras();
+                    onSchedule();
+                  }}
+                />
+              )}
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
 
   const handleSend = () => {
     if (!canSend) return;
-    onSend({ files: pendingFiles.length > 0 ? pendingFiles : undefined });
-    editorRef.current?.clear();
-    if (fileRef.current) fileRef.current.value = "";
+    onSend({ files: !isEditing && pendingFiles.length > 0 ? pendingFiles : undefined });
+    if (!isEditing) {
+      editorRef.current?.clear();
+      if (fileRef.current) fileRef.current.value = "";
+    }
     requestAnimationFrame(() => editorRef.current?.focus());
   };
 
@@ -135,11 +258,38 @@ export function ChatComposer({
 
   return (
     <div
-      className={cn("relative space-y-2", isDragging && "cursor-copy")}
+      className={cn("relative w-full min-w-0 max-w-full space-y-2", isDragging && "cursor-copy")}
       {...dragHandlers}
     >
       {isDragging && <ChatFileDropOverlay />}
-      {replyTo && (
+      {editingMessage && (
+        <div className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-hover)] px-3 py-2">
+          <div className="min-w-0 flex-1 border-l-2 border-amber-500 pl-2">
+            <p className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+              <Pencil className="h-3 w-3" />
+              Editing message
+            </p>
+            <div className="truncate text-xs text-[var(--muted)]">
+              <RichMessageRenderer
+                body={editingMessage.body}
+                bodyJson={editingMessage.bodyJson}
+                inline
+                className="truncate"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="shrink-0 rounded p-1 text-[var(--muted)] hover:bg-[var(--card)]"
+            aria-label="Cancel edit"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {replyTo && !editingMessage && (
         <div className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-hover)] px-3 py-2">
           <div className="min-w-0 flex-1 border-l-2 border-[var(--accent)] pl-2">
             <p className="text-[10px] font-semibold text-[var(--accent)]">
@@ -165,7 +315,7 @@ export function ChatComposer({
         </div>
       )}
 
-      {pendingFiles.length > 0 && (
+      {pendingFiles.length > 0 && !isEditing && (
         <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface-hover)]/50 p-2">
           {pendingFiles.map((file) => (
             <PendingFileChip
@@ -177,87 +327,31 @@ export function ChatComposer({
         </div>
       )}
 
-      <div className="relative flex min-w-0 flex-1 items-center gap-1 rounded-3xl surface-panel border border-[var(--border)] p-1.5 md:gap-2 md:p-2">
+      {body.trim() && !isEditing && (
+        <ComposerLinkPreview body={body} bodyJson={bodyJson} />
+      )}
+
+      <div className="relative flex w-full min-w-0 max-w-full items-center gap-0.5 rounded-3xl surface-panel border border-[var(--border)] p-1 sm:gap-1 sm:p-1.5 md:gap-2 md:p-2">
         <div className="relative shrink-0 md:hidden">
           <button
             type="button"
             disabled={composerDisabled}
             onClick={() => setExtrasOpen((v) => !v)}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              "flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8",
+              extrasOpen && "bg-[var(--surface-hover)] text-[var(--foreground)]"
+            )}
             aria-label="More options"
             aria-expanded={extrasOpen}
           >
             <Plus className={cn("h-4 w-4 transition-transform", extrasOpen && "rotate-45")} />
           </button>
-          {extrasOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setExtrasOpen(false)} />
-              <div className="absolute bottom-full left-0 z-50 mb-1 flex items-center gap-0.5 rounded-xl surface-panel border border-[var(--border)] p-1 shadow-[var(--shadow-sm)]">
-                <button
-                  type="button"
-                  disabled={composerDisabled}
-                  onClick={() => {
-                    setExtrasOpen(false);
-                    setEmojiOpen(true);
-                  }}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-                  aria-label="Add emoji"
-                >
-                  <Smile className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  disabled={composerDisabled}
-                  onClick={() => {
-                    setExtrasOpen(false);
-                    fileRef.current?.click();
-                  }}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-                  aria-label="Attach file"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </button>
-                {onOpenMom && (
-                  <button
-                    type="button"
-                    disabled={composerDisabled}
-                    onClick={() => {
-                      setExtrasOpen(false);
-                      onOpenMom();
-                    }}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-                    aria-label="Create minutes of meeting"
-                  >
-                    <ClipboardList className="h-4 w-4" />
-                  </button>
-                )}
-                {onSchedule && (
-                  <button
-                    type="button"
-                    disabled={!canSchedule}
-                    onClick={() => {
-                      setExtrasOpen(false);
-                      onSchedule();
-                    }}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:opacity-50"
-                    aria-label="Schedule message"
-                  >
-                    <Clock className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-          {emojiOpen && (
-            <EmojiPicker
-              onSelect={(emoji) => editorRef.current?.insertEmoji(emoji)}
-              onClose={() => setEmojiOpen(false)}
-            />
-          )}
         </div>
+        {mobileExtrasSheet}
 
         <div className="relative hidden shrink-0 items-center gap-0.5 md:flex">
           <button
+            ref={emojiButtonRef}
             type="button"
             disabled={composerDisabled}
             onClick={() => setEmojiOpen((v) => !v)}
@@ -266,6 +360,7 @@ export function ChatComposer({
           >
             <Smile className="h-4 w-4 md:h-5 md:w-5" />
           </button>
+          {!isEditing && (
           <button
             type="button"
             disabled={composerDisabled}
@@ -275,6 +370,7 @@ export function ChatComposer({
           >
             <Paperclip className="h-4 w-4 md:h-5 md:w-5" />
           </button>
+          )}
           {onOpenMom && (
             <button
               type="button"
@@ -287,14 +383,16 @@ export function ChatComposer({
               <ClipboardList className="h-4 w-4 md:h-5 md:w-5" />
             </button>
           )}
-          {onSchedule && <ScheduleButton disabled={!canSchedule} onClick={onSchedule} />}
-          {emojiOpen && (
-            <EmojiPicker
-              onSelect={(emoji) => editorRef.current?.insertEmoji(emoji)}
-              onClose={() => setEmojiOpen(false)}
-            />
-          )}
+          {onSchedule && !isEditing && <ScheduleButton disabled={!canSchedule} onClick={onSchedule} />}
         </div>
+
+        {emojiOpen && (
+          <EmojiPicker
+            anchorRef={isMobile ? undefined : emojiButtonRef}
+            onSelect={(emoji) => editorRef.current?.insertEmoji(emoji)}
+            onClose={() => setEmojiOpen(false)}
+          />
+        )}
 
         <input
           ref={fileRef}
@@ -309,29 +407,33 @@ export function ChatComposer({
         />
 
         <RichMessageEditor
+          key={editorKey}
+          editorKey={editorKey}
           ref={editorRef}
           bodyJson={bodyJson}
+          initialContent={editorInitialContent}
           onChange={onBodyChange}
           onSubmit={handleSend}
           onTyping={onTyping}
           disabled={composerDisabled}
           members={showMentions ? members : []}
           currentUserId={currentUserId}
-          placeholder="Type a message"
+          allowTagAll={showMentions && allowTagAll}
+          placeholder={isEditing ? "Edit message" : "Type a message"}
           showToolbar={false}
-          className="min-h-[2.25rem] min-w-0 flex-1 self-center overflow-hidden rounded-2xl border-0 bg-transparent px-2.5 py-1.5 md:min-h-[2.5rem] md:px-3 md:py-2"
+          className="min-h-[2rem] min-w-0 flex-1 basis-0 self-center overflow-hidden rounded-2xl border-0 bg-transparent px-1.5 py-1 text-sm sm:min-h-[2.25rem] sm:px-2.5 sm:py-1.5 md:min-h-[2.5rem] md:px-3 md:py-2"
         />
 
-        <Button
-          variant="primary"
+        <button
+          type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleSend}
           disabled={!canSend}
-          className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full p-0 md:h-10 md:w-10"
-          aria-label="Send message"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] p-0 text-white shadow-sm transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9 md:h-10 md:w-10"
+          aria-label={isEditing ? "Save changes" : "Send message"}
         >
-          <Send className="h-4 w-4" />
-        </Button>
+          {isEditing ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+        </button>
       </div>
     </div>
   );

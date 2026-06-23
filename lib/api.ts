@@ -15,10 +15,21 @@ export function handleApiError(error: unknown) {
     );
   }
 
-  if (error instanceof Error) {
+    if (error instanceof Error) {
     const msg = error.message;
     if (msg === "Forbidden") {
       return jsonError(msg, 403);
+    }
+    if (
+      msg === "You cannot edit messages here" ||
+      msg === "You can only edit your own messages" ||
+      msg === "Deleted messages cannot be edited" ||
+      msg === "Forwarded messages cannot be edited" ||
+      msg === "This message cannot be edited" ||
+      msg === "This message has no text to edit" ||
+      msg.startsWith("Messages can only be edited within")
+    ) {
+      return jsonError(msg, 400);
     }
     if (msg === "Scheduled message not found" || msg === "Not found") {
       return jsonError(msg, 404);

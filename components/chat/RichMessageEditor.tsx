@@ -4,12 +4,16 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
 } from "react";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import { MessageFormatToolbar } from "@/components/chat/MessageFormatToolbar";
 import { createChatEnterExtension } from "@/lib/rich-message-enter";
-import { createEditorExtensions } from "@/lib/rich-message-extensions";
+import {
+  createEditorExtensions,
+  type MentionMembersSource,
+} from "@/lib/rich-message-extensions";
 import { plainTextFromBodyJson } from "@/lib/rich-message-serialize";
 import { emptyRichDoc, type RichMessageDoc } from "@/lib/rich-message-types";
 import { cn } from "@/lib/utils";
@@ -34,6 +38,9 @@ interface RichMessageEditorProps {
   showToolbar?: boolean;
   toolbarCompact?: boolean;
   initialContent?: RichMessageDoc | null;
+  /** Remount editor when switching conversations so mention state stays in sync. */
+  editorKey?: string;
+  allowTagAll?: boolean;
 }
 
 export const RichMessageEditor = forwardRef<RichMessageEditorHandle, RichMessageEditorProps>(
@@ -52,12 +59,30 @@ export const RichMessageEditor = forwardRef<RichMessageEditorHandle, RichMessage
       showToolbar = true,
       toolbarCompact = false,
       initialContent,
+      editorKey,
+      allowTagAll = false,
     },
     ref
   ) {
     const onChangeRef = useRef(onChange);
     const onTypingRef = useRef(onTyping);
     const onSubmitRef = useRef(onSubmit);
+    const membersRef = useRef(members);
+    const currentUserIdRef = useRef(currentUserId);
+    const allowTagAllRef = useRef(allowTagAll);
+
+    membersRef.current = members;
+    currentUserIdRef.current = currentUserId;
+    allowTagAllRef.current = allowTagAll;
+
+    const mentionMembers = useMemo<MentionMembersSource>(
+      () => ({
+        getMembers: () => membersRef.current,
+        getCurrentUserId: () => currentUserIdRef.current,
+        getAllowTagAll: () => allowTagAllRef.current,
+      }),
+      []
+    );
 
     useEffect(() => {
       onChangeRef.current = onChange;
@@ -65,32 +90,34 @@ export const RichMessageEditor = forwardRef<RichMessageEditorHandle, RichMessage
       onSubmitRef.current = onSubmit;
     });
 
-    const editor = useEditor({
-      immediatelyRender: false,
-      editable: !disabled,
-      extensions: [
-        ...createEditorExtensions({
-          placeholder,
-          members,
-          currentUserId,
-        }),
-        ...(onSubmit
-          ? [createChatEnterExtension(() => onSubmitRef.current?.())]
-          : []),
-      ],
-      content: initialContent ?? bodyJson ?? emptyRichDoc(),
-      editorProps: {
-        attributes: {
-          class: "rich-message-input min-h-[1.375rem] max-h-28 w-full min-w-0 overflow-x-hidden overflow-y-auto text-sm leading-relaxed break-words focus:outline-none",
+    const editor = useEditor(
+      {
+        immediatelyRender: false,
+        editable: !disabled,
+        extensions: [
+          ...createEditorExtensions({
+            placeholder,
+            mentionMembers,
+          }),
+          ...(onSubmit
+            ? [createChatEnterExtension(() => onSubmitRef.current?.())]
+            : []),
+        ],
+        content: initialContent ?? bodyJson ?? emptyRichDoc(),
+        editorProps: {
+          attributes: {
+            class: "rich-message-input min-h-[1.375rem] max-h-28 w-full min-w-0 overflow-x-hidden overflow-y-auto text-sm leading-relaxed break-words focus:outline-none",
+          },
+        },
+        onUpdate: ({ editor: ed }) => {
+          const json = ed.getJSON() as RichMessageDoc;
+          const body = plainTextFromBodyJson(json);
+          onChangeRef.current({ body, bodyJson: json });
+          onTypingRef.current?.();
         },
       },
-      onUpdate: ({ editor: ed }) => {
-        const json = ed.getJSON() as RichMessageDoc;
-        const body = plainTextFromBodyJson(json);
-        onChangeRef.current({ body, bodyJson: json });
-        onTypingRef.current?.();
-      },
-    });
+      [editorKey, mentionMembers, placeholder, disabled]
+    );
 
     useEffect(() => {
       if (!editor) return;
@@ -122,7 +149,7 @@ export const RichMessageEditor = forwardRef<RichMessageEditorHandle, RichMessage
     );
 
     return (
-      <div className={cn("min-w-0 flex-1", className)}>
+      <div className={cn("min-w-0 flex-1 basis-0", className)}>
         {showToolbar && !toolbarCompact && (
           <MessageFormatToolbar editor={editor} className="mb-1.5 hidden md:flex" />
         )}

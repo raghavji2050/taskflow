@@ -1,25 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Forward, MoreHorizontal, Pencil, Pin, Reply, Smile, Trash2 } from "lucide-react";
-import { cn, getInitials } from "@/lib/utils";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Copy, Forward, MoreHorizontal, Pencil, Pin, Reply, Smile, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { cn, getAvatarColorClasses, getInitials } from "@/lib/utils";
 import { ReactionPicker } from "@/components/chat/EmojiPicker";
 import { RichMessageRenderer } from "@/components/chat/RichMessageRenderer";
-import { RichMessageEditor } from "@/components/chat/RichMessageEditor";
-import type { RichMessageDoc } from "@/lib/rich-message-types";
-import { plainTextToRichDoc } from "@/lib/rich-message-types";
 import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
 import type { MessageReceiptStatus } from "@/lib/chat-receipts";
 import { MessageAttachmentPreview } from "@/components/chat/MessageAttachmentPreview";
 import { MessageReceiptTicks } from "@/components/chat/MessageReceiptTicks";
 import { DocumentShareCard, type SharedDocumentPreview } from "@/components/chat/DocumentShareCard";
+import { MessageLinkPreview } from "@/components/chat/MessageLinkPreview";
 import { MomShareCard } from "@/components/chat/MomShareCard";
 import { ForwardedMessageCard } from "@/components/chat/ForwardedMessageCard";
 import type { SharedMomPreview } from "@/lib/mom-format";
-import { Button } from "@/components/ui/Button";
 import type { FormattedForwardedFrom } from "@/lib/message-format";
 import { isAttachmentOnlyBody } from "@/lib/attachments";
+import { emojiOnlySizeClass, isEmojiOnlyMessage } from "@/lib/chat-emoji";
 import { isDefaultDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
+import { copyTextToClipboard, getMessageCopyText } from "@/lib/chat-copy";
+import { canEditMessage } from "@/lib/message-edit";
+import { useMediaQuery } from "@/lib/use-visual-viewport";
 
 export interface MessageAttachment {
   id: string;
@@ -72,7 +75,7 @@ interface MessageBubbleProps {
   onReply?: (message: ChatMessage) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onPin?: (messageId: string, pinned: boolean) => void;
-  onEdit?: (messageId: string, body: string, bodyJson?: RichMessageDoc | null) => Promise<void>;
+  onStartEdit?: (message: ChatMessage) => void;
   onDelete?: (messageId: string) => Promise<void>;
   mentionMembers?: { id?: string; name: string }[];
   showUserPresence?: boolean;
@@ -102,6 +105,106 @@ function groupReactions(reactions: MessageReaction[] = [], currentUserId?: strin
   return [...map.values()];
 }
 
+function MessageActionMenuItems({
+  canCopy,
+  onCopy,
+  onReply,
+  onForward,
+  canModify,
+  canEdit,
+  onStartEdit,
+  onPin,
+  isPinned,
+  onDelete,
+  message,
+  isDeleted,
+  closeMenu,
+}: {
+  canCopy: boolean;
+  onCopy: () => void;
+  onReply?: (message: ChatMessage) => void;
+  onForward?: (message: ChatMessage) => void;
+  canModify: boolean;
+  canEdit: boolean;
+  onStartEdit?: (message: ChatMessage) => void;
+  onPin?: (messageId: string, pinned: boolean) => void;
+  isPinned: boolean;
+  onDelete?: () => void;
+  message: ChatMessage;
+  isDeleted: boolean;
+  closeMenu: () => void;
+}) {
+  const itemClass =
+    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]";
+
+  return (
+    <>
+      {canCopy && (
+        <button type="button" onClick={onCopy} className={itemClass}>
+          <Copy className="h-3.5 w-3.5" /> Copy
+        </button>
+      )}
+      {onReply && (
+        <button
+          type="button"
+          onClick={() => {
+            onReply(message);
+            closeMenu();
+          }}
+          className={itemClass}
+        >
+          <Reply className="h-3.5 w-3.5" /> Reply
+        </button>
+      )}
+      {onForward && !isDeleted && (
+        <button
+          type="button"
+          onClick={() => {
+            onForward(message);
+            closeMenu();
+          }}
+          className={itemClass}
+        >
+          <Forward className="h-3.5 w-3.5" /> Forward
+        </button>
+      )}
+      {canEdit && onStartEdit && (
+        <button
+          type="button"
+          onClick={() => {
+            onStartEdit(message);
+            closeMenu();
+          }}
+          className={itemClass}
+        >
+          <Pencil className="h-3.5 w-3.5" /> Edit
+        </button>
+      )}
+      {onPin && (
+        <button
+          type="button"
+          onClick={() => {
+            onPin(message.id, !isPinned);
+            closeMenu();
+          }}
+          className={itemClass}
+        >
+          <Pin className="h-3.5 w-3.5" /> {isPinned ? "Unpin" : "Pin"}
+        </button>
+      )}
+      {canModify && onDelete && (
+        <button
+          type="button"
+          onClick={() => void onDelete()}
+          className={cn(itemClass, "text-red-500 hover:bg-red-500/10")}
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Delete
+        </button>
+      )}
+    </>
+  );
+}
+
 export function MessageBubble({
   message,
   isOwn,
@@ -110,7 +213,7 @@ export function MessageBubble({
   onReply,
   onReact,
   onPin,
-  onEdit,
+  onStartEdit,
   onDelete,
   mentionMembers = [],
   showUserPresence = false,
@@ -123,12 +226,59 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editBody, setEditBody] = useState(message.body);
-  const [editBodyJson, setEditBodyJson] = useState<RichMessageDoc | null>(
-    (message.bodyJson as RichMessageDoc | null) ?? null
-  );
-  const [saving, setSaving] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
+  const [desktopMenuStyle, setDesktopMenuStyle] = useState<{
+    top: number;
+    left: number;
+    transform?: string;
+  }>({ top: 0, left: 0 });
+  const desktopMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const desktopReactButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileReactButtonRef = useRef<HTMLButtonElement>(null);
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const reactAnchorRef = isMobile ? mobileReactButtonRef : desktopReactButtonRef;
+
+  useEffect(() => setMenuMounted(true), []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen || isMobile || !desktopMenuButtonRef.current) return;
+
+    const rect = desktopMenuButtonRef.current.getBoundingClientRect();
+    const menuWidth = 144;
+    const menuHeight = 220;
+    const gap = 8;
+    const padding = 8;
+    const vw = window.innerWidth;
+
+    let left = isOwn ? rect.right - menuWidth : rect.left;
+    left = Math.max(padding, Math.min(left, vw - menuWidth - padding));
+
+    let top = rect.bottom + gap;
+    let transform: string | undefined;
+
+    if (isOwn) {
+      top = rect.top - gap;
+      transform = "translateY(-100%)";
+      if (top - menuHeight < padding) {
+        top = rect.bottom + gap;
+        transform = undefined;
+      }
+    } else if (top + menuHeight > window.innerHeight - padding) {
+      top = rect.top - gap;
+      transform = "translateY(-100%)";
+    }
+
+    setDesktopMenuStyle({ top, left, transform });
+  }, [menuOpen, isOwn, isMobile]);
 
   const isDeleted = Boolean(message.deletedAt);
   const time = new Date(message.createdAt).toLocaleTimeString([], {
@@ -138,24 +288,17 @@ export function MessageBubble({
   const reactionGroups = groupReactions(message.reactions, currentUserId);
   const isPinned = Boolean(message.pinnedAt);
   const canModify = isOwn && !isDeleted && !readOnly;
+  const canEdit = canEditMessage(message, currentUserId, { readOnly });
+  const copyText = getMessageCopyText(message.body, message.bodyJson);
+  const canCopy = !isDeleted && copyText.length > 0;
+  const showMessageActions = !isDeleted && (!readOnly || canCopy);
 
-  useEffect(() => {
-    if (!editing) {
-      setEditBody(message.body);
-      setEditBodyJson((message.bodyJson as RichMessageDoc | null) ?? null);
-    }
-  }, [message.body, message.bodyJson, editing]);
-
-  const handleSaveEdit = async () => {
-    const trimmed = editBody.trim();
-    if (!trimmed || !onEdit) return;
-    setSaving(true);
-    try {
-      await onEdit(message.id, trimmed, editBodyJson);
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
+  const handleCopy = async () => {
+    if (!canCopy) return;
+    setMenuOpen(false);
+    const ok = await copyTextToClipboard(copyText);
+    if (ok) toast.success("Copied to clipboard");
+    else toast.error("Could not copy message");
   };
 
   const handleDelete = async () => {
@@ -186,11 +329,9 @@ export function MessageBubble({
   const hasAttachments =
     !message.forwardedFrom &&
     Boolean(message.attachments?.length) &&
-    !isDeleted &&
-    !editing;
+    !isDeleted;
   const hasBubbleContent =
     isDeleted ||
-    editing ||
     Boolean(message.parent) ||
     Boolean(message.forwardedFrom) ||
     Boolean(message.sharedDocument) ||
@@ -199,10 +340,98 @@ export function MessageBubble({
   const attachmentsInBubble = hasAttachments && hasBubbleContent;
   const attachmentsStandalone = hasAttachments && !hasBubbleContent;
 
+  const isEmojiSticker =
+    showBody &&
+    !message.parent &&
+    !message.forwardedFrom &&
+    !message.sharedDocument &&
+    !message.sharedMom &&
+    !hasAttachments &&
+    !isDeleted &&
+    isEmojiOnlyMessage(message.body);
+  const emojiSizeClass = isEmojiSticker ? emojiOnlySizeClass(message.body) : undefined;
+
+  const closeMenu = () => setMenuOpen(false);
+
+  const menuItems = (
+    <MessageActionMenuItems
+      canCopy={canCopy}
+      onCopy={() => void handleCopy()}
+      onReply={onReply}
+      onForward={onForward}
+      canModify={canModify}
+      canEdit={canEdit}
+      onStartEdit={onStartEdit}
+      onPin={onPin}
+      isPinned={isPinned}
+      onDelete={handleDelete}
+      message={message}
+      isDeleted={isDeleted}
+      closeMenu={closeMenu}
+    />
+  );
+
+  const desktopMenu =
+    menuOpen && menuMounted && !isMobile
+      ? createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[200]"
+              onClick={closeMenu}
+              aria-hidden="true"
+            />
+            <div
+              className="fixed z-[201] min-w-[9rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg"
+              style={{
+                top: desktopMenuStyle.top,
+                left: desktopMenuStyle.left,
+                transform: desktopMenuStyle.transform,
+              }}
+              role="menu"
+            >
+              {menuItems}
+            </div>
+          </>,
+          document.body
+        )
+      : null;
+
+  const mobileMenu =
+    menuOpen && menuMounted && isMobile
+      ? createPortal(
+          <div className="fixed inset-0 z-[250] flex flex-col justify-end" role="presentation">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+              onClick={closeMenu}
+              aria-hidden="true"
+            />
+            <div
+              className="relative z-10 rounded-t-2xl border-t border-[var(--border)] bg-[var(--card)] py-1 shadow-lg safe-bottom"
+              role="menu"
+            >
+              <div className="mx-auto mb-2 mt-2 h-1 w-10 rounded-full bg-[var(--border)]" />
+              {menuItems}
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
+  const reactionPicker =
+    reactOpen && onReact ? (
+      <ReactionPicker
+        anchorRef={reactAnchorRef}
+        onSelect={(emoji) => onReact(message.id, emoji)}
+        onClose={() => setReactOpen(false)}
+        align={isOwn ? "end" : "start"}
+        side={isOwn ? "top" : "bottom"}
+      />
+    ) : null;
+
   return (
     <div
       className={cn(
-        "group flex w-full animate-message-in px-0.5 sm:px-1",
+        "group flex w-full min-w-0 max-w-full animate-message-in px-0 sm:px-1",
         isOwn ? "justify-end" : "justify-start",
         !isLastInGroup && "mb-0.5",
         isLastInGroup && "mb-2"
@@ -210,7 +439,7 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "flex w-max max-w-[min(92%,100%)] sm:max-w-[85%] md:max-w-[75%]",
+          "flex w-max min-w-0 max-w-[min(92%,calc(100vw-1rem))] sm:max-w-[88%] md:max-w-[85%]",
           hideAvatars ? "gap-0" : "gap-2",
           isOwn ? "flex-row-reverse" : "flex-row"
         )}
@@ -225,8 +454,8 @@ export function MessageBubble({
       ) : (
         <div
           className={cn(
-            "flex h-8 w-8 shrink-0 self-start items-center justify-center rounded-full text-xs font-semibold",
-            isOwn ? "bg-[var(--accent)] text-white" : "bg-[var(--surface-hover)] text-[var(--foreground)]"
+            "flex h-8 w-8 shrink-0 self-start items-center justify-center overflow-hidden rounded-full text-xs font-semibold",
+            !message.user.image && getAvatarColorClasses(message.user.name)
           )}
         >
           {message.user.image ? (
@@ -238,7 +467,12 @@ export function MessageBubble({
         </div>
       ))}
 
-      <div className={cn("relative min-w-0 flex flex-col", isOwn ? "items-end" : "items-start")}>
+      <div
+        className={cn(
+          "relative flex min-w-0 flex-col",
+          isOwn ? "items-end" : "items-start"
+        )}
+      >
         {!isOwn && !hideAvatars && isFirstInGroup && (
           <p className="mb-0.5 px-1 text-[11px] font-medium text-[var(--muted)]">
             {message.user.name}
@@ -251,16 +485,20 @@ export function MessageBubble({
           </p>
         )}
 
-        <div className="relative flex flex-col">
+        <div className="relative flex w-fit min-w-0 max-w-full flex-col">
           {hasBubbleContent && (
           <div
             className={cn(
-              "rounded-2xl px-3 py-2 text-sm leading-relaxed",
-              isDeleted
-                ? "rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-hover)]/50 italic text-[var(--muted)]"
-                : isOwn
-                  ? "rounded-tr-md bg-[var(--accent)] text-white"
-                  : "rounded-tl-md border border-[var(--border)] bg-[var(--surface-2)] text-[var(--foreground)]"
+              "max-w-full break-words rounded-2xl text-sm leading-relaxed [overflow-wrap:anywhere]",
+              isEmojiSticker
+                ? "border-0 bg-transparent px-0.5 py-0.5 shadow-none"
+                : "px-3 py-2",
+              !isEmojiSticker &&
+                (isDeleted
+                  ? "rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-hover)]/50 italic text-[var(--muted)]"
+                  : isOwn
+                    ? "rounded-tr-md bg-[var(--accent)] text-white"
+                    : "rounded-tl-md border border-[var(--border)] bg-[var(--surface-2)] text-[var(--foreground)]")
             )}
           >
             {message.parent && !isDeleted && (
@@ -314,45 +552,6 @@ export function MessageBubble({
 
             {isDeleted ? (
               <p>This message was deleted</p>
-            ) : editing ? (
-              <div className="space-y-2">
-                <RichMessageEditor
-                  bodyJson={editBodyJson ?? plainTextToRichDoc(editBody)}
-                  initialContent={editBodyJson ?? plainTextToRichDoc(editBody)}
-                  onChange={({ body, bodyJson }) => {
-                    setEditBody(body);
-                    setEditBodyJson(bodyJson);
-                  }}
-                  members={mentionMembers.map((m, i) => ({
-                    id: m.id ?? `member-${i}`,
-                    name: m.name,
-                  }))}
-                  showToolbar
-                  className="rounded-lg border border-[var(--card-border)] bg-[var(--background)]"
-                />
-                <div className="flex justify-end gap-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      setEditing(false);
-                      setEditBody(message.body);
-                      setEditBodyJson((message.bodyJson as RichMessageDoc | null) ?? null);
-                    }}
-                    disabled={saving}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => void handleSaveEdit()}
-                    isLoading={saving}
-                    disabled={!editBody.trim()}
-                  >
-                    Save
-                  </Button>
-                </div>
-              </div>
             ) : (
               <>
                 {message.forwardedFrom && !isDeleted && (
@@ -368,9 +567,12 @@ export function MessageBubble({
                     body={message.body}
                     bodyJson={message.bodyJson}
                     members={mentionMembers}
-                    mentionClassName={isOwn ? "text-white bg-white/15" : undefined}
-                    linkClassName={isOwn ? "text-white underline" : undefined}
-                    inOwnBubble={isOwn}
+                    mentionClassName={isOwn && !isEmojiSticker ? "text-white bg-white/15" : undefined}
+                    linkClassName={isOwn && !isEmojiSticker ? "text-white underline" : undefined}
+                    inOwnBubble={isOwn && !isEmojiSticker}
+                    emojiOnly={isEmojiSticker}
+                    emojiSizeClass={emojiSizeClass}
+                    className={isEmojiSticker ? "leading-none" : undefined}
                   />
                 )}
 
@@ -381,6 +583,19 @@ export function MessageBubble({
                 {!message.forwardedFrom && message.sharedMom && !isDeleted && (
                   <MomShareCard mom={message.sharedMom} isOwn={isOwn} />
                 )}
+
+                {!message.forwardedFrom &&
+                  !isDeleted &&
+                  !message.sharedDocument &&
+                  !message.sharedMom &&
+                  showBody && (
+                    <MessageLinkPreview
+                      body={message.body}
+                      bodyJson={message.bodyJson}
+                      attachmentUrls={message.attachments?.map((a) => a.url)}
+                      isOwn={isOwn}
+                    />
+                  )}
 
                 {attachmentsInBubble && message.attachments && (
                   <MessageAttachmentPreview
@@ -406,18 +621,21 @@ export function MessageBubble({
             />
           )}
 
-          {!readOnly && !isDeleted && !editing && (
+          {showMessageActions && (
             <div
               className={cn(
                 "relative hidden gap-0.5 md:flex",
                 "md:absolute md:top-1/2 md:-translate-y-1/2 md:opacity-0 md:transition-opacity md:group-hover:opacity-100",
+                (menuOpen || reactOpen) && "md:!opacity-100",
                 isOwn
-                  ? "md:left-0 md:-translate-x-[calc(100%+0.25rem)] md:-translate-y-1/2"
-                  : "md:right-0 md:translate-x-[calc(100%+0.25rem)] md:-translate-y-1/2 md:justify-end"
+                  ? "md:left-0 md:-translate-x-[calc(100%+0.5rem)] md:-translate-y-1/2"
+                  : "md:right-0 md:translate-x-[calc(100%+0.5rem)] md:-translate-y-1/2 md:justify-end"
               )}
             >
+              {!readOnly && (
               <div className="relative">
                 <button
+                  ref={desktopReactButtonRef}
                   type="button"
                   onClick={() => { setReactOpen((v) => !v); setMenuOpen(false); }}
                   className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--card-border)] bg-[var(--card)] text-[var(--muted)] shadow-sm hover:text-[var(--foreground)]"
@@ -425,80 +643,23 @@ export function MessageBubble({
                 >
                   <Smile className="h-3.5 w-3.5" />
                 </button>
-                {reactOpen && onReact && (
-                  <ReactionPicker
-                    onSelect={(emoji) => onReact(message.id, emoji)}
-                    onClose={() => setReactOpen(false)}
-                  />
-                )}
               </div>
+              )}
               <button
+                ref={desktopMenuButtonRef}
                 type="button"
                 onClick={() => { setMenuOpen((v) => !v); setReactOpen(false); }}
                 className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--card-border)] bg-[var(--card)] text-[var(--muted)] shadow-sm hover:text-[var(--foreground)]"
                 aria-label="More actions"
+                aria-expanded={menuOpen}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40 hidden md:block" onClick={() => setMenuOpen(false)} />
-                  <div
-                    className={cn(
-                      "absolute top-full z-50 mt-1 hidden min-w-[8rem] rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg md:block",
-                      isOwn ? "left-0" : "right-0"
-                    )}
-                  >
-                    {onReply && (
-                      <button
-                        type="button"
-                        onClick={() => { onReply(message); setMenuOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
-                      >
-                        <Reply className="h-3.5 w-3.5" /> Reply
-                      </button>
-                    )}
-                    {onForward && !isDeleted && (
-                      <button
-                        type="button"
-                        onClick={() => { onForward(message); setMenuOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
-                      >
-                        <Forward className="h-3.5 w-3.5" /> Forward
-                      </button>
-                    )}
-                    {canModify && onEdit && message.body && (
-                      <button
-                        type="button"
-                        onClick={() => { setEditing(true); setMenuOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
-                      >
-                        <Pencil className="h-3.5 w-3.5" /> Edit
-                      </button>
-                    )}
-                    {onPin && (
-                      <button
-                        type="button"
-                        onClick={() => { onPin(message.id, !isPinned); setMenuOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
-                      >
-                        <Pin className="h-3.5 w-3.5" /> {isPinned ? "Unpin" : "Pin"}
-                      </button>
-                    )}
-                    {canModify && onDelete && (
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete()}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-500/10"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" /> Delete
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
             </div>
           )}
+          {desktopMenu}
+          {mobileMenu}
+          {reactionPicker}
         </div>
 
         {!isDeleted && reactionGroups.length > 0 && (
@@ -548,10 +709,12 @@ export function MessageBubble({
           {isOwn && !isDeleted && !isSending && !isFailed && message.receiptStatus && (
             <MessageReceiptTicks status={message.receiptStatus} />
           )}
-          {!readOnly && !isDeleted && !editing && (
+          {showMessageActions && (
             <div className="ml-0.5 inline-flex items-center gap-0.5 md:hidden">
+              {!readOnly && (
               <div className="relative">
                 <button
+                  ref={mobileReactButtonRef}
                   type="button"
                   onClick={() => {
                     setReactOpen((v) => !v);
@@ -562,13 +725,8 @@ export function MessageBubble({
                 >
                   <Smile className="h-3 w-3" />
                 </button>
-                {reactOpen && onReact && (
-                  <ReactionPicker
-                    onSelect={(emoji) => onReact(message.id, emoji)}
-                    onClose={() => setReactOpen(false)}
-                  />
-                )}
               </div>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -583,72 +741,8 @@ export function MessageBubble({
             </div>
           )}
         </div>
-        {!readOnly && !isDeleted && !editing && menuOpen && (
-          <>
-            <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMenuOpen(false)} />
-            <div className="fixed bottom-4 left-1/2 z-50 w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-[var(--card-border)] bg-[var(--card)] py-1 shadow-lg md:hidden">
-              {onReply && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onReply(message);
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
-                >
-                  <Reply className="h-3.5 w-3.5" /> Reply
-                </button>
-              )}
-              {onForward && !isDeleted && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onForward(message);
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
-                >
-                  <Forward className="h-3.5 w-3.5" /> Forward
-                </button>
-              )}
-              {canModify && onEdit && message.body && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(true);
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Edit
-                </button>
-              )}
-              {onPin && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onPin(message.id, !isPinned);
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]"
-                >
-                  <Pin className="h-3.5 w-3.5" /> {isPinned ? "Unpin" : "Pin"}
-                </button>
-              )}
-              {canModify && onDelete && (
-                <button
-                  type="button"
-                  onClick={() => void handleDelete()}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-500/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              )}
-            </div>
-          </>
-        )}
       </div>
-      </div>
+    </div>
     </div>
   );
 }

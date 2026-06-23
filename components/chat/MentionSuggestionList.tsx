@@ -1,11 +1,20 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { cn, getInitials } from "@/lib/utils";
+import { Users } from "lucide-react";
+import { MENTION_ALL_ID } from "@/lib/mentions";
+import { cn, getAvatarColorClasses, getInitials } from "@/lib/utils";
+
+interface MentionSuggestionItem {
+  id: string;
+  label: string;
+  image?: string | null;
+  tagAll?: boolean;
+}
 
 interface MentionSuggestionListProps {
-  items: { id: string; label: string }[];
-  command: (item: { id: string; label: string }) => void;
+  items: MentionSuggestionItem[];
+  command: (item: MentionSuggestionItem) => void;
 }
 
 export interface MentionSuggestionListHandle {
@@ -43,7 +52,7 @@ export const MentionSuggestionList = forwardRef<
 
   return (
     <div
-      className="max-h-48 min-w-[180px] overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--card)] p-1 shadow-lg"
+      className="max-h-56 min-w-[200px] overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--card)] p-1 shadow-lg"
       role="listbox"
       aria-label="Mention suggestions"
     >
@@ -63,10 +72,33 @@ export const MentionSuggestionList = forwardRef<
             command(item);
           }}
         >
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[10px] font-semibold text-[var(--accent)]">
-            {getInitials(item.label)}
+          <span
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-semibold",
+              item.tagAll || item.id === MENTION_ALL_ID
+                ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                : !item.image && getAvatarColorClasses(item.label)
+            )}
+          >
+            {item.tagAll || item.id === MENTION_ALL_ID ? (
+              <Users className="h-3.5 w-3.5" />
+            ) : item.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.image} alt="" className="h-full w-full object-cover" />
+            ) : (
+              getInitials(item.label)
+            )}
           </span>
-          <span className="truncate">{item.label}</span>
+          <span className="min-w-0 truncate">
+            {item.tagAll || item.id === MENTION_ALL_ID ? (
+              <>
+                <span className="font-semibold">@all</span>
+                <span className="ml-1.5 text-xs text-[var(--muted)]">Notify everyone</span>
+              </>
+            ) : (
+              item.label
+            )}
+          </span>
         </button>
       ))}
     </div>

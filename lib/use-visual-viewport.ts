@@ -81,10 +81,14 @@ export function mobileFixedPanelStyle(
   return {
     position: "fixed",
     top: vv.offsetTop + topOffset,
-    left: vv.offsetLeft,
-    width: vv.width,
+    left: 0,
+    right: 0,
+    width: "100%",
+    maxWidth: "100vw",
     height: Math.max(120, vv.height - topOffset),
     zIndex: 30,
+    overflow: "hidden",
+    boxSizing: "border-box",
   };
 }
 

@@ -1,3 +1,23 @@
+export const MENTION_ALL_ID = "__all__";
+export const MENTION_ALL_LABEL = "all";
+
+export function isMentionAllId(id: string): boolean {
+  return id === MENTION_ALL_ID;
+}
+
+export function isMentionAllLabel(label: string): boolean {
+  return label.trim().toLowerCase() === MENTION_ALL_LABEL;
+}
+
+/** True when text after `@` is the tag-all token (not e.g. Allison). */
+export function isMentionAllAtPosition(body: string, atIndex: number): boolean {
+  if (body[atIndex] !== "@") return false;
+  const rest = body.slice(atIndex + 1);
+  if (!rest.toLowerCase().startsWith(MENTION_ALL_LABEL)) return false;
+  const next = rest[MENTION_ALL_LABEL.length];
+  return next === undefined || next === " " || next === "\n";
+}
+
 export function parseMentionNames(body: string): string[] {
   const matches = body.match(/@([A-Za-z][A-Za-z0-9 _.-]{0,48})/g) ?? [];
   return [...new Set(matches.map((m) => m.slice(1).trim()).filter(Boolean))];
@@ -15,6 +35,17 @@ export function parseMentionsFromBody(
 
   while (i < body.length) {
     if (body[i] === "@") {
+      if (isMentionAllAtPosition(body, i)) {
+        for (const member of members) {
+          if (!seen.has(member.id)) {
+            found.push(member);
+            seen.add(member.id);
+          }
+        }
+        i += 1 + MENTION_ALL_LABEL.length;
+        continue;
+      }
+
       const rest = body.slice(i + 1);
       const match = sorted.find(
         (m) =>
@@ -62,6 +93,12 @@ export function splitMessageBody(
 
   while (i < body.length) {
     if (body[i] === "@") {
+      if (isMentionAllAtPosition(body, i)) {
+        parts.push({ type: "mention", value: MENTION_ALL_LABEL });
+        i += 1 + MENTION_ALL_LABEL.length;
+        continue;
+      }
+
       const rest = body.slice(i + 1);
       const match = sorted.find(
         (m) =>

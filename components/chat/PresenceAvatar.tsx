@@ -1,7 +1,7 @@
 "use client";
 
 import { useRealtime } from "@/components/RealtimeProvider";
-import { cn, getInitials } from "@/lib/utils";
+import { cn, getAvatarColorClasses, getInitials } from "@/lib/utils";
 
 interface PresenceAvatarProps {
   name: string;
@@ -35,7 +35,8 @@ export function PresenceAvatar({
   return (
     <div
       className={cn(
-        "relative flex shrink-0 self-start items-center justify-center overflow-visible rounded-full bg-[var(--accent)] font-semibold text-white",
+        "relative flex shrink-0 self-start items-center justify-center overflow-visible rounded-full font-semibold",
+        !image && getAvatarColorClasses(name),
         box,
         className
       )}

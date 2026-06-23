@@ -11,6 +11,7 @@ import { notifyParticipants } from "@/lib/message-notify";
 import { saveMessageAttachmentFile } from "@/lib/message-upload";
 import { normalizeMessageContent } from "@/lib/rich-message-serialize";
 import type { RichMessageDoc } from "@/lib/rich-message-types";
+import { assertCanEditMessage } from "@/lib/message-edit";
 
 export { notifyParticipants };
 
@@ -553,10 +554,14 @@ export async function updateMessage(params: {
 }) {
   const msg = await prisma.message.findFirst({
     where: { id: params.messageId, conversationId: params.conversationId },
+    include: messageInclude,
   });
   if (!msg) throw new Error("Message not found");
   if (msg.userId !== params.userId) throw new Error("Forbidden");
   if (msg.deletedAt) throw new Error("Cannot edit a deleted message");
+
+  const formatted = formatMessageForClient(msg, params.userId);
+  assertCanEditMessage(formatted, params.userId);
 
   const normalized = normalizeMessageContent({
     body: params.body,
@@ -578,7 +583,7 @@ export async function updateMessage(params: {
     include: messageInclude,
   });
 
-  const formatted = formatMessageForClient(message);
+  const updated = formatMessageForClient(message);
   const participantIds = await getConversationParticipantIds(params.conversationId);
   broadcastMessageToConversation(participantIds, {
     conversationId: params.conversationId,
@@ -586,10 +591,10 @@ export async function updateMessage(params: {
     actorId: params.userId,
     preview: "Message edited",
     type: "message:updated",
-    message: formatted,
+    message: updated,
   });
 
-  return formatted;
+  return updated;
 }
 
 export async function deleteMessage(params: {

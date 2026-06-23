@@ -46,6 +46,41 @@ async function getDirectParticipantUsers(conversationId: string) {
   return Array.from(byId.values());
 }
 
+/** Members eligible for @mentions (participants + workspace members for team channels). */
+export async function getMentionCandidatesForConversation(conversation: {
+  id: string;
+  type: ConversationType;
+  workspaceId: string | null;
+  participants: { user: { id: string; name: string } }[];
+}): Promise<{ id: string; name: string }[]> {
+  const byId = new Map<string, { id: string; name: string }>();
+
+  for (const p of conversation.participants) {
+    byId.set(p.user.id, { id: p.user.id, name: p.user.name });
+  }
+
+  if (conversation.type === ConversationType.WORKSPACE && conversation.workspaceId) {
+    const wsMembers = await prisma.workspaceMember.findMany({
+      where: { workspaceId: conversation.workspaceId },
+      select: { user: { select: { id: true, name: true } } },
+    });
+    for (const { user } of wsMembers) {
+      if (!byId.has(user.id)) byId.set(user.id, user);
+    }
+  }
+
+  if (conversation.type === ConversationType.DIRECT) {
+    const directUsers = await getDirectParticipantUsers(conversation.id);
+    for (const user of directUsers) {
+      if (!byId.has(user.id)) {
+        byId.set(user.id, { id: user.id, name: user.name });
+      }
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function findDirectConversation(userId1: string, userId2: string) {
   const conversations = await prisma.conversation.findMany({
     where: {

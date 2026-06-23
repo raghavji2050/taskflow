@@ -1,7 +1,7 @@
 import type { ScheduledMessageStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canPostToConversation } from "@/lib/chat-access";
-import { getConversationDisplayName } from "@/lib/conversations";
+import { getConversationDisplayName, getMentionCandidatesForConversation } from "@/lib/conversations";
 import {
   attachmentPlaceholderBody,
 } from "@/lib/attachments";
@@ -298,7 +298,7 @@ export async function deliverScheduledMessage(id: string, userId: string, userNa
 
     const { conversation } = participant;
     const conversationTitle = getConversationDisplayName(conversation, userId);
-    const mentionCandidates = conversation.participants.map((p) => p.user);
+    const mentionCandidates = await getMentionCandidatesForConversation(conversation);
     const hasAttachments = row.attachments.length > 0;
 
     let message = await sendMessage({

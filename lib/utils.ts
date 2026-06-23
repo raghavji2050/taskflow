@@ -144,9 +144,32 @@ export function formatDueDateTime(date: Date | string | null | undefined): strin
 
 export function getInitials(name: string): string {
   return name
-    .split(" ")
+    .split(/\s+/)
+    .filter(Boolean)
     .map((part) => part[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+}
+
+const AVATAR_PALETTE = [
+  { bg: "bg-rose-500", text: "text-white" },
+  { bg: "bg-orange-500", text: "text-white" },
+  { bg: "bg-amber-500", text: "text-white" },
+  { bg: "bg-emerald-500", text: "text-white" },
+  { bg: "bg-teal-500", text: "text-white" },
+  { bg: "bg-sky-500", text: "text-white" },
+  { bg: "bg-indigo-500", text: "text-white" },
+  { bg: "bg-violet-500", text: "text-white" },
+  { bg: "bg-fuchsia-500", text: "text-white" },
+] as const;
+
+export function getAvatarColorClasses(name: string): string {
+  const normalized = name.trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const palette = AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length]!;
+  return `${palette.bg} ${palette.text}`;
 }

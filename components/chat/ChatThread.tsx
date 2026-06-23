@@ -106,7 +106,7 @@ function revokeAllBlobAttachments(messages: ChatMessage[]) {
 
 export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, onCleared, onBack, onConversationUpdated, onMessageSent, stagedDrop, onStagedDropConsumed }: ChatThreadProps) {
   const { data: session } = useSession();
-  const { selectedWorkspaceId } = useWorkspace();
+  const { selectedWorkspaceId, workspaces } = useWorkspace();
   const userId = session?.user?.id;
   const { isUserOnline, presenceVersion } = useRealtime();
   const isMobile = useMediaQuery("(max-width: 767px)");
@@ -119,6 +119,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const [bodyJson, setBodyJson] = useState<RichMessageDoc | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -179,6 +180,10 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
   useEffect(() => {
     setPendingFiles([]);
+    setEditingMessage(null);
+    setReplyTo(null);
+    setBody("");
+    setBodyJson(null);
   }, [conversation?.id]);
 
   useEffect(() => {
@@ -912,10 +917,37 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     }
   };
 
+  const cancelEditMessage = useCallback(() => {
+    setEditingMessage(null);
+    setBody("");
+    setBodyJson(null);
+  }, []);
+
+  const startEditMessage = useCallback((message: ChatMessage) => {
+    setReplyTo(null);
+    setPendingFiles([]);
+    setEditingMessage(message);
+    setBody(message.body);
+    const doc = message.bodyJson as RichMessageDoc | null | undefined;
+    setBodyJson(doc && hasRichFormatting(doc) ? doc : null);
+  }, []);
+
   const handleSend = async (opts?: { files?: File[] }) => {
     if (!conversation || readOnly || !userId || !session?.user?.name) return;
     const text = body.trim();
     const files = opts?.files ?? [];
+
+    if (editingMessage) {
+      if (!text) return;
+      try {
+        await handleEdit(editingMessage.id, text, bodyJson);
+        cancelEditMessage();
+      } catch {
+        // keep composer in edit mode
+      }
+      return;
+    }
+
     if (!text && files.length === 0) return;
 
     const tempId = `temp-${crypto.randomUUID()}`;
@@ -1063,7 +1095,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       updateMessageInState(data.message);
       toast.success("Message updated");
     } else {
-      toast.error("Could not edit message");
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      toast.error(data?.error ?? "Could not edit message");
       throw new Error("edit failed");
     }
   };
@@ -1154,6 +1187,43 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     return () => window.removeEventListener("taskflow:presence", handler);
   }, [directPeerId]);
 
+  const mentionMembers = useMemo(() => {
+    if (!conversation) return [];
+
+    const byId = new Map<
+      string,
+      { id: string; name: string; image?: string | null; email?: string }
+    >();
+
+    for (const p of conversation.participants) {
+      byId.set(p.id, {
+        id: p.id,
+        name: p.name,
+        image: p.image ?? null,
+        email: p.email,
+      });
+    }
+
+    if (conversation.type === "WORKSPACE" && conversation.workspaceId) {
+      const ws = workspaces.find((w) => w.id === conversation.workspaceId);
+      for (const m of ws?.members ?? []) {
+        if (!byId.has(m.user.id)) {
+          byId.set(m.user.id, {
+            id: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+          });
+        }
+      }
+    }
+
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [conversation, workspaces]);
+
+  const showMentions = Boolean(userId && mentionMembers.some((m) => m.id !== userId));
+  const allowTagAll =
+    conversation?.type === "GROUP" || conversation?.type === "WORKSPACE";
+
   if (!conversation) {
     return (
       <div className="flex flex-1 items-center justify-center bg-[var(--background)] p-8 text-center">
@@ -1167,8 +1237,6 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     );
   }
 
-  const mentionMembers = conversation.participants.map((p) => ({ id: p.id, name: p.name }));
-  const showMentions = mentionMembers.length > 1;
   const isPersonal = conversation.type === "PERSONAL";
   const isDirect = conversation.type === "DIRECT";
   const isDmStyle = isDirect || isPersonal;
@@ -1217,6 +1285,72 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const pinnedDisplay = [...pinned, ...pinnedNotInFeed].filter(
     (p, i, arr) => arr.findIndex((x) => x.id === p.id) === i
   ).slice(0, 3);
+
+  const composerBar = (
+    <div
+      className={cn(
+        "w-full min-w-0 max-w-full border-t border-[var(--border)] bg-[var(--chat-thread-bg)] px-1.5 pt-2 sm:px-2 md:px-4 md:pt-3",
+        keyboardOpen ? "pb-2.5" : "pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4",
+        isMobile
+          ? "fixed inset-x-0 bottom-0 z-[45] shadow-[0_-8px_24px_rgba(0,0,0,0.18)]"
+          : "z-30 shrink-0"
+      )}
+      style={
+        isMobile && keyboardOpen
+          ? {
+              bottom: Math.max(
+                0,
+                layoutHeight - visualViewport.height - visualViewport.offsetTop
+              ),
+            }
+          : undefined
+      }
+    >
+      {scheduledMessages.length > 0 && (
+        <div className="mb-1.5 space-y-1">
+          {scheduledMessages.map((item) => (
+            <ScheduledMessageCard
+              key={item.id}
+              item={item}
+              compact
+              onEdit={(scheduled) => {
+                setEditingScheduled(scheduled);
+                setScheduleDialogOpen(true);
+              }}
+              onDelete={(scheduled) => void handleDeleteScheduled(scheduled)}
+            />
+          ))}
+        </div>
+      )}
+      <ChatComposer
+        body={body}
+        bodyJson={bodyJson}
+        onBodyChange={({ body: nextBody, bodyJson: nextJson }) => {
+          setBody(nextBody);
+          setBodyJson(nextJson);
+        }}
+        onSend={handleSend}
+        onSchedule={readOnly ? undefined : handleScheduleOpen}
+        onTyping={handleTyping}
+        readOnly={readOnly}
+        members={mentionMembers}
+        showMentions={showMentions}
+        allowTagAll={allowTagAll}
+        currentUserId={userId}
+        conversationId={conversation.id}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+        editingMessage={editingMessage}
+        onCancelEdit={cancelEditMessage}
+        onOpenMom={readOnly ? undefined : () => setMomModalOpen(true)}
+        pendingFiles={pendingFiles}
+        onAddFiles={addPendingFiles}
+        onRemoveFile={(file) =>
+          setPendingFiles((prev) => prev.filter((f) => chatFileKey(f) !== chatFileKey(file)))
+        }
+      />
+    </div>
+  );
 
   const canDeleteConversation =
     conversation.type === "DIRECT" || conversation.type === "GROUP";
@@ -1297,20 +1431,26 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   ) : null;
 
   return (
-    <div className="grid h-full min-h-0 w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden chat-thread-bg">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
+    <div
+      className={cn(
+        "grid min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden chat-thread-bg",
+        isMobile ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_minmax(0,1fr)_auto]"
+      )}
+    >
       <div className="min-h-0 shrink-0">
-      <div className="surface-panel relative z-20 flex shrink-0 items-center gap-1 rounded-none border-b border-[var(--border)] px-3 py-2.5 md:gap-2 md:px-4 md:py-3">
-        {onBack && (
+      <div className="surface-panel relative z-20 flex w-full shrink-0 items-center gap-1.5 rounded-none border-b border-[var(--border)] px-2 py-2 sm:gap-2 sm:px-3 md:px-4 md:py-3">
+        {onBack ? (
           <button
             type="button"
             onClick={onBack}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] md:hidden"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] md:hidden"
             aria-label="Back to conversations"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-        )}
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 pr-[4.5rem]">
+        ) : null}
+        <div className="flex min-w-0 flex-1 items-center gap-2 pr-10 sm:pr-12">
           {isDirect && directPeer ? (
             <PresenceAvatar
               name={directPeer.name}
@@ -1319,8 +1459,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
               size="md"
             />
           ) : isPersonal ? (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10">
-              <Bookmark className="h-5 w-5 text-[var(--accent)]" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10 sm:h-10 sm:w-10">
+              <Bookmark className="h-4 w-4 text-[var(--accent)] sm:h-5 sm:w-5" />
             </div>
           ) : null}
           <div className="min-w-0 flex-1">
@@ -1341,7 +1481,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
             </p>
           </div>
         </div>
-        <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-0.5 md:right-4">
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 sm:right-3 md:right-4">
           <button
             type="button"
             onClick={() => {
@@ -1431,7 +1571,10 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       {isThreadDragging && <ChatFileDropOverlay label="Drop to attach here" />}
       <div
         ref={scrollContainerRef}
-        className="h-full overflow-y-auto overscroll-contain px-4 py-3 md:px-5 md:py-4"
+        className={cn(
+          "h-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-3 sm:px-4 md:px-5 md:py-4",
+          isMobile && "max-md:pb-28"
+        )}
       >
         {hasMore && (
           <div className="mb-4 flex shrink-0 justify-center">
@@ -1451,8 +1594,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           </div>
         )}
         {!loading && messages.length === 0 && (
-          <div className="flex flex-1 items-center justify-center px-6 py-10">
-            <div className="flex max-w-sm flex-col items-center rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card)]/50 px-8 py-10 text-center">
+          <div className="flex w-full min-w-0 max-w-full items-center justify-center px-2 py-6 sm:px-6 sm:py-10">
+            <div className="box-border flex w-full max-w-sm min-w-0 flex-col items-center rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card)]/50 px-3 py-6 text-center sm:px-8 sm:py-10">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)]/10">
                 <EmptyIcon className="h-7 w-7 text-[var(--accent)]" />
               </div>
@@ -1467,7 +1610,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           </div>
         )}
         {messages.length > 0 && (
-          <div className="space-y-1 pb-2">
+          <div className="min-w-0 max-w-full space-y-1 pb-2">
             {messages.map((msg, index) => {
               const prev = messages[index - 1];
               const next = messages[index + 1];
@@ -1506,11 +1649,14 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
                       isLastInGroup={!sameUserAsNext}
                       onJumpToMessage={(id, createdAt) => void navigateToMessage({ id, createdAt })}
                       onRetrySend={(tempId) => void handleRetrySend(tempId)}
-                      onReply={setReplyTo}
+                      onReply={(msg) => {
+                        cancelEditMessage();
+                        setReplyTo(msg);
+                      }}
                       onForward={readOnly ? undefined : setForwardMessage}
                       onReact={handleReact}
                       onPin={handlePin}
-                      onEdit={handleEdit}
+                      onStartEdit={readOnly ? undefined : startEditMessage}
                       onDelete={handleDelete}
                     />
                   </div>
@@ -1533,52 +1679,10 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       )}
       </div>
 
-      <div
-        className={cn(
-          "z-20 shrink-0 border-t border-[var(--border)] bg-[var(--chat-thread-bg)] px-2 pt-2 md:px-4 md:pt-3",
-          keyboardOpen ? "pb-2.5" : "pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4"
-        )}
-      >
-        {scheduledMessages.length > 0 && (
-          <div className="mb-1.5 space-y-1">
-            {scheduledMessages.map((item) => (
-              <ScheduledMessageCard
-                key={item.id}
-                item={item}
-                compact
-                onEdit={(scheduled) => {
-                  setEditingScheduled(scheduled);
-                  setScheduleDialogOpen(true);
-                }}
-                onDelete={(scheduled) => void handleDeleteScheduled(scheduled)}
-              />
-            ))}
-          </div>
-        )}
-        <ChatComposer
-          body={body}
-          bodyJson={bodyJson}
-          onBodyChange={({ body: nextBody, bodyJson: nextJson }) => {
-            setBody(nextBody);
-            setBodyJson(nextJson);
-          }}
-          onSend={handleSend}
-          onSchedule={readOnly ? undefined : handleScheduleOpen}
-          onTyping={handleTyping}
-          readOnly={readOnly}
-          members={conversation.participants}
-          showMentions={showMentions}
-          currentUserId={userId}
-          replyTo={replyTo}
-          onCancelReply={() => setReplyTo(null)}
-          onOpenMom={readOnly ? undefined : () => setMomModalOpen(true)}
-          pendingFiles={pendingFiles}
-          onAddFiles={addPendingFiles}
-          onRemoveFile={(file) =>
-            setPendingFiles((prev) => prev.filter((f) => chatFileKey(f) !== chatFileKey(file)))
-          }
-        />
-      </div>
+      {!isMobile && composerBar}
+    </div>
+
+      {isMobile && menuMounted ? createPortal(composerBar, document.body) : null}
 
       {conversation && userId && (
         <ScheduleMessageDialog

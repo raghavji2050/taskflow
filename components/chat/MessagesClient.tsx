@@ -16,9 +16,7 @@ import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { confirmLeaveActiveMomMeeting } from "@/lib/mom-meeting-guard";
 import {
-  mobileFixedPanelStyle,
   useMediaQuery,
-  useVisualViewport,
 } from "@/lib/use-visual-viewport";
 
 export function MessagesClient() {
@@ -37,8 +35,6 @@ export function MessagesClient() {
 
   const showMobileThread = Boolean(selectedId);
   const isMobile = useMediaQuery("(max-width: 767px)");
-  const visualViewport = useVisualViewport();
-  const mobilePanelStyle = isMobile ? mobileFixedPanelStyle(visualViewport) : undefined;
 
   const loadConversations = useCallback(async () => {
     const res = await fetch("/api/conversations");
@@ -358,19 +354,14 @@ export function MessagesClient() {
   );
 
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => {
-      document.body.style.overflow = "hidden";
-      document.documentElement.style.overflow = "hidden";
-    };
-    update();
-    mq.addEventListener("change", update);
+    if (!isMobile) return;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
     return () => {
-      mq.removeEventListener("change", update);
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
     };
-  }, []);
+  }, [isMobile]);
 
   if (status === "loading") return <PageLoader className="min-h-[50vh]" />;
 
@@ -379,10 +370,9 @@ export function MessagesClient() {
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-1 flex-col overflow-hidden",
+        "flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden",
         isMobile && "bg-[var(--background)]"
       )}
-      style={mobilePanelStyle}
     >
       <div className="mb-3 hidden shrink-0 px-4 pt-4 sm:px-6 sm:pt-5 lg:px-8 md:block">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -412,13 +402,13 @@ export function MessagesClient() {
 
       <div
         className={cn(
-          "surface-panel mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] sm:mx-4 sm:mb-3 md:flex-row md:rounded-3xl lg:mx-6 lg:mb-4",
-          "max-md:flex-1 max-md:rounded-2xl"
+          "surface-panel mx-2 mb-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] sm:mx-4 sm:mb-3 md:grid md:grid-cols-[20rem_minmax(0,1fr)] md:rounded-3xl lg:mx-6 lg:mb-4",
+          "max-md:mx-0 max-md:mb-0 max-md:flex max-md:flex-1 max-md:flex-col max-md:rounded-none max-md:border-x-0 max-md:border-b-0"
         )}
       >
         <div
           className={cn(
-            "flex h-full min-h-0 w-full shrink-0 flex-col border-[var(--border)] md:w-80 md:max-w-sm md:border-r",
+            "flex h-full min-h-0 w-full min-w-0 flex-col border-[var(--border)] md:w-auto md:max-w-[20rem] md:border-r",
             showMobileThread && "max-md:hidden"
           )}
         >

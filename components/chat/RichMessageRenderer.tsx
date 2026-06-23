@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { MessageBody } from "@/components/chat/MessageBody";
 import { CodeSnippet } from "@/components/chat/CodeSnippet";
+import { isMentionAllId } from "@/lib/mentions";
 import { sanitizeLinkHref } from "@/lib/rich-message-links";
 import { isRichDoc } from "@/lib/rich-message-types";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,8 @@ interface RichMessageRendererProps {
   linkClassName?: string;
   inline?: boolean;
   inOwnBubble?: boolean;
+  emojiOnly?: boolean;
+  emojiSizeClass?: string;
 }
 
 function renderMarks(text: string, marks: JsonNode["marks"], linkClassName?: string): ReactNode {
@@ -69,7 +72,9 @@ function renderNode(
   }
   if (node.type === "hardBreak") return <br key={key} />;
   if (node.type === "mention") {
+    const id = String(node.attrs?.id ?? "");
     const label = String(node.attrs?.label ?? node.attrs?.id ?? "");
+    const display = isMentionAllId(id) ? "all" : label;
     return (
       <span
         key={key}
@@ -78,7 +83,7 @@ function renderNode(
           opts.mentionClassName
         )}
       >
-        @{label}
+        @{display}
       </span>
     );
   }
@@ -210,13 +215,15 @@ export function RichMessageRenderer({
   linkClassName,
   inline,
   inOwnBubble,
+  emojiOnly,
+  emojiSizeClass,
 }: RichMessageRendererProps) {
   if (!bodyJson || !isRichDoc(bodyJson)) {
     return (
       <MessageBody
         body={body}
         members={members}
-        className={className}
+        className={cn(emojiOnly && emojiSizeClass, className)}
         mentionClassName={mentionClassName}
         linkClassName={linkClassName}
         inline={inline}
@@ -230,8 +237,8 @@ export function RichMessageRenderer({
   );
 
   if (inline) {
-    return <span className={cn("inline", className)}>{children}</span>;
+    return <span className={cn("inline", emojiOnly && emojiSizeClass, className)}>{children}</span>;
   }
 
-  return <div className={cn("text-sm", className)}>{children}</div>;
+  return <div className={cn("text-sm", emojiOnly && emojiSizeClass, className)}>{children}</div>;
 }

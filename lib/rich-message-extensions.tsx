@@ -18,10 +18,25 @@ import type { Editor } from "@tiptap/core";
 import { getLowlight } from "@/lib/rich-message-lowlight";
 import { isAllowedLinkUrl } from "@/lib/rich-message-links";
 import { MentionSuggestionList } from "@/components/chat/MentionSuggestionList";
+import { MENTION_ALL_ID, MENTION_ALL_LABEL } from "@/lib/mentions";
 
 export interface RichEditorMember {
   id: string;
   name: string;
+  image?: string | null;
+  email?: string;
+}
+
+function filterMentionMembers(members: RichEditorMember[], query: string): RichEditorMember[] {
+  const q = query.trim().toLowerCase();
+  const sorted = [...members].sort((a, b) => a.name.localeCompare(b.name));
+  if (!q) return sorted;
+  return sorted.filter((m) => {
+    const name = m.name.toLowerCase();
+    const email = m.email?.toLowerCase() ?? "";
+    const first = name.split(/\s+/)[0] ?? "";
+    return name.includes(q) || first.includes(q) || email.includes(q);
+  });
 }
 
 function createSuggestionRenderer<T extends object>(Component: ComponentType<T>) {
@@ -67,13 +82,72 @@ function updatePosition(el: HTMLElement, clientRect?: (() => DOMRect | null) | n
   el.style.transform = "translateY(-100%)";
 }
 
+export interface MentionMembersSource {
+  getMembers: () => RichEditorMember[];
+  getCurrentUserId: () => string | undefined;
+  getAllowTagAll?: () => boolean;
+}
+
+function buildMentionSuggestionItems(
+  options: {
+    members?: RichEditorMember[];
+    currentUserId?: string;
+    mentionMembers?: MentionMembersSource;
+  },
+  query: string
+) {
+  const q = query.trim().toLowerCase();
+  const members = filterMentionMembers(getMentionableMembers(options), query).map((m) => ({
+    id: m.id,
+    label: m.name,
+    image: m.image ?? null,
+    tagAll: false as const,
+  }));
+
+  const allowTagAll = options.mentionMembers?.getAllowTagAll?.() ?? false;
+  const includeTagAll = allowTagAll && MENTION_ALL_LABEL.startsWith(q);
+
+  if (!includeTagAll) return members;
+
+  return [
+    { id: MENTION_ALL_ID, label: MENTION_ALL_LABEL, image: null, tagAll: true as const },
+    ...members,
+  ];
+}
+
+function getMentionableMembers(options: {
+  members?: RichEditorMember[];
+  currentUserId?: string;
+  mentionMembers?: MentionMembersSource;
+}): RichEditorMember[] {
+  if (options.mentionMembers) {
+    const currentUserId = options.mentionMembers.getCurrentUserId();
+    return options.mentionMembers
+      .getMembers()
+      .filter((m) => m.id !== currentUserId);
+  }
+  return (options.members ?? []).filter((m) => m.id !== options.currentUserId);
+}
+
+/** @internal exported for unit tests */
+export function getMentionableMembersForTest(options: {
+  members?: RichEditorMember[];
+  currentUserId?: string;
+  mentionMembers?: MentionMembersSource;
+}) {
+  return getMentionableMembers(options);
+}
+
 export function createEditorExtensions(options: {
   placeholder?: string;
   members?: RichEditorMember[];
   currentUserId?: string;
+  mentionMembers?: MentionMembersSource;
 }) {
   const lowlight = getLowlight();
-  const members = (options.members ?? []).filter((m) => m.id !== options.currentUserId);
+  const enableMentions =
+    options.mentionMembers != null ||
+    (options.members != null && options.currentUserId != null);
 
   return [
     StarterKit.configure({
@@ -104,17 +178,13 @@ export function createEditorExtensions(options: {
     TableRow,
     TableCell,
     TableHeader,
-    ...(members.length > 0
+    ...(enableMentions
       ? [
           Mention.configure({
             HTMLAttributes: { class: "rich-mention" },
             suggestion: {
               char: "@",
-              items: ({ query }) =>
-                members
-                  .filter((m) => m.name.toLowerCase().includes(query.toLowerCase()))
-                  .slice(0, 8)
-                  .map((m) => ({ id: m.id, label: m.name })),
+              items: ({ query }) => buildMentionSuggestionItems(options, query),
               command: ({ editor, range, props }) => {
                 editor
                   .chain()

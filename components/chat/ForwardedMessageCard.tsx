@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { MessageBody } from "@/components/chat/MessageBody";
 import { MessageAttachmentPreview } from "@/components/chat/MessageAttachmentPreview";
 import { DocumentShareCard } from "@/components/chat/DocumentShareCard";
+import { MessageLinkPreview } from "@/components/chat/MessageLinkPreview";
 import type { FormattedForwardedFrom } from "@/lib/message-format";
 
 interface ForwardedMessageCardProps {
@@ -64,6 +65,15 @@ export function ForwardedMessageCard({
 
           {forwarded.sharedDocument && (
             <DocumentShareCard document={forwarded.sharedDocument} isOwn={isOwn} />
+          )}
+
+          {!forwarded.sharedDocument && forwarded.body && (
+            <MessageLinkPreview
+              body={forwarded.body}
+              attachmentUrls={forwarded.attachments.map((a) => a.url)}
+              isOwn={isOwn}
+              compact
+            />
           )}
         </>
       )}

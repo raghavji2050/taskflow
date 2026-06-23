@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { messageSchema, messagesQuerySchema } from "@/lib/validations";
 import { canAccessConversation, canPostToConversation } from "@/lib/chat-access";
-import { getConversationDisplayName } from "@/lib/conversations";
+import { getConversationDisplayName, getMentionCandidatesForConversation } from "@/lib/conversations";
 import {
   addMessageAttachments,
   getMessagesForDate,
@@ -124,7 +124,7 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const conversationTitle = getConversationDisplayName(conversation, user.id);
-    const mentionCandidates = conversation.participants.map((p) => p.user);
+    const mentionCandidates = await getMentionCandidatesForConversation(conversation);
 
     let message = await sendMessage({
       conversationId: id,
