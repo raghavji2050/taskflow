@@ -9,18 +9,14 @@ self.addEventListener("activate", (event) => {
 /** @type {Map<string, { visible: boolean, at: number }>} */
 const visibilityByUser = new Map();
 
-const VISIBILITY_TTL_MS = 10_000;
+const VISIBILITY_TTL_MS = 7_000;
 
 self.addEventListener("message", (event) => {
   if (event.data?.type !== "taskflow:visibility") return;
   const userId = event.data.userId;
   if (!userId) return;
-  if (!event.data.visible) {
-    visibilityByUser.delete(userId);
-    return;
-  }
   visibilityByUser.set(userId, {
-    visible: true,
+    visible: Boolean(event.data.visible),
     at: Date.now(),
   });
 });
@@ -29,21 +25,19 @@ function isUserForeground(userId) {
   if (!userId) return false;
   const state = visibilityByUser.get(userId);
   if (!state) return false;
-  return state.visible && Date.now() - state.at < VISIBILITY_TTL_MS;
+  if (Date.now() - state.at >= VISIBILITY_TTL_MS) return false;
+  return state.visible;
 }
 
 async function shouldSuppressPush(userId) {
-  if (userId && isUserForeground(userId)) return true;
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  // No open app windows — always show push (tab was closed).
+  if (clients.length === 0) return false;
 
-  if (!userId) {
-    const clients = await self.clients.matchAll({
-      type: "window",
-      includeUncontrolled: true,
-    });
-    return clients.some((client) => client.visibilityState === "visible");
-  }
-
-  return false;
+  return Boolean(userId && isUserForeground(userId));
 }
 
 self.addEventListener("push", (event) => {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PUSH_FOREGROUND_HEARTBEAT_MS } from "@/lib/push-foreground";
 
 export function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -159,6 +160,18 @@ export async function isPushSubscribed(): Promise<boolean> {
   }
 }
 
+/** True when this browser has an active Web Push subscription (SW delivers OS notifications). */
+export async function hasActivePushSubscription(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    return subscription !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function usePushEnrollment() {
   const [needsEnable, setNeedsEnable] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -246,6 +259,26 @@ export function showPushEnrollmentToast() {
 }
 
 /** Tell the service worker and server whether this tab is in the foreground. */
+function reportForegroundState(userId: string, visible: boolean) {
+  const body = JSON.stringify({ visible });
+
+  // sendBeacon survives tab close; keepalive fetch is a fallback.
+  if (!visible && typeof navigator.sendBeacon === "function") {
+    const sent = navigator.sendBeacon(
+      "/api/notifications/foreground",
+      new Blob([body], { type: "application/json" })
+    );
+    if (sent) return;
+  }
+
+  void fetch("/api/notifications/foreground", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: !visible,
+  });
+}
+
 export async function syncForegroundToServiceWorker(userId?: string) {
   if (!("serviceWorker" in navigator)) return;
 
@@ -265,11 +298,7 @@ export async function syncForegroundToServiceWorker(userId?: string) {
   navigator.serviceWorker.controller?.postMessage(payload);
 
   if (userId) {
-    void fetch("/api/notifications/foreground", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ visible }),
-    });
+    reportForegroundState(userId, visible);
   }
 }
 
@@ -287,15 +316,16 @@ export function startForegroundSync(userId?: string): () => void {
 
   send();
   document.addEventListener("visibilitychange", send);
-  window.addEventListener("focus", send);
-  window.addEventListener("blur", send);
   window.addEventListener("pagehide", send);
 
+  const heartbeat = window.setInterval(() => {
+    if (!document.hidden && userId) void syncForegroundToServiceWorker(userId);
+  }, PUSH_FOREGROUND_HEARTBEAT_MS);
+
   return () => {
+    clearInterval(heartbeat);
     navigator.serviceWorker.removeEventListener("controllerchange", onController);
     document.removeEventListener("visibilitychange", send);
-    window.removeEventListener("focus", send);
-    window.removeEventListener("blur", send);
     window.removeEventListener("pagehide", send);
     navigator.serviceWorker.controller?.postMessage({
       type: "taskflow:visibility",
@@ -303,12 +333,7 @@ export function startForegroundSync(userId?: string): () => void {
       userId: userId ?? null,
     });
     if (userId) {
-      void fetch("/api/notifications/foreground", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ visible: false }),
-        keepalive: true,
-      });
+      reportForegroundState(userId, false);
     }
   };
 }

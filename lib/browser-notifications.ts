@@ -1,4 +1,5 @@
 const notifiedKey = "taskflow:last-notified";
+const recentMessageIds = new Set<string>();
 
 function readNotifiedMap(): Record<string, number> {
   try {
@@ -27,10 +28,20 @@ export function showBrowserNotification(
   if (Notification.permission !== "granted") return;
   if (!document.hidden) return;
 
+  if (options?.messageId) {
+    if (recentMessageIds.has(options.messageId)) return;
+    recentMessageIds.add(options.messageId);
+    window.setTimeout(() => recentMessageIds.delete(options.messageId!), 10_000);
+  }
+
+  const tag =
+    options?.tag ??
+    (options?.conversationId ? `chat-${options.conversationId}` : "taskflow");
+
   const notification = new Notification(title, {
     body: options?.body,
     icon: "/icon.svg",
-    tag: options?.tag ?? options?.conversationId ?? "taskflow",
+    tag,
     data: {
       url: options?.url ?? "/dashboard",
       conversationId: options?.conversationId,

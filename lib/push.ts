@@ -64,17 +64,31 @@ export async function sendPushToUser(
   }
 ) {
   try {
-    if (!configureWebPush()) return;
+    if (!configureWebPush()) {
+      if (process.env.PUSH_DEBUG === "1") {
+        console.warn("[push] VAPID not configured — cannot send push");
+      }
+      return;
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { pushForegroundAt: true },
     });
     if (isPushForegroundActive(user?.pushForegroundAt)) {
+      if (process.env.PUSH_DEBUG === "1") {
+        console.info(`[push] Skipped send for foreground user ${userId}`);
+      }
       return;
     }
 
     const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+    if (subs.length === 0) {
+      if (process.env.PUSH_DEBUG === "1") {
+        console.warn(`[push] No subscriptions for user ${userId}`);
+      }
+      return;
+    }
 
     for (const sub of subs) {
       try {

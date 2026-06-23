@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { getActiveConversationId } from "@/lib/active-chat";
+import { showBrowserNotification } from "@/lib/browser-notifications";
+import { hasActivePushSubscription } from "@/lib/push-client";
 
 interface NotificationDetail {
   title?: string;
@@ -23,28 +25,68 @@ interface MessageDetail {
   message?: { user?: { name?: string } };
 }
 
+function chatUrl(conversationId: string, messageId?: string) {
+  const base = `/dashboard/messages?c=${conversationId}`;
+  return messageId ? `${base}#msg-${messageId}` : base;
+}
+
 export function NotificationListener() {
   const router = useRouter();
   const { data: session } = useSession();
   const userId = session?.user?.id;
+  const pushActiveRef = useRef(false);
 
   useEffect(() => {
+    const refreshPushState = () => {
+      void hasActivePushSubscription().then((active) => {
+        pushActiveRef.current = active;
+      });
+    };
+
+    refreshPushState();
+    window.addEventListener("taskflow:push-status", refreshPushState);
+
     const openChat = (conversationId?: string, messageId?: string) => {
       if (!conversationId) return;
-      const path = `/dashboard/messages?c=${conversationId}${
-        messageId ? `#msg-${messageId}` : ""
-      }`;
-      router.push(path);
+      router.push(chatUrl(conversationId, messageId));
+    };
+
+    const maybeShowOsNotification = (
+      title: string,
+      options: {
+        body?: string;
+        url?: string;
+        conversationId?: string;
+        messageId?: string;
+        tag?: string;
+      }
+    ) => {
+      if (!document.hidden) return;
+      // Web Push + service worker already shows OS notifications when subscribed.
+      if (pushActiveRef.current) return;
+      showBrowserNotification(title, options);
     };
 
     const notificationHandler = (event: Event) => {
       const detail = (event as CustomEvent<NotificationDetail>).detail;
       if (!detail?.notificationType) return;
-      if (document.hidden) return;
 
       const openFromNotification = () => openChat(detail.conversationId, detail.messageId);
 
       if (detail.notificationType === "mention") {
+        if (document.hidden) {
+          maybeShowOsNotification(detail.title ?? "You were mentioned", {
+            body: detail.body,
+            url: detail.conversationId
+              ? chatUrl(detail.conversationId, detail.messageId)
+              : "/dashboard/messages",
+            conversationId: detail.conversationId,
+            messageId: detail.messageId,
+            tag: detail.conversationId ? `chat-${detail.conversationId}` : "taskflow",
+          });
+          return;
+        }
+
         toast(detail.title ?? "You were mentioned", {
           description: detail.body,
           action: detail.conversationId
@@ -60,9 +102,20 @@ export function NotificationListener() {
       if (!detail.conversationId || !detail.senderId) return;
       if (detail.senderId === userId) return;
       if (detail.conversationId === getActiveConversationId()) return;
-      if (document.hidden) return;
 
       const senderName = detail.message?.user?.name ?? "New message";
+
+      if (document.hidden) {
+        maybeShowOsNotification(senderName, {
+          body: detail.preview,
+          url: chatUrl(detail.conversationId, detail.messageId),
+          conversationId: detail.conversationId,
+          messageId: detail.messageId,
+          tag: `chat-${detail.conversationId}`,
+        });
+        return;
+      }
+
       toast(senderName, {
         description: detail.preview,
         action: {
@@ -77,6 +130,7 @@ export function NotificationListener() {
     return () => {
       window.removeEventListener("taskflow:notification", notificationHandler);
       window.removeEventListener("taskflow:message", messageHandler);
+      window.removeEventListener("taskflow:push-status", refreshPushState);
     };
   }, [router, userId]);
 
