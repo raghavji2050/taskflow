@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
-import { Theme } from "emoji-picker-react";
+import { Theme, EmojiStyle } from "emoji-picker-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/lib/use-visual-viewport";
@@ -101,7 +101,7 @@ function QuickEmojiButton({
       )}
       aria-label={`React with ${emoji}`}
     >
-      {emoji}
+      <span className="chat-emoji">{emoji}</span>
     </button>
   );
 }
@@ -120,18 +120,21 @@ function FullEmojiPanel({
   const theme = useEmojiTheme();
 
   return (
-    <EmojiPickerLib
-      onEmojiClick={(data) => {
-        onSelect(data.emoji);
-        onClose();
-      }}
-      theme={theme}
-      width={width}
-      height={height}
-      lazyLoadEmojis
-      searchPlaceholder="Search emojis…"
-      previewConfig={{ showPreview: false }}
-    />
+    <div className="chat-emoji-picker-panel">
+      <EmojiPickerLib
+        onEmojiClick={(data) => {
+          onSelect(data.emoji);
+          onClose();
+        }}
+        theme={theme}
+        emojiStyle={EmojiStyle.GOOGLE}
+        width={width}
+        height={height}
+        lazyLoadEmojis
+        searchPlaceholder="Search emojis…"
+        previewConfig={{ showPreview: false }}
+      />
+    </div>
   );
 }
 

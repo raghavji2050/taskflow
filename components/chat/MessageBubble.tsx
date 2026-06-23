@@ -677,7 +677,7 @@ export function MessageBubble({
                     : "border-[var(--card-border)] bg-[var(--card)]"
                 )}
               >
-                {g.emoji}
+                <span className="chat-emoji">{g.emoji}</span>
                 <span className="text-[10px] text-[var(--muted)]">{g.count}</span>
               </button>
             ))}

@@ -9,6 +9,7 @@ import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
 import { PushSubscribe } from "@/components/PushSubscribe";
 import { useRealtime } from "@/components/RealtimeProvider";
 import { formatConversationListTime } from "@/lib/chat-dates";
+import { EmojiAwareText } from "@/lib/emoji-text";
 import { useFileDragDrop } from "@/lib/chat-file-drop";
 import { cn } from "@/lib/utils";
 import type { ChatConversation } from "@/components/chat/ChatThread";
@@ -216,7 +217,9 @@ function ConversationRow({
                 hasUnread && "font-medium text-[var(--foreground)]"
               )}
             >
-              {formatLastMessagePreview(conv.lastMessage, currentUserId, conv.type)}
+              <EmojiAwareText
+                text={formatLastMessagePreview(conv.lastMessage, currentUserId, conv.type)}
+              />
             </p>
           ) : null}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { splitMessageBody } from "@/lib/mentions";
+import { EmojiAwareText } from "@/lib/emoji-text";
 import { splitTextWithUrls } from "@/lib/urls";
 import { cn } from "@/lib/utils";
 
@@ -11,9 +12,10 @@ interface MessageBodyProps {
   mentionClassName?: string;
   inline?: boolean;
   linkClassName?: string;
+  skipEmojiWrap?: boolean;
 }
 
-function renderTextWithUrls(text: string, linkClassName?: string) {
+function renderTextWithUrls(text: string, linkClassName?: string, skipEmojiWrap?: boolean) {
   return splitTextWithUrls(text).map((part, i) =>
     part.type === "url" ? (
       <a
@@ -26,8 +28,10 @@ function renderTextWithUrls(text: string, linkClassName?: string) {
       >
         {part.value}
       </a>
-    ) : (
+    ) : skipEmojiWrap ? (
       <span key={`text-${i}`}>{part.value}</span>
+    ) : (
+      <EmojiAwareText key={`text-${i}`} text={part.value} keyPrefix={`u${i}-`} />
     )
   );
 }
@@ -39,6 +43,7 @@ export function MessageBody({
   mentionClassName,
   inline,
   linkClassName,
+  skipEmojiWrap,
 }: MessageBodyProps) {
   const segments = splitMessageBody(body, members);
   const Tag = inline ? "span" : "p";
@@ -57,7 +62,7 @@ export function MessageBody({
             @{seg.value}
           </span>
         ) : (
-          <span key={`${i}-text`}>{renderTextWithUrls(seg.value, linkClassName)}</span>
+          <span key={`${i}-text`}>{renderTextWithUrls(seg.value, linkClassName, skipEmojiWrap)}</span>
         )
       )}
     </Tag>

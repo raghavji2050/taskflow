@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { MessageBody } from "@/components/chat/MessageBody";
 import { CodeSnippet } from "@/components/chat/CodeSnippet";
+import { EmojiAwareText } from "@/lib/emoji-text";
 import { isMentionAllId } from "@/lib/mentions";
 import { sanitizeLinkHref } from "@/lib/rich-message-links";
 import { isRichDoc } from "@/lib/rich-message-types";
@@ -29,23 +30,23 @@ interface RichMessageRendererProps {
   emojiSizeClass?: string;
 }
 
-function renderMarks(text: string, marks: JsonNode["marks"], linkClassName?: string): ReactNode {
-  if (!marks?.length) return text;
-  return marks.reduce<ReactNode>((node, mark) => {
-    if (mark.type === "bold") return <strong>{node}</strong>;
-    if (mark.type === "italic") return <em>{node}</em>;
-    if (mark.type === "underline") return <u>{node}</u>;
-    if (mark.type === "strike") return <s>{node}</s>;
+function renderMarks(node: ReactNode, marks: JsonNode["marks"], linkClassName?: string): ReactNode {
+  if (!marks?.length) return node;
+  return marks.reduce<ReactNode>((wrapped, mark) => {
+    if (mark.type === "bold") return <strong>{wrapped}</strong>;
+    if (mark.type === "italic") return <em>{wrapped}</em>;
+    if (mark.type === "underline") return <u>{wrapped}</u>;
+    if (mark.type === "strike") return <s>{wrapped}</s>;
     if (mark.type === "code") {
       return (
         <code className="rounded bg-[var(--surface-hover)] px-1 py-0.5 font-mono text-[0.9em]">
-          {node}
+          {wrapped}
         </code>
       );
     }
     if (mark.type === "link") {
       const href = sanitizeLinkHref(String(mark.attrs?.href ?? ""));
-      if (!href) return node;
+      if (!href) return wrapped;
       return (
         <a
           href={href}
@@ -54,21 +55,30 @@ function renderMarks(text: string, marks: JsonNode["marks"], linkClassName?: str
           className={cn("underline break-all cursor-pointer", linkClassName ?? "text-[var(--accent)]")}
           onClick={(e) => e.stopPropagation()}
         >
-          {node}
+          {wrapped}
         </a>
       );
     }
-    return node;
-  }, text);
+    return wrapped;
+  }, node);
 }
 
 function renderNode(
   node: JsonNode,
   key: string,
-  opts: Pick<RichMessageRendererProps, "mentionClassName" | "linkClassName" | "inOwnBubble">
+  opts: Pick<RichMessageRendererProps, "mentionClassName" | "linkClassName" | "inOwnBubble" | "emojiOnly">
 ): ReactNode {
   if (node.type === "text" && node.text != null) {
-    return <span key={key}>{renderMarks(node.text, node.marks, opts.linkClassName)}</span>;
+    const content = opts.emojiOnly ? (
+      node.text
+    ) : (
+      <EmojiAwareText text={node.text} keyPrefix={key} />
+    );
+    return (
+      <span key={key}>
+        {renderMarks(content, node.marks, opts.linkClassName)}
+      </span>
+    );
   }
   if (node.type === "hardBreak") return <br key={key} />;
   if (node.type === "mention") {
@@ -223,22 +233,36 @@ export function RichMessageRenderer({
       <MessageBody
         body={body}
         members={members}
-        className={cn(emojiOnly && emojiSizeClass, className)}
+        className={cn(
+          inline ? "inline" : "whitespace-pre-wrap break-words",
+          emojiOnly && "chat-emoji-only",
+          emojiOnly && emojiSizeClass,
+          className
+        )}
         mentionClassName={mentionClassName}
         linkClassName={linkClassName}
         inline={inline}
+        skipEmojiWrap={emojiOnly}
       />
     );
   }
 
   const doc = bodyJson as JsonNode;
   const children = (doc.content ?? []).map((node, i) =>
-    renderNode(node, `root-${i}`, { mentionClassName, linkClassName, inOwnBubble })
+    renderNode(node, `root-${i}`, { mentionClassName, linkClassName, inOwnBubble, emojiOnly })
   );
 
   if (inline) {
-    return <span className={cn("inline", emojiOnly && emojiSizeClass, className)}>{children}</span>;
+    return (
+      <span className={cn("inline", emojiOnly && "chat-emoji-only", emojiOnly && emojiSizeClass, className)}>
+        {children}
+      </span>
+    );
   }
 
-  return <div className={cn("text-sm", emojiOnly && emojiSizeClass, className)}>{children}</div>;
+  return (
+    <div className={cn("text-sm", emojiOnly && "chat-emoji-only", emojiOnly && emojiSizeClass, className)}>
+      {children}
+    </div>
+  );
 }

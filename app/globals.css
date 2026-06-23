@@ -50,6 +50,7 @@
   --chat-bubble-own: var(--accent);
   --chat-bubble-other: var(--surface-2);
   --chat-thread-bg: var(--background);
+  --font-emoji: "Noto Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", emoji;
   /* Status */
   --status-online: #10b981;
   --status-read: #5e6ad2;
@@ -115,7 +116,8 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-sidebar: var(--sidebar);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, var(--font-emoji);
   --font-mono: var(--font-geist-mono);
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
@@ -125,9 +127,17 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.chat-emoji,
+.chat-emoji-only {
+  font-family: var(--font-emoji);
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
 }
 
 button:not(:disabled),
@@ -493,7 +503,6 @@ select:not(:disabled) {
   background: var(--muted);
 }
 
-/* Rich message editor (Tiptap) */
 .rich-message-editor {
   min-width: 0;
   width: 100%;
@@ -505,6 +514,8 @@ select:not(:disabled) {
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif, var(--font-emoji);
 }
 
 .rich-message-input {
