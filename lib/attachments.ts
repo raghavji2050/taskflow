@@ -120,3 +120,18 @@ export function isAttachmentOnlyBody(body: string, filename: string) {
     isMultiFileAttachmentBody(trimmed)
   );
 }
+
+export function isGifAttachment(mimeType: string, filename = "") {
+  return mimeType === "image/gif" || filename.toLowerCase().endsWith(".gif");
+}
+
+export function isGifStickerMessage(
+  body: string,
+  attachments?: { mimeType: string; filename: string }[]
+) {
+  if (!attachments || attachments.length !== 1) return false;
+  const att = attachments[0]!;
+  if (!isGifAttachment(att.mimeType, att.filename)) return false;
+  const trimmed = body.trim();
+  return !trimmed || isAttachmentOnlyBody(trimmed, att.filename);
+}

@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Clock, Paperclip, Plus, Send, Smile, X, ClipboardList, Pencil } from "lucide-react";
+import { Check, Clock, Film, Paperclip, Plus, Send, Smile, X, ClipboardList, Pencil } from "lucide-react";
 import {
   RichMessageEditor,
   type RichMessageEditorHandle,
 } from "@/components/chat/RichMessageEditor";
 import { RichMessageRenderer } from "@/components/chat/RichMessageRenderer";
-import { EmojiPicker } from "@/components/chat/EmojiPicker";
+import { ChatMediaPicker } from "@/components/chat/ChatMediaPicker";
+import type { SelectedGif } from "@/components/chat/GifPicker";
 import { ChatFileDropOverlay } from "@/components/chat/ChatFileDropOverlay";
 import { ScheduleButton } from "@/components/chat/ScheduleButton";
 import { ComposerLinkPreview } from "@/components/chat/MessageLinkPreview";
@@ -43,6 +44,7 @@ interface ChatComposerProps {
   editingMessage?: ChatMessage | null;
   onCancelEdit?: () => void;
   onOpenMom?: () => void;
+  onSendGif?: (gif: SelectedGif) => void;
   pendingFiles: File[];
   onAddFiles: (files: File[]) => void;
   onRemoveFile: (file: File) => void;
@@ -132,13 +134,15 @@ export function ChatComposer({
   editingMessage,
   onCancelEdit,
   onOpenMom,
+  onSendGif,
   pendingFiles,
   onAddFiles,
   onRemoveFile,
   conversationId,
   allowTagAll = false,
 }: ChatComposerProps) {
-  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerTab, setMediaPickerTab] = useState<"emoji" | "gif">("emoji");
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
   const isMobile = useMediaQuery("(max-width: 767px)");
@@ -181,6 +185,11 @@ export function ChatComposer({
 
   const closeExtras = () => setExtrasOpen(false);
 
+  const openMediaPicker = (tab: "emoji" | "gif") => {
+    setMediaPickerTab(tab);
+    setMediaPickerOpen(true);
+  };
+
   const mobileExtrasSheet =
     extrasOpen && isMobile && menuMounted
       ? createPortal(
@@ -200,9 +209,19 @@ export function ChatComposer({
                 icon={<Smile />}
                 onClick={() => {
                   closeExtras();
-                  setEmojiOpen(true);
+                  openMediaPicker("emoji");
                 }}
               />
+              {onSendGif && !isEditing && (
+                <ComposerExtraAction
+                  label="GIF"
+                  icon={<Film />}
+                  onClick={() => {
+                    closeExtras();
+                    openMediaPicker("gif");
+                  }}
+                />
+              )}
               {!isEditing && (
                 <ComposerExtraAction
                   label="Attach file"
@@ -354,12 +373,23 @@ export function ChatComposer({
             ref={emojiButtonRef}
             type="button"
             disabled={composerDisabled}
-            onClick={() => setEmojiOpen((v) => !v)}
+            onClick={() => openMediaPicker("emoji")}
             className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 md:h-10 md:w-10"
-            aria-label="Add emoji"
+            aria-label="Add emoji or GIF"
           >
             <Smile className="h-4 w-4 md:h-5 md:w-5" />
           </button>
+          {onSendGif && !isEditing && (
+            <button
+              type="button"
+              disabled={composerDisabled}
+              onClick={() => openMediaPicker("gif")}
+              className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 md:flex md:h-10 md:w-10"
+              aria-label="Send GIF"
+            >
+              <Film className="h-4 w-4 md:h-5 md:w-5" />
+            </button>
+          )}
           {!isEditing && (
           <button
             type="button"
@@ -386,11 +416,13 @@ export function ChatComposer({
           {onSchedule && !isEditing && <ScheduleButton disabled={!canSchedule} onClick={onSchedule} />}
         </div>
 
-        {emojiOpen && (
-          <EmojiPicker
+        {mediaPickerOpen && (
+          <ChatMediaPicker
             anchorRef={isMobile ? undefined : emojiButtonRef}
-            onSelect={(emoji) => editorRef.current?.insertEmoji(emoji)}
-            onClose={() => setEmojiOpen(false)}
+            initialTab={mediaPickerTab}
+            onEmojiSelect={(emoji) => editorRef.current?.insertEmoji(emoji)}
+            onGifSelect={(gif) => onSendGif?.(gif)}
+            onClose={() => setMediaPickerOpen(false)}
           />
         )}
 

@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { ArrowLeft, Bookmark, Calendar, ChevronDown, Eraser, Loader2, MessageCircle, MoreVertical, Pin, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ChatComposer } from "@/components/chat/ChatComposer";
+import type { SelectedGif } from "@/components/chat/GifPicker";
 import { ChatFileDropOverlay } from "@/components/chat/ChatFileDropOverlay";
 import { ChatDateJumpModal } from "@/components/chat/ChatDateJumpModal";
 import { ChatSearchPanel } from "@/components/chat/ChatSearchPanel";
@@ -151,7 +152,16 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef(0);
   const pendingSendsRef = useRef<
-    Map<string, { body: string; bodyJson: RichMessageDoc | null; parentId: string | null; files: File[] }>
+    Map<
+      string,
+      {
+        body: string;
+        bodyJson: RichMessageDoc | null;
+        parentId: string | null;
+        files: File[];
+        giphyId?: string;
+      }
+    >
   >(new Map());
 
   const SCROLL_BOTTOM_THRESHOLD = 120;
@@ -812,6 +822,18 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     typingStopTimerRef.current = setTimeout(() => sendTypingIndicator(convId, false), 2500);
   }, [conversation?.id, readOnly]);
 
+  const sendGifMessageRequest = async (
+    convId: string,
+    giphyId: string,
+    parentId: string | null
+  ) => {
+    return fetch(`/api/conversations/${convId}/messages/gif`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ giphyId, parentId }),
+    });
+  };
+
   const sendMessageRequest = async (
     convId: string,
     text: string,
@@ -857,13 +879,15 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       );
 
       try {
-        const res = await sendMessageRequest(
-          conversation.id,
-          pending.body,
-          pending.parentId,
-          pending.files,
-          pending.bodyJson
-        );
+        const res = pending.giphyId
+          ? await sendGifMessageRequest(conversation.id, pending.giphyId, pending.parentId)
+          : await sendMessageRequest(
+              conversation.id,
+              pending.body,
+              pending.parentId,
+              pending.files,
+              pending.bodyJson
+            );
         const data = await res.json();
         if (res.ok) {
           pendingSendsRef.current.delete(clientTempId);
@@ -891,6 +915,93 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     },
     [conversation, userId, session?.user?.name, withReceipts]
   );
+
+  const handleSendGif = async (gif: SelectedGif) => {
+    if (!conversation || readOnly || !userId || !session?.user?.name || editingMessage) return;
+
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const parentId = replyTo?.id ?? null;
+    const filename = `giphy-${gif.id}.gif`;
+    const optimisticBody = attachmentPlaceholderBody(1, [filename]);
+    const optimisticAttachments = [
+      {
+        id: `temp-att-${tempId}-0`,
+        filename,
+        url: gif.previewUrl,
+        mimeType: "image/gif",
+        size: 0,
+      },
+    ];
+
+    pendingSendsRef.current.set(tempId, {
+      body: optimisticBody,
+      bodyJson: null,
+      parentId,
+      files: [],
+      giphyId: gif.id,
+    });
+    stickToBottomRef.current = true;
+    setNewMessagesBelow(0);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        clientTempId: tempId,
+        body: optimisticBody,
+        bodyJson: null,
+        createdAt: new Date().toISOString(),
+        user: { id: userId, name: session.user.name ?? "You", image: session.user.image ?? null },
+        sendStatus: "sending" as const,
+        attachments: optimisticAttachments,
+        parent: replyTo
+          ? {
+              id: replyTo.id,
+              body: replyTo.body,
+              user: replyTo.user,
+              createdAt: replyTo.createdAt,
+            }
+          : null,
+      },
+    ]);
+    setReplyTo(null);
+    if (conversation.id) sendTypingIndicator(conversation.id, false);
+
+    onMessageSent?.(conversation.id, {
+      id: tempId,
+      body: optimisticBody,
+      createdAt: new Date().toISOString(),
+      user: { id: userId, name: session.user.name ?? "You" },
+    });
+
+    try {
+      const res = await sendGifMessageRequest(conversation.id, gif.id, parentId);
+      const data = await res.json();
+      if (res.ok) {
+        pendingSendsRef.current.delete(tempId);
+        setMessages((prev) => {
+          const old = prev.find((m) => m.clientTempId === tempId);
+          scheduleRevokeOptimisticAttachments(old?.attachments);
+          return withReceipts(
+            replaceSentMessage(prev, tempId, data.message as ChatMessage)
+          );
+        });
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.clientTempId === tempId ? { ...m, sendStatus: "failed" as const } : m
+          )
+        );
+        toast.error(data.error ?? "Could not send GIF");
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.clientTempId === tempId ? { ...m, sendStatus: "failed" as const } : m
+        )
+      );
+      toast.error("Could not send GIF");
+    }
+  };
 
   const handleScheduleOpen = () => {
     if (!body.trim() && pendingFiles.length === 0) return;
@@ -1346,6 +1457,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         editingMessage={editingMessage}
         onCancelEdit={cancelEditMessage}
         onOpenMom={readOnly ? undefined : () => setMomModalOpen(true)}
+        onSendGif={readOnly || editingMessage ? undefined : handleSendGif}
         pendingFiles={pendingFiles}
         onAddFiles={addPendingFiles}
         onRemoveFile={(file) =>

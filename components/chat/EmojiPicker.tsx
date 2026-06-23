@@ -106,7 +106,7 @@ function QuickEmojiButton({
   );
 }
 
-function FullEmojiPanel({
+export function FullEmojiPanel({
   onSelect,
   onClose,
   width,

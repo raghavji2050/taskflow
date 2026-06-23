@@ -17,7 +17,7 @@ import { MomShareCard } from "@/components/chat/MomShareCard";
 import { ForwardedMessageCard } from "@/components/chat/ForwardedMessageCard";
 import type { SharedMomPreview } from "@/lib/mom-format";
 import type { FormattedForwardedFrom } from "@/lib/message-format";
-import { isAttachmentOnlyBody } from "@/lib/attachments";
+import { isAttachmentOnlyBody, isGifStickerMessage } from "@/lib/attachments";
 import { emojiOnlySizeClass, isEmojiOnlyMessage } from "@/lib/chat-emoji";
 import { isDefaultDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
 import { copyTextToClipboard, getMessageCopyText } from "@/lib/chat-copy";
@@ -330,13 +330,21 @@ export function MessageBubble({
     !message.forwardedFrom &&
     Boolean(message.attachments?.length) &&
     !isDeleted;
+  const isGifSticker =
+    hasAttachments &&
+    !message.forwardedFrom &&
+    !message.sharedDocument &&
+    !message.sharedMom &&
+    !message.parent &&
+    !isDeleted &&
+    isGifStickerMessage(message.body, message.attachments);
   const hasBubbleContent =
     isDeleted ||
     Boolean(message.parent) ||
     Boolean(message.forwardedFrom) ||
     Boolean(message.sharedDocument) ||
     Boolean(message.sharedMom) ||
-    showBody;
+    (showBody && !isGifSticker);
   const attachmentsInBubble = hasAttachments && hasBubbleContent;
   const attachmentsStandalone = hasAttachments && !hasBubbleContent;
 
@@ -349,6 +357,7 @@ export function MessageBubble({
     !hasAttachments &&
     !isDeleted &&
     isEmojiOnlyMessage(message.body);
+  const isStickerStyle = isEmojiSticker || isGifSticker;
   const emojiSizeClass = isEmojiSticker ? emojiOnlySizeClass(message.body) : undefined;
 
   const closeMenu = () => setMenuOpen(false);
@@ -490,10 +499,10 @@ export function MessageBubble({
           <div
             className={cn(
               "max-w-full break-words rounded-2xl text-sm leading-relaxed [overflow-wrap:anywhere]",
-              isEmojiSticker
+              isStickerStyle
                 ? "border-0 bg-transparent px-0.5 py-0.5 shadow-none"
                 : "px-3 py-2",
-              !isEmojiSticker &&
+              !isStickerStyle &&
                 (isDeleted
                   ? "rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-hover)]/50 italic text-[var(--muted)]"
                   : isOwn
@@ -618,6 +627,7 @@ export function MessageBubble({
               messageBody={message.body}
               isSending={isSending}
               variant="standalone"
+              stickerMode={isGifSticker}
             />
           )}
 

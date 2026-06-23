@@ -458,6 +458,7 @@ function ChatImageThumbnail({
   onOpen,
   variant = "standalone",
   isSending,
+  stickerMode = false,
 }: {
   attachment: AttachmentRow;
   isOwn?: boolean;
@@ -465,6 +466,7 @@ function ChatImageThumbnail({
   onOpen: () => void;
   variant?: "standalone" | "inBubble";
   isSending?: boolean;
+  stickerMode?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
   const src = attachmentDisplayUrl(attachment.url);
@@ -474,9 +476,14 @@ function ChatImageThumbnail({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-xl border",
-        variant === "inBubble" && isOwn ? "border-white/20" : "border-[var(--card-border)]",
-        single ? "max-w-[280px]" : "aspect-square max-w-[140px]",
+        "group relative overflow-hidden",
+        stickerMode
+          ? "max-w-[240px] rounded-xl"
+          : cn(
+              "rounded-xl border",
+              variant === "inBubble" && isOwn ? "border-white/20" : "border-[var(--card-border)]",
+              single ? "max-w-[280px]" : "aspect-square max-w-[140px]"
+            ),
         src && !isSending && "cursor-pointer"
       )}
     >
@@ -503,8 +510,9 @@ function ChatImageThumbnail({
             loading="lazy"
             onLoad={() => setLoaded(true)}
             className={cn(
-              "bg-black/5 object-cover transition group-hover:scale-[1.02]",
-              single ? "max-h-52 w-full object-contain" : "h-full w-full",
+              stickerMode ? "max-h-52 w-full object-contain" : "bg-black/5 object-cover transition group-hover:scale-[1.02]",
+              !stickerMode && (single ? "max-h-52 w-full object-contain" : "h-full w-full"),
+              stickerMode && "w-full",
               !loaded && !isSending && "opacity-0"
             )}
           />
@@ -512,7 +520,12 @@ function ChatImageThumbnail({
       ) : (
         <ImageSkeleton className={single ? "min-h-[8rem] w-full" : "h-full w-full min-h-[5rem]"} />
       )}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 opacity-0 transition group-hover:opacity-100">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 opacity-0 transition group-hover:opacity-100",
+          stickerMode && "hidden"
+        )}
+      >
         <p className="truncate text-[10px] font-medium text-white">{attachment.filename}</p>
       </div>
       {downloadHref && (
@@ -536,6 +549,7 @@ interface MessageAttachmentPreviewProps {
   messageBody?: string;
   isSending?: boolean;
   variant?: "standalone" | "inBubble";
+  stickerMode?: boolean;
 }
 
 export function MessageAttachmentPreview({
@@ -544,6 +558,7 @@ export function MessageAttachmentPreview({
   messageBody,
   isSending,
   variant = "standalone",
+  stickerMode = false,
 }: MessageAttachmentPreviewProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [mediaPreview, setMediaPreview] = useState<AttachmentRow | null>(null);
@@ -555,12 +570,12 @@ export function MessageAttachmentPreview({
     images.every((img) => messageBody && isAttachmentOnlyBody(messageBody, img.filename));
 
   return (
-    <div className={cn(variant === "inBubble" && "mt-2")}>
+    <div className={cn(variant === "inBubble" && !stickerMode && "mt-2")}>
       {images.length > 0 && (
         <div
           className={cn(
             "grid gap-1.5",
-            images.length === 1 ? "grid-cols-1" : "grid-cols-2"
+            stickerMode || images.length === 1 ? "grid-cols-1" : "grid-cols-2"
           )}
         >
           {images.map((a, i) => (
@@ -572,6 +587,7 @@ export function MessageAttachmentPreview({
               onOpen={() => setLightboxIndex(i)}
               variant={variant}
               isSending={isSending}
+              stickerMode={stickerMode}
             />
           ))}
         </div>

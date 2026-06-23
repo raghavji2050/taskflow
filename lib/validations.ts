@@ -83,6 +83,11 @@ export const messageReactionSchema = z.object({
   emoji: z.string().min(1).max(16),
 });
 
+export const sendGifMessageSchema = z.object({
+  giphyId: z.string().min(1).max(64),
+  parentId: z.string().optional().nullable(),
+});
+
 export const typingSchema = z.object({
   typing: z.boolean(),
 });

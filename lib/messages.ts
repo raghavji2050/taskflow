@@ -11,7 +11,8 @@ import { notifyParticipants } from "@/lib/message-notify";
 import { saveMessageAttachmentFile } from "@/lib/message-upload";
 import { normalizeMessageContent } from "@/lib/rich-message-serialize";
 import type { RichMessageDoc } from "@/lib/rich-message-types";
-import { assertCanEditMessage } from "@/lib/message-edit";
+import { fetchGiphyAsFile } from "@/lib/giphy";
+import { attachmentPlaceholderBody } from "@/lib/attachments";
 
 export { notifyParticipants };
 
@@ -636,6 +637,88 @@ export async function deleteMessage(params: {
     preview: "Message deleted",
     type: "message:updated",
     message: formatted,
+  });
+
+  return formatted;
+}
+
+export async function sendGifMessage(params: {
+  conversationId: string;
+  userId: string;
+  userName: string;
+  giphyId: string;
+  parentId?: string | null;
+  conversationTitle: string;
+  mentionCandidates: { id: string; name: string }[];
+}) {
+  const {
+    conversationId,
+    userId,
+    userName,
+    giphyId,
+    parentId,
+    conversationTitle,
+    mentionCandidates,
+  } = params;
+
+  const { file } = await fetchGiphyAsFile(giphyId);
+  const messageBody = attachmentPlaceholderBody(1, [file.name]);
+
+  await ensureDirectParticipants(conversationId, userId);
+
+  const created = await prisma.message.create({
+    data: {
+      conversationId,
+      userId,
+      body: messageBody,
+      parentId: parentId ?? null,
+    },
+  });
+
+  const saved = await saveMessageAttachmentFile(userId, file);
+  await prisma.messageAttachment.create({
+    data: {
+      messageId: created.id,
+      filename: saved.filename,
+      url: saved.url,
+      mimeType: saved.mimeType,
+      size: saved.size,
+    },
+  });
+
+  const message = await prisma.message.findUniqueOrThrow({
+    where: { id: created.id },
+    include: messageInclude,
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  await prisma.conversationParticipant.updateMany({
+    where: { conversationId },
+    data: { archivedAt: null },
+  });
+
+  await prisma.conversationParticipant.update({
+    where: { conversationId_userId: { conversationId, userId } },
+    data: { lastReadAt: new Date() },
+  });
+
+  const formatted = formatMessageForClient(message);
+
+  await notifyParticipants({
+    conversationId,
+    userId,
+    userName,
+    preview: "GIF",
+    conversationTitle,
+    mentionCandidates,
+    body: messageBody,
+    messageId: message.id,
+    message: formatted,
+    type: "message:created",
   });
 
   return formatted;
