@@ -161,6 +161,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const markReadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markReadInFlightRef = useRef(false);
   const fetchGenRef = useRef(0);
+  const handledHashRef = useRef<string | null>(null);
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef(0);
   const pendingSendsRef = useRef<
@@ -575,10 +576,25 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     if (!convId || messages.length === 0) return;
 
     const hash = window.location.hash;
-    if (hash.startsWith("#msg-")) {
-      const messageId = hash.slice(5);
-      setTimeout(() => scrollToMessage(messageId), 100);
-    }
+    if (!hash.startsWith("#msg-")) return;
+
+    // Only act on a given deep-link hash once. Without this, the effect
+    // re-runs on every messages.length change (e.g. after sending a message)
+    // and keeps yanking the view back to the message opened from a push
+    // notification.
+    const hashKey = `${convId}:${hash}`;
+    if (handledHashRef.current === hashKey) return;
+    handledHashRef.current = hashKey;
+
+    const messageId = hash.slice(5);
+    setTimeout(() => scrollToMessage(messageId), 100);
+
+    // Clear the hash so it can't be reprocessed on later renders/navigation.
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search
+    );
   }, [conversation?.id, messages.length, scrollToMessage]);
 
   useEffect(() => {
