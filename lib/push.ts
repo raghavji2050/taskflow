@@ -36,6 +36,7 @@ export async function sendPushToSubscription(
     url?: string;
     conversationId?: string;
     messageId?: string;
+    test?: boolean;
   }
 ) {
   if (!configureWebPush()) {
@@ -61,6 +62,7 @@ export async function sendPushToUser(
     url?: string;
     conversationId?: string;
     messageId?: string;
+    test?: boolean;
   }
 ) {
   try {

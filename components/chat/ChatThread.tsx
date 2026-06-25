@@ -46,13 +46,22 @@ import {
 } from "@/lib/chat-message-merge";
 import { cn } from "@/lib/utils";
 import { useMediaQuery, useVisualViewport } from "@/lib/use-visual-viewport";
+import type { GroupRole } from "@/lib/group-permissions";
 
 export interface ChatConversation {
   id: string;
   type: string;
   name: string;
   workspaceId?: string | null;
-  participants: { id: string; name: string; email?: string; image?: string | null; lastSeenAt?: string | null }[];
+  participants: {
+    id: string;
+    name: string;
+    email?: string;
+    image?: string | null;
+    lastSeenAt?: string | null;
+    role?: GroupRole;
+  }[];
+  currentUserRole?: GroupRole;
   unreadCount?: number;
   canPost?: boolean;
   archivedAt?: string | null;
@@ -1733,12 +1742,18 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
                 !prev || toDateKey(prev.createdAt) !== toDateKey(msg.createdAt);
               const sameUserAsPrev =
                 prev &&
+                !prev.systemKind &&
+                !msg.systemKind &&
                 prev.user.id === msg.user.id &&
                 toDateKey(prev.createdAt) === toDateKey(msg.createdAt);
               const sameUserAsNext =
                 next &&
+                !next.systemKind &&
+                !msg.systemKind &&
                 next.user.id === msg.user.id &&
                 toDateKey(next.createdAt) === toDateKey(msg.createdAt);
+
+              const compactSystemActivity = Boolean(prev?.systemKind && msg.systemKind);
 
               return (
                 <div key={msg.id}>
@@ -1762,6 +1777,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
                       hideAvatars={isDmStyle}
                       isFirstInGroup={!sameUserAsPrev}
                       isLastInGroup={!sameUserAsNext}
+                      compactSystemActivity={compactSystemActivity}
                       onJumpToMessage={(id, createdAt) => void navigateToMessage({ id, createdAt })}
                       onRetrySend={(tempId) => void handleRetrySend(tempId)}
                       onReply={(msg) => {
@@ -1842,6 +1858,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           conversationName={conversation.name}
           participants={conversation.participants}
           currentUserId={userId}
+          currentUserRole={conversation.currentUserRole}
           onClose={() => setGroupInfoOpen(false)}
           onUpdated={() => onConversationUpdated?.()}
         />

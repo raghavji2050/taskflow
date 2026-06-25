@@ -149,15 +149,104 @@ export function isPushSupported() {
   );
 }
 
-export async function isPushSubscribed(): Promise<boolean> {
+export type PushEnrollmentStatus = {
+  supported: boolean;
+  permission: NotificationPermission | "unsupported";
+  pushConfigured: boolean;
+  serverSubscribed: boolean;
+  browserSubscribed: boolean;
+  /** VAPID push is fully set up on this browser */
+  enrolled: boolean;
+};
+
+export async function getPushEnrollmentStatus(): Promise<PushEnrollmentStatus> {
+  if (!isPushSupported()) {
+    return {
+      supported: false,
+      permission: "unsupported",
+      pushConfigured: false,
+      serverSubscribed: false,
+      browserSubscribed: false,
+      enrolled: false,
+    };
+  }
+
+  let pushConfigured = false;
+  let serverSubscribed = false;
   try {
     const res = await fetch("/api/notifications/subscribe");
-    if (!res.ok) return false;
-    const data = await res.json();
-    return Boolean(data.subscribed);
+    if (res.ok) {
+      const data = (await res.json()) as { pushConfigured?: boolean; subscribed?: boolean };
+      pushConfigured = Boolean(data.pushConfigured);
+      serverSubscribed = Boolean(data.subscribed);
+    }
   } catch {
-    return false;
+    // ignore
   }
+
+  const browserSubscribed = await hasActivePushSubscription();
+  const permission = Notification.permission;
+  const enrolled =
+    pushConfigured &&
+    serverSubscribed &&
+    browserSubscribed &&
+    permission === "granted";
+
+  return {
+    supported: true,
+    permission,
+    pushConfigured,
+    serverSubscribed,
+    browserSubscribed,
+    enrolled,
+  };
+}
+
+export async function isPushSubscribed(): Promise<boolean> {
+  const status = await getPushEnrollmentStatus();
+  return status.enrolled;
+}
+
+export async function sendTestPushNotification(): Promise<{
+  ok: boolean;
+  sent: number;
+  error?: string;
+}> {
+  const res = await fetch("/api/notifications/test", { method: "POST" });
+  const data = (await res.json().catch(() => ({}))) as { error?: string; sent?: number };
+  if (!res.ok) {
+    return { ok: false, sent: 0, error: data.error ?? "Test push failed" };
+  }
+  const sent = data.sent ?? 0;
+  if (sent === 0) {
+    return {
+      ok: false,
+      sent: 0,
+      error: "No active push subscription. Try enabling notifications again.",
+    };
+  }
+  return { ok: true, sent };
+}
+
+/** Subscribe via VAPID, persist to server, and send a test OS notification. */
+export async function enablePushWithTest(): Promise<{ ok: boolean; error?: string }> {
+  const subscribed = await subscribeToPush();
+  if (!subscribed) {
+    return { ok: false, error: "Permission denied or push is not configured on the server" };
+  }
+
+  const test = await sendTestPushNotification();
+  if (!test.ok) {
+    return {
+      ok: false,
+      error:
+        test.error ??
+        "Subscribed but the test notification failed. Check VAPID keys in server environment variables.",
+    };
+  }
+
+  window.dispatchEvent(new CustomEvent("taskflow:push-status"));
+  return { ok: true };
 }
 
 /** True when this browser has an active Web Push subscription (SW delivers OS notifications). */
@@ -174,12 +263,14 @@ export async function hasActivePushSubscription(): Promise<boolean> {
 
 export function usePushEnrollment() {
   const [needsEnable, setNeedsEnable] = useState(false);
+  const [pushConfigured, setPushConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!isPushSupported()) {
       setNeedsEnable(false);
+      setPushConfigured(false);
       setLoading(false);
       return;
     }
@@ -188,32 +279,36 @@ export function usePushEnrollment() {
       setLoading(false);
       return;
     }
-    const subscribed = await isPushSubscribed();
-    setNeedsEnable(!subscribed);
+    const status = await getPushEnrollmentStatus();
+    setPushConfigured(status.pushConfigured);
+    setNeedsEnable(!status.enrolled);
     setLoading(false);
   }, []);
 
   useEffect(() => {
     void refresh();
     const onFocus = () => void refresh();
+    const onPushStatus = () => void refresh();
     document.addEventListener("visibilitychange", onFocus);
     window.addEventListener("focus", onFocus);
+    window.addEventListener("taskflow:push-status", onPushStatus);
     return () => {
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("taskflow:push-status", onPushStatus);
     };
   }, [refresh]);
 
   const enable = useCallback(async () => {
     setBusy(true);
     try {
-      const ok = await subscribeToPush();
-      if (ok) {
-        toast.success("Desktop notifications enabled");
+      const result = await enablePushWithTest();
+      if (result.ok) {
+        toast.success("Desktop notifications enabled — check for a test alert");
         setNeedsEnable(false);
         return true;
       }
-      toast.error("Could not enable notifications");
+      toast.error(result.error ?? "Could not enable notifications");
       await refresh();
       return false;
     } catch (error) {
@@ -224,7 +319,7 @@ export function usePushEnrollment() {
     }
   }, [refresh]);
 
-  return { needsEnable, loading, busy, enable, refresh };
+  return { needsEnable, pushConfigured, loading, busy, enable, refresh };
 }
 
 const PROMPT_KEY = "taskflow:push-prompted";
@@ -239,22 +334,35 @@ export function markPushPrompted() {
 }
 
 export function showPushEnrollmentToast() {
-  toast("Enable desktop notifications?", {
-    description: "Get chat alerts when this tab is in the background.",
-    duration: 12_000,
-    onDismiss: () => markPushPrompted(),
-    action: {
-      label: "Enable",
-      onClick: () => {
-        markPushPrompted();
-        void subscribeToPush()
-          .then((ok) => {
-            if (ok) toast.success("Desktop notifications enabled");
-            else toast.error("Could not enable notifications");
-          })
-          .catch((error) => toast.error(getPushSubscribeErrorMessage(error)));
+  void getPushEnrollmentStatus().then((status) => {
+    if (!status.pushConfigured) {
+      toast.error("Push notifications are not configured on this server", {
+        description: "Add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to environment variables.",
+        duration: 10_000,
+      });
+      return;
+    }
+
+    toast("Enable desktop notifications?", {
+      description: "Get chat alerts via Web Push (VAPID) when this tab is in the background.",
+      duration: 15_000,
+      onDismiss: () => markPushPrompted(),
+      action: {
+        label: "Enable",
+        onClick: () => {
+          markPushPrompted();
+          void enablePushWithTest()
+            .then((result) => {
+              if (result.ok) {
+                toast.success("Desktop notifications enabled — check for a test alert");
+              } else {
+                toast.error(result.error ?? "Could not enable notifications");
+              }
+            })
+            .catch((error) => toast.error(getPushSubscribeErrorMessage(error)));
+        },
       },
-    },
+    });
   });
 }
 

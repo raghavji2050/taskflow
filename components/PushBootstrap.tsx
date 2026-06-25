@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   ensureServiceWorker,
-  isPushSubscribed,
+  getPushEnrollmentStatus,
   isPushSupported,
   markPushPrompted,
   showPushEnrollmentToast,
@@ -35,8 +35,8 @@ export function PushBootstrap() {
     if (!isPushSupported()) return;
 
     const prompt = async () => {
-      const subscribed = await isPushSubscribed();
-      if (subscribed) {
+      const status = await getPushEnrollmentStatus();
+      if (status.enrolled) {
         markPushPrompted();
         return;
       }

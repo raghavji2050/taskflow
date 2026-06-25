@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { getInitials } from "@/lib/utils";
 
+import { canManageGroupSettings, canRemoveMember, roleLabel, type GroupRole } from "@/lib/group-permissions";
+
 interface GroupInfoModalProps {
   isOpen: boolean;
   conversationId: string;
   conversationName: string;
-  participants: { id: string; name: string; email?: string }[];
+  participants: { id: string; name: string; email?: string; role?: GroupRole }[];
   currentUserId?: string;
+  currentUserRole?: GroupRole;
   onClose: () => void;
   onUpdated: () => void;
 }
@@ -22,12 +25,15 @@ export function GroupInfoModal({
   conversationName,
   participants,
   currentUserId,
+  currentUserRole = "MEMBER",
   onClose,
   onUpdated,
 }: GroupInfoModalProps) {
+  const canManage = canManageGroupSettings(currentUserRole);
   const [name, setName] = useState(conversationName);
   const [saving, setSaving] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<{ id: string; name: string; email: string }[]>([]);
   const [adding, setAdding] = useState<string | null>(null);
@@ -97,6 +103,21 @@ export function GroupInfoModal({
     }
   };
 
+  const removeMember = async (userId: string, userName: string) => {
+    if (!window.confirm(`Remove ${userName} from the group?`)) return;
+    setRemoving(userId);
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/participants`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ removeMemberIds: [userId] }),
+      });
+      if (res.ok) onUpdated();
+    } finally {
+      setRemoving(null);
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Group info" size="md">
       <div className="space-y-4">
@@ -105,7 +126,8 @@ export function GroupInfoModal({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm"
+            disabled={!canManage}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm disabled:opacity-60"
           />
         </div>
         <div>
@@ -113,14 +135,41 @@ export function GroupInfoModal({
             Members ({participants.length})
           </p>
           <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">
-            {participants.map((p) => (
-              <li key={p.id} className="rounded-lg px-2 py-1.5 hover:bg-[var(--surface-hover)]">
-                {p.name}
-                {p.id === currentUserId && (
-                  <span className="ml-1 text-[10px] text-[var(--muted)]">(you)</span>
-                )}
-              </li>
-            ))}
+            {participants.map((p) => {
+              const label = p.role ? roleLabel(p.role) : null;
+              const canRemove =
+                p.id !== currentUserId &&
+                p.role &&
+                canRemoveMember(currentUserRole, p.role);
+              return (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--surface-hover)]"
+                >
+                  <span className="min-w-0 truncate">
+                    {p.name}
+                    {p.id === currentUserId && (
+                      <span className="ml-1 text-[10px] text-[var(--muted)]">(you)</span>
+                    )}
+                    {label && (
+                      <span className="ml-1.5 text-[10px] font-medium text-[var(--accent)]">
+                        {label}
+                      </span>
+                    )}
+                  </span>
+                  {canRemove && (
+                    <button
+                      type="button"
+                      disabled={removing === p.id}
+                      onClick={() => void removeMember(p.id, p.name)}
+                      className="shrink-0 text-xs text-red-500 hover:underline disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
         {addOpen && (
@@ -153,10 +202,12 @@ export function GroupInfoModal({
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => void saveName()} isLoading={saving} disabled={!name.trim()}>
-            Save name
-          </Button>
-          {!addOpen && (
+          {canManage && (
+            <Button size="sm" onClick={() => void saveName()} isLoading={saving} disabled={!name.trim()}>
+              Save name
+            </Button>
+          )}
+          {canManage && !addOpen && (
             <Button size="sm" variant="secondary" onClick={() => setAddOpen(true)}>
               Add member
             </Button>

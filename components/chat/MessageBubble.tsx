@@ -23,6 +23,7 @@ import { isDefaultDocumentShareBody, isMomShareBody } from "@/lib/document-ui";
 import { copyTextToClipboard, getMessageCopyText } from "@/lib/chat-copy";
 import { canEditMessage } from "@/lib/message-edit";
 import { useMediaQuery } from "@/lib/use-visual-viewport";
+import { SystemActivityLine } from "@/components/chat/SystemActivityLine";
 
 export interface MessageAttachment {
   id: string;
@@ -47,6 +48,7 @@ export interface ChatMessage {
   createdAt: string;
   editedAt?: string | null;
   deletedAt?: string | null;
+  systemKind?: string | null;
   pinnedAt?: string | null;
   user: { id: string; name: string; image?: string | null };
   parent?: {
@@ -84,6 +86,7 @@ interface MessageBubbleProps {
   onRetrySend?: (clientTempId: string) => void;
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
+  compactSystemActivity?: boolean;
   onForward?: (message: ChatMessage) => void;
 }
 
@@ -223,6 +226,7 @@ export function MessageBubble({
   onForward,
   isFirstInGroup = true,
   isLastInGroup = true,
+  compactSystemActivity = false,
 }: MessageBubbleProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
@@ -281,6 +285,19 @@ export function MessageBubble({
   }, [menuOpen, isOwn, isMobile]);
 
   const isDeleted = Boolean(message.deletedAt);
+  const isSystem = Boolean(message.systemKind);
+
+  if (isSystem) {
+    return (
+      <SystemActivityLine
+        body={message.body}
+        systemKind={message.systemKind}
+        createdAt={message.createdAt}
+        compact={compactSystemActivity}
+      />
+    );
+  }
+
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",

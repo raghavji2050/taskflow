@@ -1,7 +1,9 @@
-import { ConversationType, WorkspaceRole } from "@prisma/client";
+import { ConversationType, WorkspaceRole, ConversationRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getWorkspaceMembershipIncludingArchived } from "@/lib/workspace";
 import { broadcastConversationRemoved } from "@/lib/realtime";
+import { canManageGroupSettings, canRemoveMember, type GroupRole } from "@/lib/group-permissions";
+import { recordGroupActivity } from "@/lib/conversation-activity";
 
 const conversationInclude = {
   workspace: { select: { id: true, name: true } },
@@ -182,23 +184,52 @@ export async function createGroupConversation(
 
   const users = await prisma.user.findMany({
     where: { id: { in: uniqueIds } },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (users.length !== uniqueIds.length) {
     throw new Error("One or more members not found");
   }
 
-  return prisma.conversation.create({
+  const creator = users.find((u) => u.id === creatorId);
+
+  const conv = await prisma.conversation.create({
     data: {
       type: ConversationType.GROUP,
       name: name?.trim() || null,
       createdById: creatorId,
       participants: {
-        create: uniqueIds.map((userId) => ({ userId })),
+        create: uniqueIds.map((userId) => ({
+          userId,
+          role: userId === creatorId ? ConversationRole.OWNER : ConversationRole.MEMBER,
+        })),
       },
     },
     include: conversationInclude,
   });
+
+  const addedNames = conv.participants
+    .filter((p) => p.userId !== creatorId)
+    .map((p) => p.user.name);
+  const title = name?.trim() || "Group chat";
+  const mentionCandidates = conv.participants.map((p) => ({
+    id: p.user.id,
+    name: p.user.name,
+  }));
+
+  await recordGroupActivity({
+    conversationId: conv.id,
+    actorUserId: creatorId,
+    actorName: creator?.name ?? "Someone",
+    action: "group_created",
+    body:
+      addedNames.length > 0
+        ? `${creator?.name ?? "Someone"} created the group and added ${addedNames.join(", ")}`
+        : `${creator?.name ?? "Someone"} created the group`,
+    conversationTitle: title,
+    mentionCandidates,
+  });
+
+  return conv;
 }
 
 export async function ensureWorkspaceChannel(workspaceId: string, creatorId: string) {
@@ -438,7 +469,10 @@ export async function listUserConversations(userId: string) {
       const participants =
         row.conversation.type === ConversationType.DIRECT
           ? await getDirectParticipantUsers(row.conversationId)
-          : row.conversation.participants.map((p) => p.user);
+          : row.conversation.participants.map((p) => ({
+              ...p.user,
+              role: p.role as GroupRole,
+            }));
 
       const conversationForName = {
         ...row.conversation,
@@ -453,6 +487,10 @@ export async function listUserConversations(userId: string) {
         workspaceId: row.conversation.workspaceId,
         workspace: row.conversation.workspace,
         participants,
+        currentUserRole:
+          row.conversation.type === ConversationType.GROUP
+            ? (row.role as GroupRole)
+            : undefined,
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
@@ -524,7 +562,10 @@ export async function getConversationById(conversationId: string, userId: string
   const participants =
     row.conversation.type === ConversationType.DIRECT
       ? await getDirectParticipantUsers(conversationId)
-      : row.conversation.participants.map((p) => p.user);
+      : row.conversation.participants.map((p) => ({
+          ...p.user,
+          role: p.role as GroupRole,
+        }));
 
   const conversationForName = {
     ...row.conversation,
@@ -540,6 +581,10 @@ export async function getConversationById(conversationId: string, userId: string
     workspaceId: row.conversation.workspaceId,
     workspace: row.conversation.workspace,
     participants,
+    currentUserRole:
+      row.conversation.type === ConversationType.GROUP
+        ? (row.role as GroupRole)
+        : undefined,
     unreadCount,
     canPost: await userCanPost(userId, row.conversation),
     archivedAt: row.archivedAt?.toISOString() ?? null,
@@ -580,17 +625,18 @@ export async function deleteConversationForUser(userId: string, conversationId: 
     return { deleted: false as const, left: true as const };
   }
 
-  if (conv.participants.length <= 1) {
-    await prisma.conversation.delete({ where: { id: conversationId } });
+  if (conv.type === ConversationType.GROUP) {
+    if (conv.participants.length <= 1) {
+      await prisma.conversation.delete({ where: { id: conversationId } });
+      broadcastConversationRemoved(userId, conversationId);
+      return { deleted: true as const };
+    }
+    await leaveGroupConversation(conversationId, userId);
     broadcastConversationRemoved(userId, conversationId);
-    return { deleted: true as const };
+    return { deleted: false as const, left: true as const };
   }
 
-  await prisma.conversationParticipant.delete({
-    where: { conversationId_userId: { conversationId, userId } },
-  });
-  broadcastConversationRemoved(userId, conversationId);
-  return { deleted: false as const, left: true as const };
+  throw new Error("This conversation cannot be deleted");
 }
 
 /** Re-add users who deleted a DM when the other party sends a new message. */
@@ -620,27 +666,62 @@ export async function ensureDirectParticipants(conversationId: string, senderId:
   }
 }
 
+async function getGroupActorContext(conversationId: string, userId: string) {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      type: true,
+      name: true,
+      workspace: { select: { name: true } },
+      participants: {
+        include: { user: { select: { id: true, name: true } } },
+      },
+    },
+  });
+  if (!conv || conv.type !== ConversationType.GROUP) {
+    throw new Error("Not a group conversation");
+  }
+  const actor = conv.participants.find((p) => p.userId === userId);
+  if (!actor) throw new Error("Not a participant");
+  return { conv, actor };
+}
+
+function groupMentionCandidates(
+  participants: { user: { id: string; name: string } }[]
+) {
+  return participants.map((p) => ({ id: p.user.id, name: p.user.name }));
+}
+
 export async function renameGroupConversation(
   conversationId: string,
   userId: string,
   name: string
 ) {
-  const conv = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    select: { type: true, createdById: true },
-  });
-  if (!conv || conv.type !== ConversationType.GROUP) {
-    throw new Error("Not a group conversation");
+  const { conv, actor } = await getGroupActorContext(conversationId, userId);
+  if (!canManageGroupSettings(actor.role as GroupRole)) {
+    throw new Error("Forbidden");
   }
-  const participant = await prisma.conversationParticipant.findUnique({
-    where: { conversationId_userId: { conversationId, userId } },
-  });
-  if (!participant) throw new Error("Not a participant");
 
-  return prisma.conversation.update({
+  const oldName = conv.name ?? "Group chat";
+  const newName = name.trim() || null;
+  const updated = await prisma.conversation.update({
     where: { id: conversationId },
-    data: { name: name.trim() || null },
+    data: { name: newName },
   });
+
+  const title = newName ?? "Group chat";
+  await recordGroupActivity({
+    conversationId,
+    actorUserId: userId,
+    actorName: actor.user.name,
+    action: "group_renamed",
+    body: `${actor.user.name} renamed the group to ${title}`,
+    conversationTitle: title,
+    mentionCandidates: groupMentionCandidates(conv.participants),
+    details: `from:${oldName}`,
+  });
+
+  return updated;
 }
 
 export async function addGroupMembers(
@@ -648,36 +729,110 @@ export async function addGroupMembers(
   actorId: string,
   memberIds: string[]
 ) {
-  const conv = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    select: { type: true },
-  });
-  if (!conv || conv.type !== ConversationType.GROUP) {
-    throw new Error("Not a group conversation");
+  const { conv, actor } = await getGroupActorContext(conversationId, actorId);
+  if (!canManageGroupSettings(actor.role as GroupRole)) {
+    throw new Error("Forbidden");
   }
-  const actor = await prisma.conversationParticipant.findUnique({
-    where: { conversationId_userId: { conversationId, userId: actorId } },
-  });
-  if (!actor) throw new Error("Not a participant");
 
   const unique = [...new Set(memberIds.filter((id) => id !== actorId))];
+  if (unique.length === 0) return;
+
+  const existing = await prisma.conversationParticipant.findMany({
+    where: { conversationId, userId: { in: unique } },
+    select: { userId: true },
+  });
+  const existingIds = new Set(existing.map((e) => e.userId));
+
+  const addedUsers = await prisma.user.findMany({
+    where: { id: { in: unique.filter((id) => !existingIds.has(id)) } },
+    select: { id: true, name: true },
+  });
+
   for (const memberId of unique) {
     await prisma.conversationParticipant.upsert({
       where: { conversationId_userId: { conversationId, userId: memberId } },
-      create: { conversationId, userId: memberId },
+      create: { conversationId, userId: memberId, role: ConversationRole.MEMBER },
       update: {},
+    });
+  }
+
+  const title = conv.name ?? "Group chat";
+  const mentionCandidates = groupMentionCandidates(conv.participants);
+  for (const user of addedUsers) {
+    mentionCandidates.push({ id: user.id, name: user.name });
+    await recordGroupActivity({
+      conversationId,
+      actorUserId: actorId,
+      actorName: actor.user.name,
+      action: "member_added",
+      body: `${actor.user.name} added ${user.name}`,
+      conversationTitle: title,
+      mentionCandidates,
+      targetUserId: user.id,
+      targetName: user.name,
     });
   }
 }
 
-export async function leaveGroupConversation(conversationId: string, userId: string) {
-  const conv = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    select: { type: true },
-  });
-  if (!conv || conv.type !== ConversationType.GROUP) {
-    throw new Error("Not a group conversation");
+export async function removeGroupMember(
+  conversationId: string,
+  actorId: string,
+  targetUserId: string
+) {
+  if (actorId === targetUserId) {
+    throw new Error("Use leave to remove yourself");
   }
+
+  const { conv, actor } = await getGroupActorContext(conversationId, actorId);
+  const target = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: targetUserId } },
+    include: { user: { select: { id: true, name: true } } },
+  });
+  if (!target) throw new Error("Member not found");
+  if (!canRemoveMember(actor.role as GroupRole, target.role as GroupRole)) {
+    throw new Error("Forbidden");
+  }
+
+  await prisma.conversationParticipant.delete({
+    where: { conversationId_userId: { conversationId, userId: targetUserId } },
+  });
+
+  broadcastConversationRemoved(targetUserId, conversationId);
+
+  const title = conv.name ?? "Group chat";
+  await recordGroupActivity({
+    conversationId,
+    actorUserId: actorId,
+    actorName: actor.user.name,
+    action: "member_removed",
+    body: `${actor.user.name} removed ${target.user.name}`,
+    conversationTitle: title,
+    mentionCandidates: groupMentionCandidates(
+      conv.participants.filter((p) => p.userId !== targetUserId)
+    ),
+    targetUserId,
+    targetName: target.user.name,
+  });
+}
+
+export async function leaveGroupConversation(conversationId: string, userId: string) {
+  const { conv, actor } = await getGroupActorContext(conversationId, userId);
+  const title = conv.name ?? "Group chat";
+
+  await recordGroupActivity({
+    conversationId,
+    actorUserId: userId,
+    actorName: actor.user.name,
+    action: "member_left",
+    body: `${actor.user.name} left the group`,
+    conversationTitle: title,
+    mentionCandidates: groupMentionCandidates(
+      conv.participants.filter((p) => p.userId !== userId)
+    ),
+    targetUserId: userId,
+    targetName: actor.user.name,
+  });
+
   await prisma.conversationParticipant.delete({
     where: { conversationId_userId: { conversationId, userId } },
   });

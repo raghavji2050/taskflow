@@ -12,6 +12,7 @@ import { NewDirectChatModal } from "@/components/chat/NewDirectChatModal";
 import { NewGroupChatModal } from "@/components/chat/NewGroupChatModal";
 import { Button } from "@/components/ui/Button";
 import { PushSubscribe } from "@/components/PushSubscribe";
+import { PushEnrollmentBanner } from "@/components/PushEnrollmentBanner";
 import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { confirmLeaveActiveMomMeeting } from "@/lib/mom-meeting-guard";
@@ -235,6 +236,7 @@ export function MessagesClient() {
       name: found.name,
       workspaceId: found.workspaceId,
       participants: found.participants,
+      currentUserRole: found.currentUserRole,
       unreadCount: found.unreadCount,
       canPost: found.canPost,
       archivedAt: found.archivedAt,
@@ -399,6 +401,8 @@ export function MessagesClient() {
           </div>
         </div>
       </div>
+
+      <PushEnrollmentBanner />
 
       <div
         className={cn(

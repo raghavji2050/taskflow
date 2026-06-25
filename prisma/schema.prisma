@@ -44,6 +44,12 @@ enum ConversationType {
   PERSONAL
 }
 
+enum ConversationRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 enum ScheduledMessageStatus {
   PENDING
   SENT
@@ -99,6 +105,8 @@ model User {
   timeEntries              TimeEntry[]
   timeEntryLabels          TimeEntryLabel[]
   scheduledMessages        ScheduledMessage[]
+  conversationActivitiesAsActor   ConversationActivity[] @relation("ConversationActivityActor")
+  conversationActivitiesAsTarget  ConversationActivity[] @relation("ConversationActivityTarget")
 }
 
 model Account {
@@ -426,6 +434,7 @@ model Conversation {
   participants ConversationParticipant[]
   messages     Message[]
   scheduledMessages ScheduledMessage[]
+  activities   ConversationActivity[]
 
   @@index([createdById])
   @@index([type])
@@ -440,7 +449,8 @@ model ConversationParticipant {
   archivedAt     DateTime?
   clearedAt      DateTime?
   mutedUntil     DateTime?
-  joinedAt       DateTime  @default(now())
+  joinedAt       DateTime         @default(now())
+  role           ConversationRole @default(MEMBER)
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -461,6 +471,7 @@ model Message {
   pinnedById     String?
   editedAt       DateTime?
   deletedAt      DateTime?
+  systemKind     String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -482,6 +493,22 @@ model Message {
   @@index([userId])
   @@index([parentId])
   @@index([forwardedFromId])
+}
+
+model ConversationActivity {
+  id             String   @id @default(cuid())
+  conversationId String
+  actorUserId    String?
+  targetUserId   String?
+  action         String
+  details        String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  actor        User?          @relation("ConversationActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  target       User?          @relation("ConversationActivityTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
 }
 
 model MessageAttachment {

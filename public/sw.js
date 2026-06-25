@@ -52,13 +52,14 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
-      if (await shouldSuppressPush(data.userId)) return;
+      const isTest = Boolean(data.test);
+      if (!isTest && (await shouldSuppressPush(data.userId))) return;
 
       await self.registration.showNotification(data.title || "TaskFlow", {
         body,
         icon: "/icon.svg",
         badge: "/icon.svg",
-        tag: data.conversationId ? `chat-${data.conversationId}` : "taskflow",
+        tag: isTest ? "taskflow-test" : data.conversationId ? `chat-${data.conversationId}` : "taskflow",
         renotify: true,
         requireInteraction: false,
         silent: false,

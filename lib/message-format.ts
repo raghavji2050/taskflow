@@ -141,6 +141,7 @@ type MessageWithRelations = {
   pinnedAt: Date | null;
   editedAt?: Date | null;
   deletedAt?: Date | null;
+  systemKind?: string | null;
   user: { id: string; name: string; image?: string | null };
   parent?: {
     id: string;
@@ -222,6 +223,7 @@ export function formatMessageForClient(message: MessageWithRelations, viewerUser
     pinnedAt: message.pinnedAt?.toISOString() ?? null,
     editedAt: message.editedAt?.toISOString() ?? null,
     deletedAt: message.deletedAt?.toISOString() ?? null,
+    systemKind: message.systemKind ?? null,
     user: message.user,
     parent: message.parent
       ? {

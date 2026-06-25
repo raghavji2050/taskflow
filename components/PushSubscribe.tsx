@@ -6,10 +6,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import {
   ensureServiceWorker,
+  enablePushWithTest,
+  getPushEnrollmentStatus,
   getPushSubscribeErrorMessage,
-  isPushSubscribed,
   isPushSupported,
-  subscribeToPush,
+  sendTestPushNotification,
 } from "@/lib/push-client";
 import { cn } from "@/lib/utils";
 
@@ -21,14 +22,14 @@ type PushSubscribeProps = {
   className?: string;
 };
 
+type PushUiStatus = "loading" | "idle" | "enabled" | "unsupported" | "denied" | "unconfigured";
+
 export function PushSubscribe({
   variant = "settings",
   iconOnly = false,
   className,
 }: PushSubscribeProps) {
-  const [status, setStatus] = useState<"loading" | "idle" | "enabled" | "unsupported" | "denied">(
-    "loading"
-  );
+  const [status, setStatus] = useState<PushUiStatus>("loading");
   const [busy, setBusy] = useState(false);
 
   const checkStatus = useCallback(async () => {
@@ -40,8 +41,12 @@ export function PushSubscribe({
       setStatus("denied");
       return;
     }
-    const subscribed = await isPushSubscribed();
-    setStatus(subscribed ? "enabled" : "idle");
+    const enrollment = await getPushEnrollmentStatus();
+    if (!enrollment.pushConfigured) {
+      setStatus("unconfigured");
+      return;
+    }
+    setStatus(enrollment.enrolled ? "enabled" : "idle");
   }, []);
 
   useEffect(() => {
@@ -69,29 +74,38 @@ export function PushSubscribe({
 
     setBusy(true);
     try {
-      const ok = await subscribeToPush();
-      if (!ok) {
+      const result = await enablePushWithTest();
+      if (!result.ok) {
         if (Notification.permission === "denied") {
           setStatus("denied");
           toast.error("Notifications are blocked in your browser settings");
         } else {
-          toast.error("Push not configured or permission denied");
+          toast.error(result.error ?? "Could not enable notifications");
         }
+        await checkStatus();
         return;
       }
 
-      const testRes = await fetch("/api/notifications/test", { method: "POST" });
-      if (testRes.ok) {
-        toast.success("Desktop notifications enabled");
-      } else {
-        toast.success("Desktop notifications enabled");
-      }
-
+      toast.success("Desktop notifications enabled — check for a test alert");
       setStatus("enabled");
-      window.dispatchEvent(new CustomEvent("taskflow:push-status"));
     } catch (error) {
       toast.error(getPushSubscribeErrorMessage(error));
       console.error("Push subscribe error:", error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendTest = async () => {
+    setBusy(true);
+    try {
+      const test = await sendTestPushNotification();
+      if (test.ok) {
+        toast.success("Test notification sent");
+      } else {
+        toast.error(test.error ?? "Test push failed — try enabling notifications again");
+        await checkStatus();
+      }
     } finally {
       setBusy(false);
     }
@@ -117,6 +131,22 @@ export function PushSubscribe({
 
   if (variant === "toolbar") {
     if (status === "loading" || status === "unsupported") return null;
+
+    if (status === "unconfigured") {
+      return (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled
+          className={className}
+          title="VAPID keys not configured on server"
+        >
+          <BellOff className="h-4 w-4" />
+          <span className="hidden sm:inline">Push unavailable</span>
+        </Button>
+      );
+    }
 
     if (iconOnly) {
       if (status === "denied") {
@@ -146,8 +176,8 @@ export function PushSubscribe({
               "flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-50",
               className
             )}
-            aria-label="Desktop notifications on — click to disable"
-            title="Notifications on — click to disable"
+            aria-label="Desktop notifications on — click to turn off"
+            title="Notifications on — click to turn off"
           >
             <BellRing className={cn("h-4 w-4", busy && "animate-pulse")} />
           </button>
@@ -237,6 +267,15 @@ export function PushSubscribe({
     );
   }
 
+  if (status === "unconfigured") {
+    return (
+      <p className="text-sm text-[var(--muted)]">
+        Web Push is not configured on this server. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in
+        environment variables.
+      </p>
+    );
+  }
+
   if (status === "denied") {
     return (
       <p className="text-sm text-[var(--muted)]">
@@ -251,6 +290,9 @@ export function PushSubscribe({
         <span className="text-sm text-emerald-600 dark:text-emerald-400">
           Push notifications enabled
         </span>
+        <Button variant="secondary" size="sm" onClick={() => void sendTest()} isLoading={busy}>
+          Send test
+        </Button>
         <Button variant="secondary" size="sm" onClick={() => void unsubscribe()} isLoading={busy}>
           <BellOff className="h-4 w-4" />
           Disable
@@ -262,7 +304,7 @@ export function PushSubscribe({
   return (
     <Button variant="secondary" size="sm" onClick={() => void subscribe()} isLoading={busy}>
       <BellRing className="h-4 w-4" />
-      Enable Push
+      Enable Push & test
     </Button>
   );
 }

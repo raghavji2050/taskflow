@@ -5,6 +5,7 @@ import { canAccessConversation } from "@/lib/chat-access";
 import {
   addGroupMembers,
   leaveGroupConversation,
+  removeGroupMember,
   renameGroupConversation,
 } from "@/lib/conversations";
 
@@ -13,6 +14,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const patchSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   addMemberIds: z.array(z.string()).optional(),
+  removeMemberIds: z.array(z.string()).optional(),
   leave: z.boolean().optional(),
 });
 
@@ -36,6 +38,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
     if (data.addMemberIds?.length) {
       await addGroupMembers(id, user.id, data.addMemberIds);
+    }
+    if (data.removeMemberIds?.length) {
+      for (const targetId of data.removeMemberIds) {
+        await removeGroupMember(id, user.id, targetId);
+      }
     }
 
     return NextResponse.json({ ok: true });

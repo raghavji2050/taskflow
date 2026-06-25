@@ -18,18 +18,29 @@ export async function POST() {
     }
 
     let sent = 0;
+    let lastError: string | undefined;
     for (const sub of subs) {
       try {
         await sendPushToSubscription(sub, {
           userId: user.id,
           title: "TaskFlow",
           body: "Push notifications are working!",
-          url: "/dashboard",
+          url: "/dashboard/messages",
+          test: true,
         });
         sent++;
-      } catch {
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error.message : "Push delivery failed — check VAPID keys";
         await prisma.pushSubscription.delete({ where: { id: sub.id } });
       }
+    }
+
+    if (sent === 0) {
+      return NextResponse.json(
+        { error: lastError ?? "Failed to deliver test notification" },
+        { status: 502 }
+      );
     }
 
     return NextResponse.json({ message: "Test notification sent", sent });
