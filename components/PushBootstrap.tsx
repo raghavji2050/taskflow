@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   ensureServiceWorker,
@@ -15,8 +15,23 @@ import {
 
 export function PushBootstrap() {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session, status } = useSession();
   const userId = session?.user?.id;
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+
+    const onSwMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "taskflow:notification-open") return;
+      const url = typeof event.data.url === "string" ? event.data.url : null;
+      if (!url) return;
+      router.push(url);
+    };
+
+    navigator.serviceWorker.addEventListener("message", onSwMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onSwMessage);
+  }, [router]);
 
   useEffect(() => {
     if (!isPushSupported() || status !== "authenticated" || !userId) return;

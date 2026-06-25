@@ -75,21 +75,60 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? "/dashboard";
-  const absolute = new URL(url, self.location.origin).href;
+  const data = event.notification.data ?? {};
+  const relativeUrl =
+    data.url ??
+    (data.conversationId
+      ? `/dashboard/messages?c=${data.conversationId}${
+          data.messageId ? `#msg-${data.messageId}` : ""
+        }`
+      : "/dashboard/messages");
+  const targetUrl = new URL(relativeUrl, self.location.origin).href;
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if (client.url === absolute && "focus" in client) return client.focus();
-      }
-      for (const client of clients) {
-        if (client.url.includes("/dashboard") && "navigate" in client) {
-          return client.navigate(absolute).then((c) => c?.focus());
+    (async () => {
+      const windowClients = await clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      const sameOriginClients = windowClients.filter((client) => {
+        try {
+          return new URL(client.url).origin === self.location.origin;
+        } catch {
+          return false;
         }
-        if ("focus" in client) return client.focus();
+      });
+
+      for (const client of sameOriginClients) {
+        if (typeof client.navigate === "function") {
+          try {
+            const next = await client.navigate(targetUrl);
+            if (next) {
+              await next.focus();
+              return;
+            }
+          } catch {
+            // fall through to postMessage / openWindow
+          }
+        }
       }
-      if (self.clients.openWindow) return self.clients.openWindow(absolute);
-    })
+
+      if (sameOriginClients.length > 0) {
+        const client = sameOriginClients[0];
+        await client.focus();
+        client.postMessage({
+          type: "taskflow:notification-open",
+          url: relativeUrl,
+          conversationId: data.conversationId,
+          messageId: data.messageId,
+        });
+        return;
+      }
+
+      if (clients.openWindow) {
+        await clients.openWindow(targetUrl);
+      }
+    })()
   );
 });
