@@ -34,6 +34,7 @@ export async function sendPushToSubscription(
     title: string;
     body: string;
     url?: string;
+    icon?: string;
     conversationId?: string;
     messageId?: string;
     test?: boolean;
@@ -60,6 +61,7 @@ export async function sendPushToUser(
     title: string;
     body: string;
     url?: string;
+    icon?: string;
     conversationId?: string;
     messageId?: string;
     test?: boolean;

@@ -3,6 +3,7 @@ import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { messageReactionSchema } from "@/lib/validations";
 import { canAccessConversation, canPostToConversation } from "@/lib/chat-access";
 import { getMessageInConversation, toggleMessageReaction } from "@/lib/messages";
+import { notifyMessageReaction } from "@/lib/message-notify";
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -23,7 +24,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (!msg) return NextResponse.json({ error: "Message not found" }, { status: 404 });
 
     const { emoji } = messageReactionSchema.parse(await request.json());
-    const message = await toggleMessageReaction({
+    const { message, added } = await toggleMessageReaction({
       messageId,
       conversationId: id,
       userId: user.id,
@@ -41,6 +42,16 @@ export async function POST(request: Request, context: RouteContext) {
       type: "message:updated",
       message,
     });
+
+    if (added) {
+      void notifyMessageReaction({
+        conversationId: id,
+        messageId,
+        reactorId: user.id,
+        reactorName: user.name ?? "Someone",
+        emoji,
+      });
+    }
 
     return NextResponse.json({ message });
   } catch (error) {

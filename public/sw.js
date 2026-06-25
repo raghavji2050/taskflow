@@ -55,14 +55,20 @@ self.addEventListener("push", (event) => {
       const isTest = Boolean(data.test);
       if (!isTest && (await shouldSuppressPush(data.userId))) return;
 
+      // Show the sender's avatar (when provided) as the large icon, like a
+      // chat app; fall back to the app icon for non-chat/test notifications.
+      const icon = (data.icon && String(data.icon)) || "/icon-192.png";
+      const canReply = !isTest && Boolean(data.conversationId);
+
       await self.registration.showNotification(data.title || "TaskFlow", {
         body,
-        icon: "/icon-192.png",
+        icon,
         badge: "/badge-96.png",
         tag: isTest ? "taskflow-test" : data.conversationId ? `chat-${data.conversationId}` : "taskflow",
         renotify: true,
         requireInteraction: false,
         silent: false,
+        actions: canReply ? [{ action: "reply", title: "Reply" }] : [],
         data: {
           url: data.url ?? "/dashboard",
           conversationId: data.conversationId,
@@ -76,13 +82,20 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data ?? {};
-  const relativeUrl =
-    data.url ??
-    (data.conversationId
-      ? `/dashboard/messages?c=${data.conversationId}${
-          data.messageId ? `#msg-${data.messageId}` : ""
-        }`
-      : "/dashboard/messages");
+
+  // Web push can't do inline text reply, so "Reply" opens the conversation at
+  // the composer (no #msg jump) so the user can type straight away.
+  const isReply = event.action === "reply";
+  const relativeUrl = isReply
+    ? data.conversationId
+      ? `/dashboard/messages?c=${data.conversationId}`
+      : "/dashboard/messages"
+    : data.url ??
+      (data.conversationId
+        ? `/dashboard/messages?c=${data.conversationId}${
+            data.messageId ? `#msg-${data.messageId}` : ""
+          }`
+        : "/dashboard/messages");
   const targetUrl = new URL(relativeUrl, self.location.origin).href;
 
   event.waitUntil(

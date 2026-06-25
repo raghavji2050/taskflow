@@ -19,8 +19,11 @@ export async function createNotification(params: {
   messageId?: string;
   conversationTitle?: string;
   unreadCount?: number;
+  /** Avatar shown as the OS notification icon (e.g. the message sender's photo). */
+  icon?: string | null;
 }) {
   const type = params.type ?? "general";
+  const icon = params.icon ?? undefined;
 
   if (type === "message") {
     const { title, body } = formatChatPushNotification({
@@ -33,6 +36,7 @@ export async function createNotification(params: {
       title,
       body,
       url: chatPushUrl(params.conversationId, params.messageId),
+      icon,
       conversationId: params.conversationId,
       messageId: params.messageId,
     });
@@ -64,6 +68,7 @@ export async function createNotification(params: {
       title: params.title,
       body: params.body,
       url: chatPushUrl(params.conversationId, params.messageId),
+      icon,
       conversationId: params.conversationId,
       messageId: params.messageId,
     });

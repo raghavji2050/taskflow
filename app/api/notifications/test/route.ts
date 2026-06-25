@@ -23,8 +23,8 @@ export async function POST() {
       try {
         await sendPushToSubscription(sub, {
           userId: user.id,
-          title: "TaskFlow",
-          body: "Push notifications are working!",
+          title: "TaskFlow notifications enabled",
+          body: "You'll now get a message here when someone messages you.",
           url: "/dashboard/messages",
           test: true,
         });

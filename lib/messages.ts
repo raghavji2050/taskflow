@@ -795,6 +795,7 @@ export async function toggleMessageReaction(params: {
     },
   });
 
+  const added = !existing;
   if (existing) {
     await prisma.messageReaction.delete({ where: { id: existing.id } });
   } else {
@@ -807,12 +808,14 @@ export async function toggleMessageReaction(params: {
     });
   }
 
-  return formatMessageForClient(
+  const message = formatMessageForClient(
     await prisma.message.findUniqueOrThrow({
       where: { id: params.messageId },
       include: messageInclude,
     })
   );
+
+  return { message, added };
 }
 
 export async function setMessagePinned(params: {
