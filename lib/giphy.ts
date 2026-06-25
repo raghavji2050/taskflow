@@ -29,6 +29,7 @@ interface GiphyListResponse {
 }
 
 const GIPHY_BASE = "https://api.giphy.com/v1/gifs";
+export const GIPHY_PAGE_SIZE = 24;
 const SEARCH_CACHE_TTL_MS = 60_000;
 const TRENDING_CACHE_TTL_MS = 120_000;
 
@@ -99,7 +100,12 @@ async function giphyFetch(path: string, params: Record<string, string>) {
   return (await res.json()) as GiphyListResponse;
 }
 
-export async function searchGifs(query: string, offset = 0, limit = 24) {
+export function giphyHasMore(offset: number, count: number, total: number) {
+  if (count === 0) return false;
+  return offset + count < total;
+}
+
+export async function searchGifs(query: string, offset = 0, limit = GIPHY_PAGE_SIZE) {
   const q = query.trim();
   if (!q) return { gifs: [], offset: 0, total: 0 };
 
@@ -122,7 +128,7 @@ export async function searchGifs(query: string, offset = 0, limit = 24) {
   return result;
 }
 
-export async function getTrendingGifs(offset = 0, limit = 24) {
+export async function getTrendingGifs(offset = 0, limit = GIPHY_PAGE_SIZE) {
   const cacheKey = `trending:${offset}:${limit}`;
   const cached = getListCache(cacheKey);
   if (cached) return cached;

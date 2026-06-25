@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeGiphyItem, normalizeGiphyList } from "@/lib/giphy";
+import { giphyHasMore, normalizeGiphyItem, normalizeGiphyList } from "@/lib/giphy";
 
 describe("giphy normalization", () => {
   it("maps Giphy API item to preview gif", () => {
@@ -40,5 +40,13 @@ describe("giphy normalization", () => {
     ]);
     expect(list).toHaveLength(1);
     expect(list[0]?.id).toBe("a");
+  });
+});
+
+describe("giphy pagination", () => {
+  it("detects more pages", () => {
+    expect(giphyHasMore(0, 24, 100)).toBe(true);
+    expect(giphyHasMore(96, 24, 100)).toBe(false);
+    expect(giphyHasMore(0, 0, 100)).toBe(false);
   });
 });

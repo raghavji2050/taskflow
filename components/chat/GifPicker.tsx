@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search } from "lucide-react";
-import type { GiphyGif } from "@/lib/giphy";
+import { GIPHY_PAGE_SIZE, giphyHasMore, type GiphyGif } from "@/lib/giphy";
 import { rememberRecentGif, readRecentGifs, type RecentGif } from "@/lib/gif-recent";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,17 @@ interface GifPickerProps {
   height?: number;
 }
 
-const clientListCache = new Map<string, GiphyGif[]>();
+type GifListResponse = {
+  gifs?: GiphyGif[];
+  offset?: number;
+  total?: number;
+};
+
+const clientPageCache = new Map<string, GifListResponse>();
+
+function pageCacheKey(search: string, offset: number) {
+  return `${search || "__trending__"}:${offset}`;
+}
 
 function GiphyAttribution() {
   return (
@@ -41,8 +51,24 @@ export function GifPicker({ onSelect, height = 300 }: GifPickerProps) {
   const [gifs, setGifs] = useState<GiphyGif[]>([]);
   const [recent, setRecent] = useState<RecentGif[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
   const requestIdRef = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const debouncedQueryRef = useRef(debouncedQuery);
+  const hasMoreRef = useRef(hasMore);
+  const loadingRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const nextOffsetRef = useRef(0);
+
+  debouncedQueryRef.current = debouncedQuery;
+  hasMoreRef.current = hasMore;
+  loadingRef.current = loading;
+  loadingMoreRef.current = loadingMore;
+  nextOffsetRef.current = nextOffset;
 
   useEffect(() => {
     setRecent(readRecentGifs());
@@ -53,56 +79,104 @@ export function GifPicker({ onSelect, height = 300 }: GifPickerProps) {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const loadGifs = useCallback(async (search: string, requestId: number) => {
-    const cacheKey = search || "__trending__";
-    const cached = clientListCache.get(cacheKey);
-    if (cached) {
-      if (requestIdRef.current === requestId) {
-        setGifs(cached);
-        setError(null);
-        setLoading(false);
-      }
-      return;
+  const fetchPage = useCallback(async (search: string, offset: number) => {
+    const cacheKey = pageCacheKey(search, offset);
+    const cached = clientPageCache.get(cacheKey);
+    if (cached) return cached;
+
+    const params = new URLSearchParams({
+      offset: String(offset),
+      limit: String(GIPHY_PAGE_SIZE),
+    });
+    const endpoint = search
+      ? `/api/giphy/search?${params}&q=${encodeURIComponent(search)}`
+      : `/api/giphy/trending?${params}`;
+
+    const res = await fetch(endpoint);
+    const data = (await res.json()) as GifListResponse & { error?: string };
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to load GIFs");
     }
 
-    setLoading(true);
-    setError(null);
-    try {
-      const endpoint = search
-        ? `/api/giphy/search?q=${encodeURIComponent(search)}`
-        : "/api/giphy/trending";
-      const res = await fetch(endpoint);
-      const data = await res.json();
-      if (requestIdRef.current !== requestId) return;
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to load GIFs");
-      }
-      const next = (data.gifs ?? []) as GiphyGif[];
-      clientListCache.set(cacheKey, next);
-      setGifs(next);
-    } catch (err) {
-      if (requestIdRef.current !== requestId) return;
-      setGifs([]);
-      setError(err instanceof Error ? err.message : "Failed to load GIFs");
-    } finally {
-      if (requestIdRef.current === requestId) {
-        setLoading(false);
-      }
-    }
+    clientPageCache.set(cacheKey, data);
+    return data;
   }, []);
+
+  const applyPage = useCallback((data: GifListResponse, append: boolean) => {
+    const page = (data.gifs ?? []) as GiphyGif[];
+    const baseOffset = data.offset ?? 0;
+    setGifs((prev) => (append ? [...prev, ...page] : page));
+    const next = baseOffset + page.length;
+    setNextOffset(next);
+    setHasMore(giphyHasMore(baseOffset, page.length, data.total ?? 0));
+  }, []);
+
+  const loadPage = useCallback(
+    async (search: string, offset: number, append: boolean, requestId: number) => {
+      const setBusy = append ? setLoadingMore : setLoading;
+      setBusy(true);
+      if (!append) setError(null);
+
+      try {
+        const data = await fetchPage(search, offset);
+        if (requestIdRef.current !== requestId) return;
+        applyPage(data, append);
+      } catch (err) {
+        if (requestIdRef.current !== requestId) return;
+        if (!append) {
+          setGifs([]);
+          setHasMore(false);
+          setNextOffset(0);
+        }
+        setError(err instanceof Error ? err.message : "Failed to load GIFs");
+      } finally {
+        if (requestIdRef.current === requestId) {
+          setBusy(false);
+        }
+      }
+    },
+    [applyPage, fetchPage]
+  );
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
-    const cacheKey = debouncedQuery || "__trending__";
-    const cached = clientListCache.get(cacheKey);
+    setGifs([]);
+    setHasMore(false);
+    setNextOffset(0);
+
+    const cacheKey = pageCacheKey(debouncedQuery, 0);
+    const cached = clientPageCache.get(cacheKey);
     if (cached) {
-      setGifs(cached);
+      applyPage(cached, false);
       setError(null);
       setLoading(false);
       return;
     }
-    void loadGifs(debouncedQuery, requestId);
-  }, [debouncedQuery, loadGifs]);
+
+    void loadPage(debouncedQuery, 0, false, requestId);
+  }, [debouncedQuery, loadPage, applyPage]);
+
+  const loadMore = useCallback(() => {
+    if (loadingRef.current || loadingMoreRef.current || !hasMoreRef.current) return;
+    const requestId = requestIdRef.current;
+    void loadPage(debouncedQueryRef.current, nextOffsetRef.current, true, requestId);
+  }, [loadPage]);
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    const target = loadMoreRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore();
+      },
+      { root, rootMargin: "120px", threshold: 0 }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMore, gifs.length, hasMore, debouncedQuery]);
 
   const handleSelect = (gif: SelectedGif) => {
     rememberRecentGif(gif);
@@ -127,7 +201,7 @@ export function GifPicker({ onSelect, height = 300 }: GifPickerProps) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
         {showRecent && (
           <div className="mb-3">
             <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
@@ -161,37 +235,61 @@ export function GifPicker({ onSelect, height = 300 }: GifPickerProps) {
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Loading GIFs…
           </div>
-        ) : error ? (
+        ) : error && gifs.length === 0 ? (
           <p className="px-2 py-8 text-center text-xs text-red-500">{error}</p>
         ) : gifs.length === 0 ? (
           <p className="px-2 py-8 text-center text-xs text-[var(--muted)]">
             {debouncedQuery ? "No GIFs found" : "No trending GIFs"}
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            {gifs.map((gif) => (
-              <button
-                key={gif.id}
-                type="button"
-                onClick={() =>
-                  handleSelect({ id: gif.id, title: gif.title, previewUrl: gif.previewUrl })
-                }
-                className={cn(
-                  "group relative overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface-2)]",
-                  "aspect-[4/3] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                )}
-                title={gif.title}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={gif.previewUrl}
-                  alt={gif.title}
-                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                  loading="lazy"
-                />
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              {gifs.map((gif) => (
+                <button
+                  key={gif.id}
+                  type="button"
+                  onClick={() =>
+                    handleSelect({ id: gif.id, title: gif.title, previewUrl: gif.previewUrl })
+                  }
+                  className={cn(
+                    "group relative overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface-2)]",
+                    "aspect-[4/3] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                  )}
+                  title={gif.title}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={gif.previewUrl}
+                    alt={gif.title}
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    loading="lazy"
+                  />
+                </button>
+              ))}
+            </div>
+
+            <div ref={loadMoreRef} className="flex min-h-8 items-center justify-center py-2">
+              {loadingMore && (
+                <span className="flex items-center gap-2 text-[10px] text-[var(--muted)]">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading more…
+                </span>
+              )}
+              {!loadingMore && hasMore && (
+                <button
+                  type="button"
+                  onClick={loadMore}
+                  className="text-[10px] font-medium text-[var(--accent)] hover:underline"
+                >
+                  Load more
+                </button>
+              )}
+            </div>
+
+            {error && gifs.length > 0 && (
+              <p className="px-2 pb-2 text-center text-[10px] text-red-500">{error}</p>
+            )}
+          </>
         )}
       </div>
 

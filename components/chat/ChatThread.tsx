@@ -45,6 +45,7 @@ import {
   sortChatMessages,
 } from "@/lib/chat-message-merge";
 import { cn } from "@/lib/utils";
+import { useMobileSidebarOptional } from "@/components/MobileSidebarProvider";
 import { useMediaQuery, useVisualViewport } from "@/lib/use-visual-viewport";
 import type { GroupRole } from "@/lib/group-permissions";
 
@@ -121,6 +122,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const userId = session?.user?.id;
   const { isUserOnline, presenceVersion } = useRealtime();
   const isMobile = useMediaQuery("(max-width: 767px)");
+  const mobileSidebar = useMobileSidebarOptional();
+  const mobileSidebarOpen = Boolean(mobileSidebar?.mobileOpen);
   const visualViewport = useVisualViewport();
   const [layoutHeight, setLayoutHeight] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -264,17 +267,38 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   }, [headerMenuOpen]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const top = el.scrollHeight;
-    if (behavior === "instant") {
-      el.scrollTop = top;
-    } else {
-      el.scrollTo({ top, behavior });
-    }
-    stickToBottomRef.current = true;
-    setNewMessagesBelow(0);
+    const run = () => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+      const top = el.scrollHeight;
+      if (behavior === "instant") {
+        el.scrollTop = top;
+      } else {
+        el.scrollTo({ top, behavior });
+      }
+      stickToBottomRef.current = true;
+      setNewMessagesBelow(0);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(run));
   }, []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const onViewportChange = () => {
+      if (!stickToBottomRef.current) return;
+      scrollToBottom("instant");
+    };
+
+    vv.addEventListener("resize", onViewportChange);
+    vv.addEventListener("scroll", onViewportChange);
+    return () => {
+      vv.removeEventListener("resize", onViewportChange);
+      vv.removeEventListener("scroll", onViewportChange);
+    };
+  }, [isMobile, scrollToBottom]);
 
   const lastMessage = messages[messages.length - 1];
   const scrollAnchorKey = lastMessage
@@ -1412,22 +1436,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const composerBar = (
     <div
       className={cn(
-        "w-full min-w-0 max-w-full border-t border-[var(--border)] bg-[var(--chat-thread-bg)] px-1.5 pt-2 sm:px-2 md:px-4 md:pt-3",
-        keyboardOpen ? "pb-2.5" : "pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4",
-        isMobile
-          ? "fixed inset-x-0 bottom-0 z-[45] shadow-[0_-8px_24px_rgba(0,0,0,0.18)]"
-          : "z-30 shrink-0"
+        "w-full min-w-0 max-w-full shrink-0 border-t border-[var(--border)] bg-[var(--chat-thread-bg)] px-1.5 pt-2 sm:px-2 md:px-4 md:pt-3",
+        keyboardOpen ? "pb-2.5" : "pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-4"
       )}
-      style={
-        isMobile && keyboardOpen
-          ? {
-              bottom: Math.max(
-                0,
-                layoutHeight - visualViewport.height - visualViewport.offsetTop
-              ),
-            }
-          : undefined
-      }
     >
       {scheduledMessages.length > 0 && (
         <div className="mb-1.5 space-y-1">
@@ -1559,7 +1570,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
     <div
       className={cn(
         "grid min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden chat-thread-bg",
-        isMobile ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_minmax(0,1fr)_auto]"
+        "grid-rows-[auto_minmax(0,1fr)_auto]"
       )}
     >
       <div className="min-h-0 shrink-0">
@@ -1696,8 +1707,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       <div
         ref={scrollContainerRef}
         className={cn(
-          "h-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-3 sm:px-4 md:px-5 md:py-4",
-          isMobile && "max-md:pb-28"
+          "h-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-3 sm:px-4 md:px-5 md:py-4"
         )}
       >
         {hasMore && (
@@ -1810,10 +1820,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       )}
       </div>
 
-      {!isMobile && composerBar}
+      {!mobileSidebarOpen ? composerBar : null}
     </div>
-
-      {isMobile && menuMounted ? createPortal(composerBar, document.body) : null}
 
       {conversation && userId && (
         <ScheduleMessageDialog

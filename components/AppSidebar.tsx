@@ -40,6 +40,7 @@ import {
   useMobileSidebarSwipe,
 } from "@/lib/use-mobile-sidebar-swipe";
 import { GlowBadge } from "@/components/ui/GlowBadge";
+import { useMobileSidebar } from "@/components/MobileSidebarProvider";
 import { cn, getInitials } from "@/lib/utils";
 
 export const SIDEBAR_COLLAPSED_KEY = "taskflow-sidebar-collapsed";
@@ -241,7 +242,7 @@ function SidebarContent({
   ];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <div className={cn("flex h-14 shrink-0 items-center border-b border-[var(--sidebar-border)]", collapsed ? "justify-center px-2" : "gap-2 px-3")}>
         <Link
           href="/dashboard"
@@ -360,7 +361,7 @@ function SidebarContent({
 }
 
 export function AppSidebar() {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { mobileOpen, setMobileOpen } = useMobileSidebar();
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -415,11 +416,11 @@ export function AppSidebar() {
       </div>
 
       {mobileOpen && (
-        <div id={MOBILE_SIDEBAR_OVERLAY_ID} className="fixed inset-0 z-50 lg:hidden">
+        <div id={MOBILE_SIDEBAR_OVERLAY_ID} className="fixed inset-0 z-[100] lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
           <aside
             id={MOBILE_SIDEBAR_DRAWER_ID}
-            className="surface-panel absolute inset-y-0 left-0 flex w-[280px] flex-col rounded-none border-r border-[var(--border)] shadow-lg"
+            className="surface-panel absolute inset-y-0 left-0 z-[1] flex h-full w-[min(280px,85vw)] min-h-0 flex-col overflow-hidden rounded-none border-r border-[var(--border)] bg-[var(--sidebar)] shadow-lg"
           >
             <SidebarContent
               onNavigate={() => setMobileOpen(false)}

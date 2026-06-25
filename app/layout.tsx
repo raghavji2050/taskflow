@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ConditionalNavbar } from "@/components/ConditionalNavbar";
 import { Providers } from "@/components/providers";
@@ -16,6 +16,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = rootMetadata;
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  interactiveWidget: "resizes-content",
+};
 
 export default function RootLayout({
   children,

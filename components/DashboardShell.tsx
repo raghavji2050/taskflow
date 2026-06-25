@@ -11,6 +11,7 @@ import { TimeTrackingBar } from "@/components/TimeTrackingBar";
 import { IdleTimerProvider } from "@/components/IdleTimerProvider";
 import { TimerReminderWatcher } from "@/components/TimerReminderWatcher";
 import { AmbientBackground } from "@/components/ui/AmbientBackground";
+import { MobileSidebarProvider } from "@/components/MobileSidebarProvider";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
@@ -18,6 +19,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <ActiveTimerProvider>
         <NotificationListener />
         <PushBootstrap />
+        <MobileSidebarProvider>
         <AmbientBackground>
           <div className="app-mesh-content flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden lg:flex-row">
             <AppSidebar />
@@ -36,6 +38,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </AmbientBackground>
+        </MobileSidebarProvider>
       </ActiveTimerProvider>
     </WorkspaceProvider>
   );

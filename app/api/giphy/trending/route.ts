@@ -9,8 +9,12 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const offset = Math.max(0, Number(searchParams.get("offset") ?? 0) || 0);
+    const limit = Math.min(
+      50,
+      Math.max(1, Number(searchParams.get("limit") ?? 24) || 24)
+    );
 
-    const result = await getTrendingGifs(offset);
+    const result = await getTrendingGifs(offset, limit);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof Error && error.message === "Giphy is not configured") {
