@@ -57,8 +57,8 @@ self.addEventListener("push", (event) => {
 
       await self.registration.showNotification(data.title || "TaskFlow", {
         body,
-        icon: "/icon.svg",
-        badge: "/icon.svg",
+        icon: "/icon-192.png",
+        badge: "/badge-96.png",
         tag: isTest ? "taskflow-test" : data.conversationId ? `chat-${data.conversationId}` : "taskflow",
         renotify: true,
         requireInteraction: false,
