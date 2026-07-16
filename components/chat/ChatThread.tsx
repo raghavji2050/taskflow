@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Bookmark, Calendar, ChevronDown, Eraser, Loader2, MessageCircle, MoreVertical, Pin, Search, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Bookmark, Calendar, ChevronDown, Eraser, Link2, Loader2, MessageCircle, MoreVertical, Pin, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import type { SelectedGif } from "@/components/chat/GifPicker";
@@ -11,6 +11,7 @@ import { ChatFileDropOverlay } from "@/components/chat/ChatFileDropOverlay";
 import { ChatDateJumpModal } from "@/components/chat/ChatDateJumpModal";
 import { ChatSearchPanel } from "@/components/chat/ChatSearchPanel";
 import { GroupInfoModal } from "@/components/chat/GroupInfoModal";
+import { InboundWebhookModal } from "@/components/chat/InboundWebhookModal";
 import { ForwardMessageModal } from "@/components/chat/ForwardMessageModal";
 import { MessageBubble, type ChatMessage } from "@/components/chat/MessageBubble";
 import { useWorkspace } from "@/components/WorkspaceProvider";
@@ -150,6 +151,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
   const [peerLastSeenAt, setPeerLastSeenAt] = useState<string | null>(null);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
+  const [inboundWebhookOpen, setInboundWebhookOpen] = useState(false);
   const [momModalOpen, setMomModalOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [editingScheduled, setEditingScheduled] = useState<ScheduledMessageClient | null>(null);
@@ -521,6 +523,8 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
         .then(() => {
           onReadRef.current?.();
           window.dispatchEvent(new CustomEvent("taskflow:chat-unread"));
+          // Conversation open clears related bell notifications — refresh the badge.
+          window.dispatchEvent(new CustomEvent("taskflow:notification"));
         })
         .catch(() => {})
         .finally(() => {
@@ -1546,6 +1550,18 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
             <Users className="h-3.5 w-3.5" /> Group info
           </button>
         )}
+        {(conversation.type === "GROUP" || conversation.type === "WORKSPACE") && (
+          <button
+            type="button"
+            onClick={() => {
+              setInboundWebhookOpen(true);
+              setHeaderMenuOpen(false);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--surface-hover)]"
+          >
+            <Link2 className="h-3.5 w-3.5" /> External message link
+          </button>
+        )}
         <button
           type="button"
           disabled={!canClearChat}
@@ -1885,6 +1901,14 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
           currentUserRole={conversation.currentUserRole}
           onClose={() => setGroupInfoOpen(false)}
           onUpdated={() => onConversationUpdated?.()}
+        />
+      )}
+
+      {(conversation.type === "GROUP" || conversation.type === "WORKSPACE") && (
+        <InboundWebhookModal
+          isOpen={inboundWebhookOpen}
+          conversationId={conversation.id}
+          onClose={() => setInboundWebhookOpen(false)}
         />
       )}
     </div>

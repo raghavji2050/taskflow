@@ -28,10 +28,9 @@ export async function GET(request: Request) {
       where: {
         userId: user.id,
         archivedAt: showArchived ? { not: null } : null,
-        type: { not: "message" },
       },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take: 30,
       include: {
         invite: {
           include: {
@@ -43,7 +42,7 @@ export async function GET(request: Request) {
     });
 
     const unreadCount = await prisma.notification.count({
-      where: { userId: user.id, read: false, archivedAt: null, type: { not: "message" } },
+      where: { userId: user.id, read: false, archivedAt: null },
     });
 
     return NextResponse.json({ notifications, unreadCount });

@@ -113,7 +113,7 @@ export const createConversationSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("GROUP"),
     name: z.string().min(1).max(100).optional(),
-    memberIds: z.array(z.string()).min(1).max(50),
+    memberIds: z.array(z.string()).max(50).default([]),
   }),
 ]);
 

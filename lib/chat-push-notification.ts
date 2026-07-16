@@ -1,3 +1,5 @@
+import { plainMessagePreview } from "@/lib/markdown-plain";
+
 const CHAT_PUSH_COUNT_KEY = "taskflow:chat-push-count";
 
 export function formatChatPushNotification(params: {
@@ -6,7 +8,8 @@ export function formatChatPushNotification(params: {
   conversationTitle: string;
   preview: string;
 }): { title: string; body: string } {
-  const preview = params.preview?.trim() || "New message";
+  // OS notifications are plain text — strip markdown so **bold** / `code` don't show raw.
+  const preview = plainMessagePreview(params.preview ?? "", 180);
   const conversationTitle = params.conversationTitle?.trim() || params.senderName;
 
   if (params.unreadCount <= 1) {

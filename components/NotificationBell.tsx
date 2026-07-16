@@ -88,9 +88,16 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
   useEffect(() => {
     fetchNotifications();
     const onRealtime = () => void fetchNotifications();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchNotifications();
+    };
     window.addEventListener("taskflow:notification", onRealtime);
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.removeEventListener("taskflow:notification", onRealtime);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [fetchNotifications]);
 
@@ -167,12 +174,16 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
   };
 
   const openNotification = (n: Notification) => {
-    if ((n.type === "mention" || n.type === "message") && n.conversationId) {
+    if (
+      (n.type === "mention" || n.type === "message" || n.type === "reaction") &&
+      n.conversationId
+    ) {
       const path = `/dashboard/messages?c=${n.conversationId}${
         n.messageId ? `#msg-${n.messageId}` : ""
       }`;
       router.push(path);
       setOpen(false);
+      if (!n.read) void markAsRead(n.id);
     }
   };
 
@@ -224,8 +235,18 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
                   )}
                 >
                   <div
-                    role={(n.type === "mention" || n.type === "message") && n.conversationId ? "button" : undefined}
-                    tabIndex={(n.type === "mention" || n.type === "message") && n.conversationId ? 0 : undefined}
+                    role={
+                      (n.type === "mention" || n.type === "message" || n.type === "reaction") &&
+                      n.conversationId
+                        ? "button"
+                        : undefined
+                    }
+                    tabIndex={
+                      (n.type === "mention" || n.type === "message" || n.type === "reaction") &&
+                      n.conversationId
+                        ? 0
+                        : undefined
+                    }
                     onClick={() => openNotification(n)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -234,7 +255,7 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
                       }
                     }}
                     className={cn(
-                      (n.type === "mention" || n.type === "message") &&
+                      (n.type === "mention" || n.type === "message" || n.type === "reaction") &&
                         n.conversationId &&
                         "cursor-pointer hover:opacity-90",
                       !showArchived && (!n.read ? "pr-16" : "pr-9")

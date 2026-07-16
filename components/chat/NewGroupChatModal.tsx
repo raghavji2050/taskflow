@@ -60,7 +60,6 @@ export function NewGroupChatModal({ isOpen, onClose, onCreated }: NewGroupChatMo
   };
 
   const createGroup = async () => {
-    if (selected.length === 0) return;
     setCreating(true);
     const res = await fetch("/api/conversations", {
       method: "POST",
@@ -84,7 +83,7 @@ export function NewGroupChatModal({ isOpen, onClose, onCreated }: NewGroupChatMo
       isOpen={isOpen}
       onClose={onClose}
       title="New group chat"
-      description="Add members and optionally name your group"
+      description="Optionally name the group and add members now, or add them later"
     >
       <div className="space-y-4">
         <Input
@@ -114,7 +113,7 @@ export function NewGroupChatModal({ isOpen, onClose, onCreated }: NewGroupChatMo
 
         <Input
           hideLabel
-          placeholder="Search members to add…"
+          placeholder="Search members to add (optional)…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           startIcon={<Search className="h-4 w-4" />}
@@ -153,7 +152,7 @@ export function NewGroupChatModal({ isOpen, onClose, onCreated }: NewGroupChatMo
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button
             onClick={() => void createGroup()}
-            disabled={selected.length === 0 || creating}
+            disabled={creating}
             isLoading={creating}
           >
             Create group

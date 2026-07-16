@@ -1,6 +1,5 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
-import { isPushForegroundActive } from "@/lib/push-foreground";
 
 export function getVapidPublicKey(): string | null {
   return (
@@ -75,16 +74,9 @@ export async function sendPushToUser(
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { pushForegroundAt: true },
-    });
-    if (isPushForegroundActive(user?.pushForegroundAt)) {
-      if (process.env.PUSH_DEBUG === "1") {
-        console.info(`[push] Skipped send for foreground user ${userId}`);
-      }
-      return;
-    }
+    // Always deliver to every subscription. Per-browser suppression happens in
+    // the service worker when that tab is visible — so offline / other devices
+    // still get the OS notification, and the bell has a DB row for catch-up.
 
     const subs = await prisma.pushSubscription.findMany({ where: { userId } });
     if (subs.length === 0) {

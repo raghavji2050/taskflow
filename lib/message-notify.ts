@@ -4,8 +4,8 @@ import { parseMentionsFromBody } from "@/lib/mentions";
 import { broadcastMessageToConversation } from "@/lib/realtime";
 import { getConversationParticipantIds } from "@/lib/chat-access";
 import { getConversationUnreadCount } from "@/lib/conversations";
-import { sendPushToUser } from "@/lib/push";
 import type { formatMessageForClient } from "@/lib/message-format";
+import { INBOUND_BOT_EMAIL } from "@/lib/inbound-webhook";
 
 /** Push the author of a message when someone else reacts to it. */
 export async function notifyMessageReaction(params: {
@@ -34,13 +34,14 @@ export async function notifyMessageReaction(params: {
     ? `Reacted ${params.emoji} to: ${shortSnippet}`
     : `Reacted ${params.emoji} to your message`;
 
-  await sendPushToUser(message.userId, {
+  await createNotification({
+    userId: message.userId,
     title: params.reactorName,
     body,
-    url: `/dashboard/messages?c=${params.conversationId}#msg-${params.messageId}`,
-    icon: reactor?.image ?? undefined,
+    type: "reaction",
     conversationId: params.conversationId,
     messageId: params.messageId,
+    icon: reactor?.image ?? undefined,
   });
 }
 
@@ -91,15 +92,28 @@ async function deliverParticipantNotifications(
   const mentioned = parseMentionsFromBody(params.body, params.mentionCandidates);
   const mentionedIds = new Set(mentioned.map((m) => m.id));
 
-  const sender = await prisma.user.findUnique({
-    where: { id: params.userId },
-    select: { image: true },
-  });
+  const [sender, inboundBots] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: params.userId },
+      select: { image: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { email: INBOUND_BOT_EMAIL },
+          { email: { startsWith: "inbound+" } },
+        ],
+      },
+      select: { id: true },
+    }),
+  ]);
   const senderIcon = sender?.image ?? undefined;
+  const botIds = new Set(inboundBots.map((u) => u.id));
 
   await Promise.all(
     otherParticipantIds
       .filter((participantId) => !mentionedIds.has(participantId))
+      .filter((participantId) => !botIds.has(participantId))
       .map(async (participantId) => {
         const unreadCount = await getConversationUnreadCount(params.conversationId, participantId);
         return createNotification({
@@ -119,6 +133,7 @@ async function deliverParticipantNotifications(
   await Promise.all(
     mentioned
       .filter((m) => m.id !== params.userId)
+      .filter((m) => !botIds.has(m.id))
       .map((m) =>
         createNotification({
           userId: m.id,

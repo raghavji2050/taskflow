@@ -876,6 +876,9 @@ export async function markConversationRead(conversationId: string, userId: strin
     lastReadAt: now.toISOString(),
     lastReceivedAt: now.toISOString(),
   });
+
+  const { markConversationNotificationsRead } = await import("@/lib/notifications");
+  await markConversationNotificationsRead(userId, conversationId);
 }
 
 export async function markConversationReceived(conversationId: string, userId: string) {

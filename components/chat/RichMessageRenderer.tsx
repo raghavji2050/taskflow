@@ -2,8 +2,10 @@
 
 import type { ReactNode } from "react";
 import { MessageBody } from "@/components/chat/MessageBody";
+import { MarkdownMessage } from "@/components/chat/MarkdownMessage";
 import { CodeSnippet } from "@/components/chat/CodeSnippet";
 import { EmojiAwareText } from "@/lib/emoji-text";
+import { looksLikeMarkdown } from "@/lib/markdown-detect";
 import { isMentionAllId } from "@/lib/mentions";
 import { sanitizeLinkHref } from "@/lib/rich-message-links";
 import { isRichDoc } from "@/lib/rich-message-types";
@@ -229,6 +231,15 @@ export function RichMessageRenderer({
   emojiSizeClass,
 }: RichMessageRendererProps) {
   if (!bodyJson || !isRichDoc(bodyJson)) {
+    if (!inline && looksLikeMarkdown(body)) {
+      return (
+        <MarkdownMessage
+          body={body}
+          inOwnBubble={inOwnBubble}
+          className={cn(emojiOnly && "chat-emoji-only", emojiOnly && emojiSizeClass, className)}
+        />
+      );
+    }
     return (
       <MessageBody
         body={body}

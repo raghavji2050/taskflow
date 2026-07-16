@@ -44,17 +44,17 @@ describe("formatChatPushNotification", () => {
     });
   });
 
-  it("uses sender as conversation title fallback when grouping", () => {
+  it("strips markdown markers from push body", () => {
     expect(
       formatChatPushNotification({
-        unreadCount: 2,
-        senderName: "Carol",
-        conversationTitle: "",
-        preview: "Hi",
+        unreadCount: 1,
+        senderName: "Seed",
+        conversationTitle: "test",
+        preview: "**Seed balance changes**\n- **SONI .** `104DH55010140T`",
       })
     ).toEqual({
-      title: "Carol",
-      body: "2 new messages\nHi",
+      title: "Seed",
+      body: "Seed balance changes SONI . 104DH55010140T",
     });
   });
 });

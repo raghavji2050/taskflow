@@ -178,8 +178,8 @@ export async function createGroupConversation(
   name?: string | null
 ) {
   const uniqueIds = [...new Set([creatorId, ...memberIds])];
-  if (uniqueIds.length < 2) {
-    throw new Error("Group chat requires at least 2 members");
+  if (uniqueIds.length < 1) {
+    throw new Error("Group chat requires a creator");
   }
 
   const users = await prisma.user.findMany({

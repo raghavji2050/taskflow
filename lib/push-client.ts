@@ -48,6 +48,29 @@ export function parseVapidPublicKey(base64String: string): Uint8Array {
   return bytes;
 }
 
+function applicationServerKeysMatch(
+  subscription: PushSubscription,
+  expected: Uint8Array
+): boolean {
+  const existing = subscription.options?.applicationServerKey;
+  if (!existing) return false;
+  const bytes = new Uint8Array(existing instanceof ArrayBuffer ? existing : existing);
+  if (bytes.length !== expected.length) return false;
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] !== expected[i]) return false;
+  }
+  return true;
+}
+
+async function unsubscribeQuietly(subscription: PushSubscription | null) {
+  if (!subscription) return;
+  try {
+    await subscription.unsubscribe();
+  } catch {
+    // ignore
+  }
+}
+
 export function getPushSubscribeErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message && !error.message.includes("push service")) {
     return error.message;
@@ -91,7 +114,7 @@ async function savePushSubscription(subscription: PushSubscription) {
   }
 }
 
-export async function subscribeToPush(): Promise<boolean> {
+export async function subscribeToPush(opts?: { forceRefresh?: boolean }): Promise<boolean> {
   if (!isPushSupported()) return false;
 
   const vapidKey = await getVapidPublicKey();
@@ -106,16 +129,23 @@ export async function subscribeToPush(): Promise<boolean> {
   const registration = await ensureServiceWorker();
   let subscription = await registration.pushManager.getSubscription();
 
+  // Drop stale subscriptions created with a different VAPID key (causes
+  // "Received unexpected response code" from FCM/Mozilla on send).
+  if (
+    subscription &&
+    (opts?.forceRefresh || !applicationServerKeysMatch(subscription, applicationServerKey))
+  ) {
+    await unsubscribeQuietly(subscription);
+    subscription = null;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
   if (subscription) {
     try {
       await savePushSubscription(subscription);
       return true;
     } catch {
-      try {
-        await subscription.unsubscribe();
-      } catch {
-        // ignore
-      }
+      await unsubscribeQuietly(subscription);
       subscription = null;
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
@@ -235,7 +265,15 @@ export async function enablePushWithTest(): Promise<{ ok: boolean; error?: strin
     return { ok: false, error: "Permission denied or push is not configured on the server" };
   }
 
-  const test = await sendTestPushNotification();
+  let test = await sendTestPushNotification();
+  if (!test.ok) {
+    // Stale endpoint / key mismatch — force a brand-new browser subscription and retry once.
+    const retried = await subscribeToPush({ forceRefresh: true });
+    if (retried) {
+      test = await sendTestPushNotification();
+    }
+  }
+
   if (!test.ok) {
     return {
       ok: false,

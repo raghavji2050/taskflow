@@ -426,6 +426,8 @@ model Conversation {
   name        String?
   workspaceId String?          @unique
   createdById String
+  /// Secret token for the public inbound webhook URL (/api/inbound/{token}).
+  inboundToken String?         @unique
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 

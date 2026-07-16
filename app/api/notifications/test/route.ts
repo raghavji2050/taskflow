@@ -3,6 +3,38 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { isPushConfigured, sendPushToSubscription } from "@/lib/push";
 
+function formatPushDeliveryError(error: unknown): string {
+  const statusCode =
+    error && typeof error === "object" && "statusCode" in error
+      ? Number((error as { statusCode?: number }).statusCode)
+      : undefined;
+  const body =
+    error && typeof error === "object" && "body" in error
+      ? String((error as { body?: unknown }).body ?? "")
+      : "";
+  const message = error instanceof Error ? error.message : "Push delivery failed";
+
+  if (statusCode === 401 || statusCode === 403) {
+    return (
+      `Push rejected (${statusCode}): browser subscription does not match server VAPID keys. ` +
+      "Click Enable again (we will refresh the subscription), or run npm run generate:vapid and restart the server."
+    );
+  }
+  if (statusCode === 404 || statusCode === 410) {
+    return `Push subscription expired (${statusCode}). Enable notifications again.`;
+  }
+  if (statusCode) {
+    return `Push service error ${statusCode}${body ? `: ${body.slice(0, 200)}` : ""}`;
+  }
+  if (/unexpected response code/i.test(message)) {
+    return (
+      "Push service rejected the notification (likely a stale subscription or VAPID key mismatch). " +
+      "Enable notifications again to refresh."
+    );
+  }
+  return message || "Push delivery failed — check VAPID keys";
+}
+
 export async function POST() {
   try {
     const user = await getAuthenticatedUser();
@@ -30,9 +62,9 @@ export async function POST() {
         });
         sent++;
       } catch (error) {
-        lastError =
-          error instanceof Error ? error.message : "Push delivery failed — check VAPID keys";
-        await prisma.pushSubscription.delete({ where: { id: sub.id } });
+        lastError = formatPushDeliveryError(error);
+        console.warn("[push/test] delivery failed", lastError, error);
+        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
       }
     }
 
