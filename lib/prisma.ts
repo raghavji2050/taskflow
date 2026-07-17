@@ -48,13 +48,20 @@ async function withPrismaRetry<T>(operation: () => Promise<T>): Promise<T> {
   throw lastError;
 }
 
-/** Prefer a longer connect timeout for hosted DBs (Railway cold starts). */
+/** Prefer a longer connect timeout and a small pool for hosted DBs. */
 function databaseUrlWithTimeout(): string | undefined {
   const url = process.env.DATABASE_URL;
   if (!url) return undefined;
-  if (/[?&]connect_timeout=/i.test(url)) return url;
+
+  const params: string[] = [];
+  if (!/[?&]connect_timeout=/i.test(url)) params.push("connect_timeout=300");
+  // Default Prisma pool is ~num_cpus*2+1; that exhausts small VPS max_connections.
+  if (!/[?&]connection_limit=/i.test(url)) params.push("connection_limit=5");
+  if (!/[?&]pool_timeout=/i.test(url)) params.push("pool_timeout=20");
+  if (params.length === 0) return url;
+
   const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}connect_timeout=300`;
+  return `${url}${sep}${params.join("&")}`;
 }
 
 function createPrismaClient(): PrismaClient {
