@@ -28,6 +28,21 @@ function isPermanentTokenError(code: string | undefined): boolean {
   return PERMANENT_FCM_ERRORS.has(code) || /registration-token/i.test(code);
 }
 
+function appOrigin(): string {
+  return (
+    process.env.NEXTAUTH_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    "http://localhost:3000"
+  );
+}
+
+function toAbsoluteUrl(pathOrUrl: string | undefined, fallback: string): string {
+  const value = (pathOrUrl || fallback).trim();
+  if (/^https?:\/\//i.test(value)) return value;
+  const origin = appOrigin();
+  return `${origin}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
 function toDataPayload(userId: string, payload: PushPayload): Record<string, string> {
   const safeBody = payload.body?.trim() || "New message";
   const data: Record<string, string> = {
@@ -36,65 +51,111 @@ function toDataPayload(userId: string, payload: PushPayload): Record<string, str
     body: safeBody,
     url: payload.url ?? "/dashboard",
   };
-  if (payload.icon) data.icon = payload.icon;
+  if (payload.icon) data.icon = toAbsoluteUrl(payload.icon, "/icon-192.png");
   if (payload.conversationId) data.conversationId = payload.conversationId;
   if (payload.messageId) data.messageId = payload.messageId;
   if (payload.test) data.test = "true";
   return data;
 }
 
+function buildMessage(userId: string, payload: PushPayload) {
+  const data = toDataPayload(userId, payload);
+  const title = data.title;
+  const body = data.body;
+  const link = toAbsoluteUrl(payload.url, "/dashboard");
+  const icon = toAbsoluteUrl(payload.icon, "/icon-192.png");
+
+  return {
+    data,
+    // Include notification so browsers still show an OS alert if the SW
+    // cold-starts before onBackgroundMessage is wired.
+    notification: {
+      title,
+      body,
+    },
+    webpush: {
+      headers: {
+        Urgency: "high",
+        TTL: "86400",
+      },
+      notification: {
+        title,
+        body,
+        icon,
+        badge: toAbsoluteUrl("/badge-96.png", "/badge-96.png"),
+        tag: payload.test
+          ? "taskflow-test"
+          : payload.conversationId
+            ? `chat-${payload.conversationId}`
+            : "taskflow",
+        renotify: true,
+        data: {
+          url: payload.url ?? "/dashboard",
+          conversationId: payload.conversationId ?? "",
+          messageId: payload.messageId ?? "",
+        },
+      },
+      fcmOptions: {
+        link,
+      },
+    },
+  };
+}
+
+async function deleteInvalidTokens(
+  tokens: { id: string }[],
+  responses: { success: boolean; error?: { code?: string; message?: string } }[],
+  userId: string
+) {
+  const toDelete: string[] = [];
+  responses.forEach((result, index) => {
+    if (result.success) return;
+    const code = result.error?.code;
+    console.warn(
+      `[push] FCM send failed for token ${tokens[index]?.id} (user ${userId}):`,
+      code ?? result.error?.message
+    );
+    if (isPermanentTokenError(code)) {
+      toDelete.push(tokens[index].id);
+    }
+  });
+  if (toDelete.length > 0) {
+    await prisma.pushSubscription.deleteMany({ where: { id: { in: toDelete } } });
+  }
+}
+
 export async function sendPushToUser(userId: string, payload: PushPayload) {
   try {
     const messaging = getFirebaseMessaging();
     if (!messaging) {
-      if (process.env.PUSH_DEBUG === "1") {
-        console.warn("[push] Firebase Admin not configured — cannot send push");
-      }
+      console.warn("[push] Firebase Admin not configured — cannot send push");
       return;
     }
 
     const tokens = await prisma.pushSubscription.findMany({ where: { userId } });
     if (tokens.length === 0) {
-      if (process.env.PUSH_DEBUG === "1") {
-        console.warn(`[push] No FCM tokens for user ${userId}`);
-      }
+      console.warn(`[push] No FCM tokens for user ${userId}`);
       return;
     }
 
-    const data = toDataPayload(userId, payload);
-    // Data-only so the service worker / onMessage always control display.
+    const message = buildMessage(userId, payload);
     const response = await messaging.sendEachForMulticast({
       tokens: tokens.map((t) => t.fcmToken),
-      data,
-      webpush: {
-        fcmOptions: {
-          link: payload.url ?? "/dashboard",
-        },
-      },
+      ...message,
     });
 
-    const toDelete: string[] = [];
-    response.responses.forEach((result, index) => {
-      if (result.success) return;
-      const code = result.error?.code;
-      console.warn(
-        `[push] FCM send failed for token ${tokens[index]?.id} (user ${userId}):`,
-        code ?? result.error?.message
-      );
-      if (isPermanentTokenError(code)) {
-        toDelete.push(tokens[index].id);
-      }
-    });
+    console.info(
+      `[push] sent to user ${userId}: ${response.successCount}/${tokens.length} ok` +
+        (response.failureCount ? `, ${response.failureCount} failed` : "")
+    );
 
-    if (toDelete.length > 0) {
-      await prisma.pushSubscription.deleteMany({ where: { id: { in: toDelete } } });
-    }
+    await deleteInvalidTokens(tokens, response.responses, userId);
   } catch (error) {
     console.warn(`[push] sendPushToUser failed for ${userId}:`, error);
   }
 }
 
-/** Send to every token for the user; returns how many succeeded. Throws if none and errors exist. */
+/** Send to every token for the user; returns how many succeeded. */
 export async function sendTestPushToUser(userId: string): Promise<{ sent: number; error?: string }> {
   const messaging = getFirebaseMessaging();
   if (!messaging) {
@@ -106,7 +167,7 @@ export async function sendTestPushToUser(userId: string): Promise<{ sent: number
     return { sent: 0, error: "No push subscription found" };
   }
 
-  const data = toDataPayload(userId, {
+  const message = buildMessage(userId, {
     title: "TaskFlow notifications enabled",
     body: "You'll now get a message here when someone messages you.",
     url: "/dashboard/messages",
@@ -115,26 +176,17 @@ export async function sendTestPushToUser(userId: string): Promise<{ sent: number
 
   const response = await messaging.sendEachForMulticast({
     tokens: tokens.map((t) => t.fcmToken),
-    data,
-    webpush: {
-      fcmOptions: { link: "/dashboard/messages" },
-    },
+    ...message,
   });
 
-  const toDelete: string[] = [];
   let lastError: string | undefined;
-  response.responses.forEach((result, index) => {
+  response.responses.forEach((result) => {
     if (result.success) return;
     lastError = result.error?.message ?? result.error?.code ?? "FCM delivery failed";
     console.warn("[push/test] delivery failed", lastError, result.error);
-    if (isPermanentTokenError(result.error?.code)) {
-      toDelete.push(tokens[index].id);
-    }
   });
 
-  if (toDelete.length > 0) {
-    await prisma.pushSubscription.deleteMany({ where: { id: { in: toDelete } } });
-  }
+  await deleteInvalidTokens(tokens, response.responses, userId);
 
   return { sent: response.successCount, error: response.successCount === 0 ? lastError : undefined };
 }

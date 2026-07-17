@@ -80,6 +80,12 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function getPrisma(): AppPrismaClient {
+  if (process.env.NEXT_RUNTIME === "edge") {
+    throw new Error(
+      "Prisma Client cannot run in the Edge Runtime. Use Node.js route handlers instead."
+    );
+  }
+
   const existing = globalForPrisma.prisma;
   if (
     existing &&
@@ -97,4 +103,14 @@ function getPrisma(): AppPrismaClient {
   return client;
 }
 
-export const prisma = getPrisma();
+/**
+ * Lazy proxy so importing this module in Edge-safe graphs does not construct
+ * PrismaClient until a property is actually accessed (Node routes only).
+ */
+export const prisma: AppPrismaClient = new Proxy({} as AppPrismaClient, {
+  get(_target, prop, receiver) {
+    const client = getPrisma();
+    const value = Reflect.get(client, prop, receiver);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

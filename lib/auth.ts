@@ -1,4 +1,4 @@
-import NextAuth, { type Account, type NextAuthConfig } from "next-auth";
+import NextAuth, { type Account } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
@@ -6,6 +6,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
 import { getGitHubOAuthConfig, getGoogleOAuthConfig } from "@/lib/oauth";
+import { authConfig } from "@/lib/auth.config";
+import type { NextAuthConfig } from "next-auth";
 
 const providers: NextAuthConfig["providers"] = [
   Credentials({
@@ -67,12 +69,10 @@ function oauthAccountData(account: Account) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers,
-  session: { strategy: "jwt" },
-  pages: { signIn: "/login" },
-  trustHost: true,
-  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   callbacks: {
+    ...authConfig.callbacks,
     async signIn({ user, account }) {
       if (account?.provider === "credentials") return true;
       if (!user.email) return false;
@@ -127,10 +127,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         delete token.deleted;
       }
 
-      if (!token.id) return token;
-
-      // Prisma cannot run in Edge middleware — skip DB checks there.
-      if (process.env.NEXT_RUNTIME === "edge") return token;
+      // Edge middleware: never touch Prisma — role/session already live in the JWT.
+      if (process.env.NEXT_RUNTIME === "edge" || !token.id) {
+        return token;
+      }
 
       const dbUser = await prisma.user.findUnique({
         where: { id: token.id as string },
@@ -149,19 +149,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       delete token.deleted;
 
       return token;
-    },
-    async session({ session, token }) {
-      if (token.deleted || !token.id) {
-        return { ...session, user: undefined };
-      }
-
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = (token.role as string) ?? "USER";
-        if (token.name) session.user.name = token.name as string;
-        if (token.email) session.user.email = token.email as string;
-      }
-      return session;
     },
   },
 });

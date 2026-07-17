@@ -56,13 +56,30 @@ async function saveFcmToken(fcmToken: string) {
 }
 
 export async function ensureServiceWorker() {
-  const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  // Dynamic SW embeds Firebase config so messaging initializes synchronously.
+  const registration = await navigator.serviceWorker.register("/api/push-sw", {
+    scope: "/",
+    updateViaCache: "none",
+  });
   await navigator.serviceWorker.ready;
 
-  // Warm Firebase Messaging inside the SW (fetches public config).
+  // Unregister legacy /sw.js workers that used async Firebase init.
   try {
-    registration.active?.postMessage({ type: "taskflow:firebase-config" });
-    navigator.serviceWorker.controller?.postMessage({ type: "taskflow:firebase-config" });
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      regs
+        .filter((reg) => {
+          const url = reg.active?.scriptURL || reg.installing?.scriptURL || "";
+          return url.endsWith("/sw.js") || url.includes("/sw.js?");
+        })
+        .map((reg) => reg.unregister())
+    );
+  } catch {
+    // ignore
+  }
+
+  try {
+    await registration.update();
   } catch {
     // ignore
   }
@@ -220,15 +237,20 @@ export async function subscribeToPush(opts?: { forceRefresh?: boolean }): Promis
 
 /** Subscribe via FCM, persist token, and send a test OS notification. */
 export async function enablePushWithTest(): Promise<{ ok: boolean; error?: string }> {
-  const subscribed = await subscribeToPush();
+  // Always refresh token when enabling so we drop stale registrations after SW/FCM changes.
+  const subscribed = await subscribeToPush({ forceRefresh: true });
   if (!subscribed) {
     return { ok: false, error: "Permission denied or push is not configured on the server" };
   }
+
+  // Give the new SW a moment to activate before the test push arrives.
+  await new Promise((resolve) => setTimeout(resolve, 400));
 
   let test = await sendTestPushNotification();
   if (!test.ok) {
     const retried = await subscribeToPush({ forceRefresh: true });
     if (retried) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
       test = await sendTestPushNotification();
     }
   }
@@ -340,8 +362,10 @@ export async function refreshPushTokenIfEnrolled(): Promise<void> {
 }
 
 /**
- * Foreground FCM handler: in-app toast for normal pushes; OS notification for tests.
- * Background/closed tabs are handled by the service worker.
+ * Foreground FCM handler.
+ * - Test: always show OS notification
+ * - Hidden tab: show OS notification (SW may not own the event while page is open)
+ * - Focused tab: skip (realtime toasts already cover in-app alerts)
  */
 export function startForegroundMessageListener(): () => void {
   if (typeof window === "undefined") return () => {};
@@ -358,23 +382,38 @@ export function startForegroundMessageListener(): () => void {
       const title = data.title || payload.notification?.title || "TaskFlow";
       const body = data.body || payload.notification?.body || "New notification";
       const isTest = data.test === "true";
+      const icon = data.icon || "/icon-192.png";
+      const tag = isTest
+        ? "taskflow-test"
+        : data.conversationId
+          ? `chat-${data.conversationId}`
+          : "taskflow";
 
-      // Foreground: realtime already drives in-app toasts. Only surface OS/toast for tests.
-      if (!isTest) return;
+      if (!isTest && !document.hidden) return;
 
       if (Notification.permission === "granted") {
         try {
-          new Notification(title, {
-            body,
-            icon: data.icon || "/icon-192.png",
-            tag: "taskflow-test",
-          });
+          const n = new Notification(title, { body, icon, tag });
+          n.onclick = () => {
+            window.focus();
+            if (data.url) window.location.assign(data.url);
+            n.close();
+          };
           return;
         } catch {
           // fall through to toast
         }
       }
-      toast.success(title, { description: body });
+
+      toast(title, {
+        description: body,
+        action: data.url
+          ? {
+              label: "Open",
+              onClick: () => window.location.assign(data.url!),
+            }
+          : undefined,
+      });
     });
   })();
 
