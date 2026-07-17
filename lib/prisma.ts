@@ -57,29 +57,25 @@ function databaseUrlWithTimeout(): string | undefined {
   return `${url}${sep}connect_timeout=300`;
 }
 
-function createPrismaClient() {
+function createPrismaClient(): PrismaClient {
   const datasourceUrl = databaseUrlWithTimeout();
-  const base = new PrismaClient({
+  const client = new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     ...(datasourceUrl ? { datasources: { db: { url: datasourceUrl } } } : {}),
   });
 
-  return base.$extends({
-    query: {
-      $allOperations({ args, query }) {
-        return withPrismaRetry(() => query(args));
-      },
-    },
-  });
+  // Use $use (not $extends) so the client stays typed as PrismaClient and
+  // $transaction callbacks remain compatible with Prisma.TransactionClient.
+  client.$use(async (params, next) => withPrismaRetry(() => next(params)));
+
+  return client;
 }
 
-type AppPrismaClient = ReturnType<typeof createPrismaClient>;
-
 const globalForPrisma = globalThis as unknown as {
-  prisma: AppPrismaClient | undefined;
+  prisma: PrismaClient | undefined;
 };
 
-function getPrisma(): AppPrismaClient {
+function getPrisma(): PrismaClient {
   if (process.env.NEXT_RUNTIME === "edge") {
     throw new Error(
       "Prisma Client cannot run in the Edge Runtime. Use Node.js route handlers instead."
@@ -107,7 +103,7 @@ function getPrisma(): AppPrismaClient {
  * Lazy proxy so importing this module in Edge-safe graphs does not construct
  * PrismaClient until a property is actually accessed (Node routes only).
  */
-export const prisma: AppPrismaClient = new Proxy({} as AppPrismaClient, {
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
     const client = getPrisma();
     const value = Reflect.get(client, prop, receiver);
