@@ -1,11 +1,11 @@
 import { getFirebaseWebConfig } from "@/lib/firebase-config";
 
 /**
- * Dynamically served service worker with Firebase config embedded so
+ * Dynamically served FCM service worker with Firebase config embedded so
  * messaging initializes synchronously (required for getToken + background push).
  *
- * Background OS alerts come from the FCM `notification` payload (auto-displayed).
- * This file wires messaging + notification click handling.
+ * Background / closed-tab alerts: data-only FCM + onBackgroundMessage → showNotification.
+ * notificationclick is registered before Firebase imports (FCM can overwrite later handlers).
  */
 export async function GET() {
   const config = getFirebaseWebConfig();
@@ -23,13 +23,6 @@ export async function GET() {
   const configJson = JSON.stringify(config);
 
   const script = `/* TaskFlow FCM service worker (generated) */
-importScripts(
-  "https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js",
-  "https://www.gstatic.com/firebasejs/12.16.0/firebase-messaging-compat.js"
-);
-
-firebase.initializeApp(${configJson});
-firebase.messaging();
 
 self.addEventListener("install", function (event) {
   event.waitUntil(self.skipWaiting());
@@ -42,17 +35,13 @@ self.addEventListener("activate", function (event) {
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
   const data = event.notification.data || {};
-  const isReply = event.action === "reply";
-  const relativeUrl = isReply
-    ? data.conversationId
-      ? "/dashboard/messages?c=" + data.conversationId
-      : "/dashboard/messages"
-    : data.url ||
-      (data.conversationId
-        ? "/dashboard/messages?c=" +
-          data.conversationId +
-          (data.messageId ? "#msg-" + data.messageId : "")
-        : "/dashboard/messages");
+  const relativeUrl =
+    data.url ||
+    (data.conversationId
+      ? "/dashboard/messages?c=" +
+        data.conversationId +
+        (data.messageId ? "#msg-" + data.messageId : "")
+      : "/dashboard/messages");
   const targetUrl = new URL(relativeUrl, self.location.origin).href;
 
   event.waitUntil(
@@ -99,6 +88,41 @@ self.addEventListener("notificationclick", function (event) {
       }
     })()
   );
+});
+
+importScripts(
+  "https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js",
+  "https://www.gstatic.com/firebasejs/12.16.0/firebase-messaging-compat.js"
+);
+
+firebase.initializeApp(${configJson});
+var messaging = firebase.messaging();
+
+messaging.onBackgroundMessage(function (payload) {
+  var data = payload.data || {};
+  var title = data.title || (payload.notification && payload.notification.title) || "TaskFlow";
+  var body = data.body || (payload.notification && payload.notification.body) || "New notification";
+  var icon = data.icon || "/icon-192.png";
+  var tag =
+    data.test === "true"
+      ? "taskflow-test"
+      : data.conversationId
+        ? "chat-" + data.conversationId
+        : "taskflow";
+  var url = data.url || "/dashboard/messages";
+
+  return self.registration.showNotification(title, {
+    body: body,
+    icon: icon,
+    badge: "/badge-96.png",
+    tag: tag,
+    renotify: true,
+    data: {
+      url: url,
+      conversationId: data.conversationId || "",
+      messageId: data.messageId || "",
+    },
+  });
 });
 `;
 

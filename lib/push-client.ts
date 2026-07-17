@@ -55,22 +55,28 @@ async function saveFcmToken(fcmToken: string) {
   }
 }
 
+const FCM_SW_URL = "/firebase-messaging-sw.js";
+
 export async function ensureServiceWorker() {
-  // Dynamic SW embeds Firebase config so messaging initializes synchronously.
-  const registration = await navigator.serviceWorker.register("/api/push-sw", {
+  // Standard FCM path (rewrites to /api/push-sw with embedded Firebase config).
+  const registration = await navigator.serviceWorker.register(FCM_SW_URL, {
     scope: "/",
     updateViaCache: "none",
   });
   await navigator.serviceWorker.ready;
 
-  // Unregister legacy /sw.js workers that used async Firebase init.
+  // Drop legacy SW URLs that break closed-tab / background delivery.
   try {
     const regs = await navigator.serviceWorker.getRegistrations();
     await Promise.all(
       regs
         .filter((reg) => {
           const url = reg.active?.scriptURL || reg.installing?.scriptURL || "";
-          return url.endsWith("/sw.js") || url.includes("/sw.js?");
+          return (
+            url.endsWith("/sw.js") ||
+            url.includes("/sw.js?") ||
+            url.includes("/api/push-sw")
+          );
         })
         .map((reg) => reg.unregister())
     );
@@ -243,8 +249,24 @@ export async function enablePushWithTest(): Promise<{ ok: boolean; error?: strin
     return { ok: false, error: "Permission denied or push is not configured on the server" };
   }
 
-  // Give the new SW a moment to activate before the test push arrives.
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  // Wait for the new SW to control this page before the test push arrives.
+  await navigator.serviceWorker.ready;
+  if (navigator.serviceWorker.controller) {
+    // already controlling
+  } else {
+    await new Promise<void>((resolve) => {
+      const onChange = () => {
+        navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+        resolve();
+      };
+      navigator.serviceWorker.addEventListener("controllerchange", onChange);
+      window.setTimeout(() => {
+        navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+        resolve();
+      }, 2000);
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 300));
 
   let test = await sendTestPushNotification();
   if (!test.ok) {
@@ -350,6 +372,26 @@ export async function refreshPushTokenIfEnrolled(): Promise<void> {
     const vapidKey = getFirebaseWebVapidKey();
     if (!messaging || !vapidKey) return;
     const registration = await ensureServiceWorker();
+
+    // If an old SW is still controlling the page, force a new token bound to
+    // /firebase-messaging-sw.js so closed-tab push works after deploy.
+    const controlling = navigator.serviceWorker.controller?.scriptURL ?? "";
+    const needsSwMigration =
+      controlling.includes("/api/push-sw") || controlling.endsWith("/sw.js");
+
+    if (needsSwMigration) {
+      try {
+        await deleteToken(messaging);
+      } catch {
+        // ignore
+      }
+      try {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    }
+
     const token = await getToken(messaging, {
       vapidKey,
       serviceWorkerRegistration: registration,

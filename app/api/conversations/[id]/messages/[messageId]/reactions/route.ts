@@ -44,7 +44,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     if (added) {
-      void notifyMessageReaction({
+      await notifyMessageReaction({
         conversationId: id,
         messageId,
         reactorId: user.id,

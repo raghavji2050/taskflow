@@ -50,8 +50,8 @@ function toDataPayload(userId: string, payload: PushPayload): Record<string, str
     title: payload.title || "TaskFlow",
     body: safeBody,
     url: payload.url ?? "/dashboard",
+    icon: toAbsoluteUrl(payload.icon, "/icon-192.png"),
   };
-  if (payload.icon) data.icon = toAbsoluteUrl(payload.icon, "/icon-192.png");
   if (payload.conversationId) data.conversationId = payload.conversationId;
   if (payload.messageId) data.messageId = payload.messageId;
   if (payload.test) data.test = "true";
@@ -60,40 +60,17 @@ function toDataPayload(userId: string, payload: PushPayload): Record<string, str
 
 function buildMessage(userId: string, payload: PushPayload) {
   const data = toDataPayload(userId, payload);
-  const title = data.title;
-  const body = data.body;
   const link = toAbsoluteUrl(payload.url, "/dashboard");
-  const icon = toAbsoluteUrl(payload.icon, "/icon-192.png");
 
+  // Data-only payload: the service worker's onBackgroundMessage calls
+  // showNotification. A top-level/webpush `notification` block makes FCM
+  // auto-display (and can skip/race the SW when the app is fully closed).
   return {
     data,
-    // Include notification so browsers still show an OS alert if the SW
-    // cold-starts before onBackgroundMessage is wired.
-    notification: {
-      title,
-      body,
-    },
     webpush: {
       headers: {
         Urgency: "high",
         TTL: "86400",
-      },
-      notification: {
-        title,
-        body,
-        icon,
-        badge: toAbsoluteUrl("/badge-96.png", "/badge-96.png"),
-        tag: payload.test
-          ? "taskflow-test"
-          : payload.conversationId
-            ? `chat-${payload.conversationId}`
-            : "taskflow",
-        renotify: true,
-        data: {
-          url: payload.url ?? "/dashboard",
-          conversationId: payload.conversationId ?? "",
-          messageId: payload.messageId ?? "",
-        },
       },
       fcmOptions: {
         link,

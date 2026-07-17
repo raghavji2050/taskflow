@@ -106,18 +106,34 @@ export async function createNotification(params: {
     notificationBody = plainMessagePreview(params.body, 180);
   }
 
-  // Persist so offline users see what they missed when they return.
-  // Message type: coalesce one unread row per conversation.
-  const notification =
+  const url =
+    type === "timer_still_running" || type === "task_assigned" || type === "workspace_invite"
+      ? "/dashboard"
+      : type === "message" || type === "mention" || type === "reaction"
+        ? chatPushUrl(params.conversationId, params.messageId)
+        : params.conversationId
+          ? chatPushUrl(params.conversationId, params.messageId)
+          : "/dashboard";
+
+  broadcastNotification(params.userId, {
+    title: notificationTitle,
+    body: notificationBody,
+    notificationType: type,
+    conversationId: params.conversationId,
+    messageId: params.messageId,
+  });
+
+  // Persist bell row and FCM in parallel — don't block push on the DB write.
+  const persistPromise =
     type === "message" && params.conversationId
-      ? await upsertMessageNotification({
+      ? upsertMessageNotification({
           userId: params.userId,
           title: notificationTitle,
           body: notificationBody,
           conversationId: params.conversationId,
           messageId: params.messageId,
         })
-      : await prisma.notification.create({
+      : prisma.notification.create({
           data: {
             userId: params.userId,
             title: notificationTitle,
@@ -129,31 +145,17 @@ export async function createNotification(params: {
           },
         });
 
-  broadcastNotification(params.userId, {
-    title: notificationTitle,
-    body: notificationBody,
-    notificationType: type,
-    conversationId: params.conversationId,
-    messageId: params.messageId,
-  });
-
-  const url =
-    type === "timer_still_running" || type === "task_assigned" || type === "workspace_invite"
-      ? "/dashboard"
-      : type === "message" || type === "mention" || type === "reaction"
-        ? chatPushUrl(params.conversationId, params.messageId)
-        : params.conversationId
-          ? chatPushUrl(params.conversationId, params.messageId)
-          : "/dashboard";
-
-  await sendPushToUser(params.userId, {
-    title: notificationTitle,
-    body: notificationBody,
-    url,
-    icon,
-    conversationId: params.conversationId,
-    messageId: params.messageId,
-  });
+  const [, notification] = await Promise.all([
+    sendPushToUser(params.userId, {
+      title: notificationTitle,
+      body: notificationBody,
+      url,
+      icon,
+      conversationId: params.conversationId,
+      messageId: params.messageId,
+    }),
+    persistPromise,
+  ]);
 
   return notification;
 }

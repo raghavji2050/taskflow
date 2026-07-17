@@ -1,5 +1,5 @@
-/* Legacy static SW — browsers should use /api/push-sw (FCM with embedded config).
- * Kept so old registrations can soft-redirect on activate. */
+/* Legacy static SW — browsers should use /firebase-messaging-sw.js (FCM).
+ * Kept so old registrations can soft-unregister on activate. */
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });

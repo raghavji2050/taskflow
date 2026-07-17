@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import { afterResponse } from "@/lib/after-response";
 import { createNotification } from "@/lib/notifications";
 import { parseMentionsFromBody } from "@/lib/mentions";
 import { broadcastMessageToConversation } from "@/lib/realtime";
 import { getConversationParticipantIds } from "@/lib/chat-access";
-import { getConversationUnreadCount } from "@/lib/conversations";
 import type { formatMessageForClient } from "@/lib/message-format";
 import { INBOUND_BOT_EMAIL } from "@/lib/inbound-webhook";
 
@@ -15,33 +15,35 @@ export async function notifyMessageReaction(params: {
   reactorName: string;
   emoji: string;
 }) {
-  const message = await prisma.message.findUnique({
-    where: { id: params.messageId },
-    select: { userId: true, body: true, deletedAt: true },
-  });
-  if (!message || message.deletedAt) return;
-  // Don't notify someone for reacting to their own message.
-  if (message.userId === params.reactorId) return;
+  await afterResponse(async () => {
+    const message = await prisma.message.findUnique({
+      where: { id: params.messageId },
+      select: { userId: true, body: true, deletedAt: true },
+    });
+    if (!message || message.deletedAt) return;
+    // Don't notify someone for reacting to their own message.
+    if (message.userId === params.reactorId) return;
 
-  const reactor = await prisma.user.findUnique({
-    where: { id: params.reactorId },
-    select: { image: true },
-  });
+    const reactor = await prisma.user.findUnique({
+      where: { id: params.reactorId },
+      select: { image: true },
+    });
 
-  const snippet = (message.body ?? "").replace(/\s+/g, " ").trim();
-  const shortSnippet = snippet.length > 60 ? `${snippet.slice(0, 60)}…` : snippet;
-  const body = shortSnippet
-    ? `Reacted ${params.emoji} to: ${shortSnippet}`
-    : `Reacted ${params.emoji} to your message`;
+    const snippet = (message.body ?? "").replace(/\s+/g, " ").trim();
+    const shortSnippet = snippet.length > 60 ? `${snippet.slice(0, 60)}…` : snippet;
+    const body = shortSnippet
+      ? `Reacted ${params.emoji} to: ${shortSnippet}`
+      : `Reacted ${params.emoji} to your message`;
 
-  await createNotification({
-    userId: message.userId,
-    title: params.reactorName,
-    body,
-    type: "reaction",
-    conversationId: params.conversationId,
-    messageId: params.messageId,
-    icon: reactor?.image ?? undefined,
+    await createNotification({
+      userId: message.userId,
+      title: params.reactorName,
+      body,
+      type: "reaction",
+      conversationId: params.conversationId,
+      messageId: params.messageId,
+      icon: reactor?.image ?? undefined,
+    });
   });
 }
 
@@ -72,7 +74,9 @@ export async function notifyParticipants(params: {
 
   if (eventType === "message:updated") return;
 
-  void deliverParticipantNotifications(params, allParticipantIds);
+  // Keep the request alive on serverless until FCM finishes (void was freezing
+  // unfinished work for ~20–30s on Vercel). after() does not block the response.
+  await afterResponse(() => deliverParticipantNotifications(params, allParticipantIds));
 }
 
 async function deliverParticipantNotifications(
@@ -110,13 +114,14 @@ async function deliverParticipantNotifications(
   const senderIcon = sender?.image ?? undefined;
   const botIds = new Set(inboundBots.map((u) => u.id));
 
-  await Promise.all(
-    otherParticipantIds
+  // Skip per-recipient unread counts — that was an extra DB round-trip per user
+  // before FCM. Push uses unreadCount=1 (sender as title); bell still upserts.
+  await Promise.all([
+    ...otherParticipantIds
       .filter((participantId) => !mentionedIds.has(participantId))
       .filter((participantId) => !botIds.has(participantId))
-      .map(async (participantId) => {
-        const unreadCount = await getConversationUnreadCount(params.conversationId, participantId);
-        return createNotification({
+      .map((participantId) =>
+        createNotification({
           userId: participantId,
           title: params.userName,
           body: params.preview,
@@ -124,14 +129,11 @@ async function deliverParticipantNotifications(
           conversationId: params.conversationId,
           messageId: params.messageId,
           conversationTitle: params.conversationTitle,
-          unreadCount,
+          unreadCount: 1,
           icon: senderIcon,
-        });
-      })
-  );
-
-  await Promise.all(
-    mentioned
+        })
+      ),
+    ...mentioned
       .filter((m) => m.id !== params.userId)
       .filter((m) => !botIds.has(m.id))
       .map((m) =>
@@ -144,6 +146,6 @@ async function deliverParticipantNotifications(
           messageId: params.messageId,
           icon: senderIcon,
         })
-      )
-  );
+      ),
+  ]);
 }
