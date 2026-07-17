@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, digestEmail } from "@/lib/email";
-import { configureWebPush, sendPushToSubscription } from "@/lib/push";
+import { sendPushToUser } from "@/lib/push";
 import { archiveStaleCompletedTasks } from "@/lib/auto-archive";
 import { runOverdueAutomations, runDueDateApproachingAutomations } from "@/lib/automations";
 
@@ -21,8 +21,6 @@ export async function GET(request: Request) {
     include: { task: { include: { user: true } } },
   });
 
-  const pushEnabled = configureWebPush();
-
   for (const reminder of dueReminders) {
     await prisma.notification.create({
       data: {
@@ -32,24 +30,11 @@ export async function GET(request: Request) {
       },
     });
 
-    const subs = await prisma.pushSubscription.findMany({
-      where: { userId: reminder.task.userId },
+    await sendPushToUser(reminder.task.userId, {
+      title: "Task Reminder",
+      body: reminder.task.title,
+      url: "/dashboard",
     });
-
-    if (pushEnabled) {
-      for (const sub of subs) {
-        try {
-          await sendPushToSubscription(sub, {
-            userId: reminder.task.userId,
-            title: "Task Reminder",
-            body: reminder.task.title,
-            url: "/dashboard",
-          });
-        } catch {
-          await prisma.pushSubscription.delete({ where: { id: sub.id } });
-        }
-      }
-    }
 
     await prisma.reminder.update({ where: { id: reminder.id }, data: { sent: true } });
   }

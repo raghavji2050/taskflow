@@ -2,7 +2,6 @@ import { InvitationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, workspaceInviteEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
-import { configureWebPush, sendPushToSubscription } from "@/lib/push";
 import { broadcastWorkspaceUpdate } from "@/lib/realtime";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -89,22 +88,6 @@ export async function sendWorkspaceInvite(params: {
     );
   } catch (error) {
     console.error("[Invite] Email failed:", error);
-  }
-
-  if (configureWebPush()) {
-    const subs = await prisma.pushSubscription.findMany({ where: { userId: invitee.id } });
-    for (const sub of subs) {
-      try {
-        await sendPushToSubscription(sub, {
-          userId: invitee.id,
-          title: "Workspace invitation",
-          body: `${inviter.name} invited you to "${workspace.name}"`,
-          url: "/dashboard",
-        });
-      } catch {
-        await prisma.pushSubscription.delete({ where: { id: sub.id } });
-      }
-    }
   }
 
   broadcastWorkspaceUpdate({

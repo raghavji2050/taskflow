@@ -19,7 +19,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "generate:vapid": "node scripts/generate-vapid.mjs",
     "test:email": "node scripts/test-email.mjs",
     "cron:scheduled-messages": "tsx scripts/run-scheduled-messages-cron.ts"
   },
@@ -55,6 +54,8 @@
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "emoji-picker-react": "^4.19.1",
+    "firebase": "^12.16.0",
+    "firebase-admin": "^14.2.0",
     "isomorphic-dompurify": "^3.18.0",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.17.0",
@@ -72,7 +73,6 @@
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
-    "web-push": "^3.6.7",
     "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
@@ -87,7 +87,6 @@
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.2",
     "eslint": "^9",

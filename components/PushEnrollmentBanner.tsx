@@ -73,8 +73,8 @@ export function PushEnrollmentBanner({ className }: PushEnrollmentBannerProps) {
           <p className="font-medium text-[var(--foreground)]">Enable desktop notifications</p>
           <p className="text-[var(--muted)]">
             {pushConfigured
-              ? "Get chat alerts via Web Push when you're away from this tab."
-              : "Push is not configured on this server (VAPID keys missing)."}
+              ? "Get chat alerts via FCM when you're away from this tab."
+              : "Push is not configured on this server (Firebase credentials missing)."}
           </p>
         </div>
       </div>

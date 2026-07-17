@@ -231,7 +231,9 @@ Common status codes:
 | GET/PUT | `/api/user/profile` | Get/update profile |
 | PUT | `/api/user/password` | Change password |
 | GET/PATCH | `/api/notifications` | Notification center |
-| POST | `/api/notifications/subscribe` | Web push subscription |
+| POST | `/api/notifications/subscribe` | FCM device token subscribe |
+| POST | `/api/notifications/test` | Send test FCM push |
+| GET | `/api/notifications/firebase-config` | Public Firebase web config (for SW) |
 | GET/POST | `/api/workspaces` | Team workspaces |
 | POST | `/api/workspaces/[id]/members` | Invite member |
 | GET | `/api/events` | SSE real-time stream |

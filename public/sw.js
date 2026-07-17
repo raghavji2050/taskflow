@@ -1,82 +1,97 @@
-self.addEventListener("install", (event) => {
-  event.waitUntil(self.skipWaiting());
-});
+/* TaskFlow service worker — FCM background push + notification click handling */
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
-});
+importScripts(
+  "https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js",
+  "https://www.gstatic.com/firebasejs/12.16.0/firebase-messaging-compat.js"
+);
 
-/** @type {Map<string, { visible: boolean, at: number }>} */
-const visibilityByUser = new Map();
+let messagingReady = null;
 
-const VISIBILITY_TTL_MS = 7_000;
+function ensureFirebaseMessaging() {
+  if (messagingReady) return messagingReady;
 
-self.addEventListener("message", (event) => {
-  if (event.data?.type !== "taskflow:visibility") return;
-  const userId = event.data.userId;
-  if (!userId) return;
-  visibilityByUser.set(userId, {
-    visible: Boolean(event.data.visible),
-    at: Date.now(),
-  });
-});
+  messagingReady = (async () => {
+    const res = await fetch("/api/notifications/firebase-config");
+    if (!res.ok) throw new Error("Firebase config unavailable");
+    const config = await res.json();
+    if (!config?.apiKey || !config?.projectId) {
+      throw new Error("Firebase not configured");
+    }
 
-function isUserForeground(userId) {
-  if (!userId) return false;
-  const state = visibilityByUser.get(userId);
-  if (!state) return false;
-  if (Date.now() - state.at >= VISIBILITY_TTL_MS) return false;
-  return state.visible;
-}
+    if (!firebase.apps.length) {
+      firebase.initializeApp({
+        apiKey: config.apiKey,
+        authDomain: config.authDomain,
+        projectId: config.projectId,
+        messagingSenderId: config.messagingSenderId,
+        appId: config.appId,
+      });
+    }
 
-async function shouldSuppressPush(userId) {
-  const clients = await self.clients.matchAll({
-    type: "window",
-    includeUncontrolled: true,
-  });
-  // No open app windows — always show push (tab was closed).
-  if (clients.length === 0) return false;
-
-  return Boolean(userId && isUserForeground(userId));
-}
-
-self.addEventListener("push", (event) => {
-  let data = { title: "TaskFlow", body: "New message", url: "/dashboard" };
-  try {
-    if (event.data) data = { ...data, ...event.data.json() };
-  } catch {
-    // use defaults
-  }
-
-  const body = (data.body && String(data.body).trim()) || "New message";
-
-  event.waitUntil(
-    (async () => {
-      const isTest = Boolean(data.test);
-      if (!isTest && (await shouldSuppressPush(data.userId))) return;
-
-      // Show the sender's avatar (when provided) as the large icon, like a
-      // chat app; fall back to the app icon for non-chat/test notifications.
+    const messaging = firebase.messaging();
+    messaging.onBackgroundMessage((payload) => {
+      const data = payload.data || {};
+      const title = data.title || payload.notification?.title || "TaskFlow";
+      const body =
+        (data.body && String(data.body).trim()) ||
+        payload.notification?.body ||
+        "New message";
+      const isTest = data.test === "true" || data.test === true;
       const icon = (data.icon && String(data.icon)) || "/icon-192.png";
       const canReply = !isTest && Boolean(data.conversationId);
 
-      await self.registration.showNotification(data.title || "TaskFlow", {
+      return self.registration.showNotification(title, {
         body,
         icon,
         badge: "/badge-96.png",
-        tag: isTest ? "taskflow-test" : data.conversationId ? `chat-${data.conversationId}` : "taskflow",
+        tag: isTest
+          ? "taskflow-test"
+          : data.conversationId
+            ? `chat-${data.conversationId}`
+            : "taskflow",
         renotify: true,
         requireInteraction: false,
         silent: false,
         actions: canReply ? [{ action: "reply", title: "Reply" }] : [],
         data: {
-          url: data.url ?? "/dashboard",
+          url: data.url || "/dashboard",
           conversationId: data.conversationId,
           messageId: data.messageId,
         },
       });
+    });
+
+    return messaging;
+  })().catch((error) => {
+    messagingReady = null;
+    console.warn("[sw] Firebase messaging init failed:", error);
+    throw error;
+  });
+
+  return messagingReady;
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      await self.clients.claim();
+      try {
+        await ensureFirebaseMessaging();
+      } catch {
+        // Config may be missing during local setup; getToken will fail until configured.
+      }
     })()
   );
+});
+
+// Client can push config after register so messaging is ready before the first FCM message.
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "taskflow:firebase-config") return;
+  event.waitUntil(ensureFirebaseMessaging().catch(() => {}));
 });
 
 self.addEventListener("notificationclick", (event) => {

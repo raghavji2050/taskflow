@@ -8,8 +8,9 @@ import {
   getPushEnrollmentStatus,
   isPushSupported,
   markPushPrompted,
+  refreshPushTokenIfEnrolled,
   showPushEnrollmentToast,
-  startForegroundSync,
+  startForegroundMessageListener,
   wasPushPrompted,
 } from "@/lib/push-client";
 
@@ -36,14 +37,21 @@ export function PushBootstrap() {
   useEffect(() => {
     if (!isPushSupported() || status !== "authenticated" || !userId) return;
 
-    let stopSync = () => {};
+    let stopForeground = () => {};
     void ensureServiceWorker()
       .then(() => {
-        stopSync = startForegroundSync(userId);
+        stopForeground = startForegroundMessageListener();
+        void refreshPushTokenIfEnrolled();
       })
       .catch(() => {});
 
-    return () => stopSync();
+    const onFocus = () => void refreshPushTokenIfEnrolled();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      stopForeground();
+      window.removeEventListener("focus", onFocus);
+    };
   }, [status, userId]);
 
   useEffect(() => {

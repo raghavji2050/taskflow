@@ -2,74 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { PUSH_FOREGROUND_HEARTBEAT_MS } from "@/lib/push-foreground";
+import { deleteToken, getToken, onMessage } from "firebase/messaging";
+import {
+  getFirebaseMessaging,
+  getFirebaseWebVapidKey,
+  isFirebaseWebConfigured,
+} from "@/lib/firebase-client";
 
-export function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
-}
-
-export async function getVapidPublicKey(): Promise<string | null> {
-  // Prefer the live server key so it always matches VAPID_PRIVATE_KEY (avoids stale build-time env).
-  try {
-    const res = await fetch("/api/notifications/vapid-key");
-    if (res.ok) {
-      const data = (await res.json()) as { publicKey?: string | null; configured?: boolean };
-      if (data.publicKey) return data.publicKey;
-      if (!data.configured) return null;
-    }
-  } catch {
-    // fall through to build-time key
-  }
-  if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
-    return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  }
-  return null;
-}
-
-export function parseVapidPublicKey(base64String: string): Uint8Array {
-  const key = base64String.trim();
-  if (!key) {
-    throw new Error("Push is not configured on the server. Ask an admin to run: npm run generate:vapid");
-  }
-  let bytes: Uint8Array;
-  try {
-    bytes = urlBase64ToUint8Array(key);
-  } catch {
-    throw new Error("Invalid VAPID public key. Regenerate keys with: npm run generate:vapid");
-  }
-  if (bytes.length !== 65) {
-    throw new Error(
-      `Invalid VAPID public key length (${bytes.length}, expected 65). Regenerate with: npm run generate:vapid`
-    );
-  }
-  return bytes;
-}
-
-function applicationServerKeysMatch(
-  subscription: PushSubscription,
-  expected: Uint8Array
-): boolean {
-  const existing = subscription.options?.applicationServerKey;
-  if (!existing) return false;
-  const bytes = new Uint8Array(existing instanceof ArrayBuffer ? existing : existing);
-  if (bytes.length !== expected.length) return false;
-  for (let i = 0; i < bytes.length; i++) {
-    if (bytes[i] !== expected[i]) return false;
-  }
-  return true;
-}
-
-async function unsubscribeQuietly(subscription: PushSubscription | null) {
-  if (!subscription) return;
-  try {
-    await subscription.unsubscribe();
-  } catch {
-    // ignore
-  }
-}
+const TOKEN_STORAGE_KEY = "taskflow:fcm-token";
 
 export function getPushSubscribeErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message && !error.message.includes("push service")) {
@@ -82,7 +22,7 @@ export function getPushSubscribeErrorMessage(error: unknown): string {
     return (
       "Browser push registration failed. On Brave: open brave://settings/privacy, enable " +
       '"Use Google services for push messaging", allow notifications for this site, then retry. ' +
-      "Also verify VAPID keys are set on the server (npm run generate:vapid) and restart the app."
+      "Also verify Firebase Cloud Messaging is configured on the server."
     );
   }
   if (name === "NotAllowedError") {
@@ -91,18 +31,13 @@ export function getPushSubscribeErrorMessage(error: unknown): string {
   return message || "Failed to enable push notifications";
 }
 
-async function savePushSubscription(subscription: PushSubscription) {
-  const json = subscription.toJSON();
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-    throw new Error("Invalid push subscription from browser");
-  }
-
+async function saveFcmToken(fcmToken: string) {
   const res = await fetch("/api/notifications/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      endpoint: json.endpoint,
-      keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+      fcmToken,
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
     }),
   });
 
@@ -112,61 +47,26 @@ async function savePushSubscription(subscription: PushSubscription) {
       (data as { error?: string }).error ?? "Server rejected push subscription"
     );
   }
-}
-
-export async function subscribeToPush(opts?: { forceRefresh?: boolean }): Promise<boolean> {
-  if (!isPushSupported()) return false;
-
-  const vapidKey = await getVapidPublicKey();
-  if (!vapidKey) {
-    throw new Error("Push is not configured on the server. Run: npm run generate:vapid");
-  }
-
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return false;
-
-  const applicationServerKey = parseVapidPublicKey(vapidKey);
-  const registration = await ensureServiceWorker();
-  let subscription = await registration.pushManager.getSubscription();
-
-  // Drop stale subscriptions created with a different VAPID key (causes
-  // "Received unexpected response code" from FCM/Mozilla on send).
-  if (
-    subscription &&
-    (opts?.forceRefresh || !applicationServerKeysMatch(subscription, applicationServerKey))
-  ) {
-    await unsubscribeQuietly(subscription);
-    subscription = null;
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-
-  if (subscription) {
-    try {
-      await savePushSubscription(subscription);
-      return true;
-    } catch {
-      await unsubscribeQuietly(subscription);
-      subscription = null;
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    }
-  }
 
   try {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey as BufferSource,
-    });
-  } catch (error) {
-    throw new Error(getPushSubscribeErrorMessage(error));
+    localStorage.setItem(TOKEN_STORAGE_KEY, fcmToken);
+  } catch {
+    // ignore
   }
-
-  await savePushSubscription(subscription);
-  return true;
 }
 
 export async function ensureServiceWorker() {
   const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
   await navigator.serviceWorker.ready;
+
+  // Warm Firebase Messaging inside the SW (fetches public config).
+  try {
+    registration.active?.postMessage({ type: "taskflow:firebase-config" });
+    navigator.serviceWorker.controller?.postMessage({ type: "taskflow:firebase-config" });
+  } catch {
+    // ignore
+  }
+
   return registration;
 }
 
@@ -175,6 +75,7 @@ export function isPushSupported() {
     typeof window !== "undefined" &&
     "serviceWorker" in navigator &&
     "PushManager" in window &&
+    "Notification" in window &&
     window.isSecureContext
   );
 }
@@ -185,7 +86,7 @@ export type PushEnrollmentStatus = {
   pushConfigured: boolean;
   serverSubscribed: boolean;
   browserSubscribed: boolean;
-  /** VAPID push is fully set up on this browser */
+  /** FCM push is fully set up on this browser */
   enrolled: boolean;
 };
 
@@ -212,6 +113,11 @@ export async function getPushEnrollmentStatus(): Promise<PushEnrollmentStatus> {
     }
   } catch {
     // ignore
+  }
+
+  // Client-only check when API is unreachable
+  if (!pushConfigured) {
+    pushConfigured = isFirebaseWebConfigured();
   }
 
   const browserSubscribed = await hasActivePushSubscription();
@@ -258,7 +164,61 @@ export async function sendTestPushNotification(): Promise<{
   return { ok: true, sent };
 }
 
-/** Subscribe via VAPID, persist to server, and send a test OS notification. */
+export async function subscribeToPush(opts?: { forceRefresh?: boolean }): Promise<boolean> {
+  if (!isPushSupported()) return false;
+
+  if (!isFirebaseWebConfigured()) {
+    throw new Error(
+      "Push is not configured on the server. Add Firebase Cloud Messaging env vars (see .env.example)."
+    );
+  }
+
+  const vapidKey = getFirebaseWebVapidKey();
+  if (!vapidKey) {
+    throw new Error("NEXT_PUBLIC_FIREBASE_VAPID_KEY is missing.");
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return false;
+
+  const registration = await ensureServiceWorker();
+  const messaging = await getFirebaseMessaging();
+  if (!messaging) {
+    throw new Error("Firebase Messaging is not supported in this browser.");
+  }
+
+  if (opts?.forceRefresh) {
+    try {
+      await deleteToken(messaging);
+    } catch {
+      // ignore
+    }
+    try {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+
+  let token: string;
+  try {
+    token = await getToken(messaging, {
+      vapidKey,
+      serviceWorkerRegistration: registration,
+    });
+  } catch (error) {
+    throw new Error(getPushSubscribeErrorMessage(error));
+  }
+
+  if (!token) {
+    throw new Error("Failed to get an FCM registration token");
+  }
+
+  await saveFcmToken(token);
+  return true;
+}
+
+/** Subscribe via FCM, persist token, and send a test OS notification. */
 export async function enablePushWithTest(): Promise<{ ok: boolean; error?: string }> {
   const subscribed = await subscribeToPush();
   if (!subscribed) {
@@ -267,7 +227,6 @@ export async function enablePushWithTest(): Promise<{ ok: boolean; error?: strin
 
   let test = await sendTestPushNotification();
   if (!test.ok) {
-    // Stale endpoint / key mismatch — force a brand-new browser subscription and retry once.
     const retried = await subscribeToPush({ forceRefresh: true });
     if (retried) {
       test = await sendTestPushNotification();
@@ -279,7 +238,7 @@ export async function enablePushWithTest(): Promise<{ ok: boolean; error?: strin
       ok: false,
       error:
         test.error ??
-        "Subscribed but the test notification failed. Check VAPID keys in server environment variables.",
+        "Subscribed but the test notification failed. Check Firebase Admin credentials.",
     };
   }
 
@@ -287,16 +246,142 @@ export async function enablePushWithTest(): Promise<{ ok: boolean; error?: strin
   return { ok: true };
 }
 
-/** True when this browser has an active Web Push subscription (SW delivers OS notifications). */
+export async function unsubscribeFromPush(): Promise<void> {
+  let token: string | null = null;
+  try {
+    token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+
+  const messaging = await getFirebaseMessaging();
+  if (messaging) {
+    try {
+      if (!token) {
+        const vapidKey = getFirebaseWebVapidKey();
+        const registration = await ensureServiceWorker();
+        if (vapidKey) {
+          token = await getToken(messaging, {
+            vapidKey,
+            serviceWorkerRegistration: registration,
+          });
+        }
+      }
+      await deleteToken(messaging);
+    } catch {
+      // ignore
+    }
+  }
+
+  await fetch("/api/notifications/subscribe", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(token ? { fcmToken: token } : {}),
+  });
+
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+
+  window.dispatchEvent(new CustomEvent("taskflow:push-status"));
+}
+
+/** True when this browser has a stored FCM token (SW delivers background OS notifications). */
 export async function hasActivePushSubscription(): Promise<boolean> {
   if (!isPushSupported()) return false;
+  if (Notification.permission !== "granted") return false;
   try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    return subscription !== null;
+    const stored = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (stored) return true;
+    const messaging = await getFirebaseMessaging();
+    if (!messaging) return false;
+    const vapidKey = getFirebaseWebVapidKey();
+    if (!vapidKey) return false;
+    const registration = await ensureServiceWorker();
+    const token = await getToken(messaging, {
+      vapidKey,
+      serviceWorkerRegistration: registration,
+    });
+    if (token) {
+      try {
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      } catch {
+        // ignore
+      }
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
+}
+
+/** Refresh FCM token with the server when already enrolled (e.g. on focus). */
+export async function refreshPushTokenIfEnrolled(): Promise<void> {
+  if (!isPushSupported() || !isFirebaseWebConfigured()) return;
+  if (Notification.permission !== "granted") return;
+
+  try {
+    const messaging = await getFirebaseMessaging();
+    const vapidKey = getFirebaseWebVapidKey();
+    if (!messaging || !vapidKey) return;
+    const registration = await ensureServiceWorker();
+    const token = await getToken(messaging, {
+      vapidKey,
+      serviceWorkerRegistration: registration,
+    });
+    if (!token) return;
+    await saveFcmToken(token);
+  } catch {
+    // ignore refresh failures
+  }
+}
+
+/**
+ * Foreground FCM handler: in-app toast for normal pushes; OS notification for tests.
+ * Background/closed tabs are handled by the service worker.
+ */
+export function startForegroundMessageListener(): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  let unsubscribe: (() => void) | undefined;
+  let cancelled = false;
+
+  void (async () => {
+    const messaging = await getFirebaseMessaging();
+    if (!messaging || cancelled) return;
+
+    unsubscribe = onMessage(messaging, (payload) => {
+      const data = payload.data ?? {};
+      const title = data.title || payload.notification?.title || "TaskFlow";
+      const body = data.body || payload.notification?.body || "New notification";
+      const isTest = data.test === "true";
+
+      // Foreground: realtime already drives in-app toasts. Only surface OS/toast for tests.
+      if (!isTest) return;
+
+      if (Notification.permission === "granted") {
+        try {
+          new Notification(title, {
+            body,
+            icon: data.icon || "/icon-192.png",
+            tag: "taskflow-test",
+          });
+          return;
+        } catch {
+          // fall through to toast
+        }
+      }
+      toast.success(title, { description: body });
+    });
+  })();
+
+  return () => {
+    cancelled = true;
+    unsubscribe?.();
+  };
 }
 
 export function usePushEnrollment() {
@@ -375,14 +460,14 @@ export function showPushEnrollmentToast() {
   void getPushEnrollmentStatus().then((status) => {
     if (!status.pushConfigured) {
       toast.error("Push notifications are not configured on this server", {
-        description: "Add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to environment variables.",
+        description: "Add Firebase Cloud Messaging credentials to environment variables.",
         duration: 10_000,
       });
       return;
     }
 
     toast("Enable desktop notifications?", {
-      description: "Get chat alerts via Web Push (VAPID) when this tab is in the background.",
+      description: "Get alerts via FCM when this tab is in the background or closed.",
       duration: 15_000,
       onDismiss: () => markPushPrompted(),
       action: {
@@ -402,84 +487,4 @@ export function showPushEnrollmentToast() {
       },
     });
   });
-}
-
-/** Tell the service worker and server whether this tab is in the foreground. */
-function reportForegroundState(userId: string, visible: boolean) {
-  const body = JSON.stringify({ visible });
-
-  // sendBeacon survives tab close; keepalive fetch is a fallback.
-  if (!visible && typeof navigator.sendBeacon === "function") {
-    const sent = navigator.sendBeacon(
-      "/api/notifications/foreground",
-      new Blob([body], { type: "application/json" })
-    );
-    if (sent) return;
-  }
-
-  void fetch("/api/notifications/foreground", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-    keepalive: !visible,
-  });
-}
-
-export async function syncForegroundToServiceWorker(userId?: string) {
-  if (!("serviceWorker" in navigator)) return;
-
-  const visible = !document.hidden;
-  const payload = {
-    type: "taskflow:visibility",
-    visible,
-    userId: userId ?? null,
-  };
-
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    reg.active?.postMessage(payload);
-  } catch {
-    // ignore
-  }
-  navigator.serviceWorker.controller?.postMessage(payload);
-
-  if (userId) {
-    reportForegroundState(userId, visible);
-  }
-}
-
-export function startForegroundSync(userId?: string): () => void {
-  if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
-    return () => {};
-  }
-
-  const send = () => {
-    if (userId) void syncForegroundToServiceWorker(userId);
-  };
-
-  const onController = () => send();
-  navigator.serviceWorker.addEventListener("controllerchange", onController);
-
-  send();
-  document.addEventListener("visibilitychange", send);
-  window.addEventListener("pagehide", send);
-
-  const heartbeat = window.setInterval(() => {
-    if (!document.hidden && userId) void syncForegroundToServiceWorker(userId);
-  }, PUSH_FOREGROUND_HEARTBEAT_MS);
-
-  return () => {
-    clearInterval(heartbeat);
-    navigator.serviceWorker.removeEventListener("controllerchange", onController);
-    document.removeEventListener("visibilitychange", send);
-    window.removeEventListener("pagehide", send);
-    navigator.serviceWorker.controller?.postMessage({
-      type: "taskflow:visibility",
-      visible: false,
-      userId: userId ?? null,
-    });
-    if (userId) {
-      reportForegroundState(userId, false);
-    }
-  };
 }

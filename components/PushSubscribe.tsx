@@ -11,6 +11,7 @@ import {
   getPushSubscribeErrorMessage,
   isPushSupported,
   sendTestPushNotification,
+  unsubscribeFromPush,
 } from "@/lib/push-client";
 import { cn } from "@/lib/utils";
 
@@ -114,14 +115,9 @@ export function PushSubscribe({
   const unsubscribe = async () => {
     setBusy(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      if (subscription) await subscription.unsubscribe();
-
-      await fetch("/api/notifications/subscribe", { method: "DELETE" });
+      await unsubscribeFromPush();
       toast.success("Desktop notifications disabled");
       setStatus("idle");
-      window.dispatchEvent(new CustomEvent("taskflow:push-status"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to disable push");
     } finally {
@@ -140,7 +136,7 @@ export function PushSubscribe({
           size="sm"
           disabled
           className={className}
-          title="VAPID keys not configured on server"
+          title="Firebase Cloud Messaging not configured on server"
         >
           <BellOff className="h-4 w-4" />
           <span className="hidden sm:inline">Push unavailable</span>
@@ -270,8 +266,8 @@ export function PushSubscribe({
   if (status === "unconfigured") {
     return (
       <p className="text-sm text-[var(--muted)]">
-        Web Push is not configured on this server. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in
-        environment variables.
+        Firebase Cloud Messaging is not configured on this server. Set the Firebase
+        env vars listed in .env.example.
       </p>
     );
   }

@@ -5,8 +5,12 @@ import { isPushConfigured } from "@/lib/push";
 import { z } from "zod";
 
 const subscribeSchema = z.object({
-  endpoint: z.string().url(),
-  keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
+  fcmToken: z.string().min(10).max(4096),
+  userAgent: z.string().max(512).optional(),
+});
+
+const unsubscribeSchema = z.object({
+  fcmToken: z.string().min(10).max(4096).optional(),
 });
 
 export async function GET() {
@@ -32,17 +36,24 @@ export async function POST(request: Request) {
 
     if (!isPushConfigured()) {
       return NextResponse.json(
-        { error: "Push notifications are not configured. Run: npm run generate:vapid" },
+        {
+          error:
+            "Push notifications are not configured. Add Firebase Cloud Messaging env vars (see .env.example).",
+        },
         { status: 503 }
       );
     }
 
-    const { endpoint, keys } = subscribeSchema.parse(await request.json());
+    const body = subscribeSchema.parse(await request.json());
+    const userAgent =
+      body.userAgent?.slice(0, 512) ??
+      request.headers.get("user-agent")?.slice(0, 512) ??
+      null;
 
     await prisma.pushSubscription.upsert({
-      where: { endpoint },
-      update: { p256dh: keys.p256dh, auth: keys.auth, userId: user.id },
-      create: { endpoint, p256dh: keys.p256dh, auth: keys.auth, userId: user.id },
+      where: { fcmToken: body.fcmToken },
+      update: { userId: user.id, userAgent },
+      create: { fcmToken: body.fcmToken, userId: user.id, userAgent },
     });
 
     return NextResponse.json({ message: "Subscribed" });
@@ -51,12 +62,22 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   try {
     const user = await getAuthenticatedUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    await prisma.pushSubscription.deleteMany({ where: { userId: user.id } });
+    const json = await request.json().catch(() => ({}));
+    const { fcmToken } = unsubscribeSchema.parse(json);
+
+    if (fcmToken) {
+      await prisma.pushSubscription.deleteMany({
+        where: { userId: user.id, fcmToken },
+      });
+    } else {
+      await prisma.pushSubscription.deleteMany({ where: { userId: user.id } });
+    }
+
     return NextResponse.json({ message: "Unsubscribed" });
   } catch (error) {
     return handleApiError(error);

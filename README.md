@@ -39,7 +39,7 @@ A professional task management application built with Next.js App Router, TypeSc
 ### Notifications
 - In-app notification center
 - Due date reminders
-- Push notifications (Web Push + service worker)
+- Push notifications (Firebase Cloud Messaging + service worker)
 - Email digests via cron job
 
 ### Collaboration
@@ -69,7 +69,7 @@ A professional task management application built with Next.js App Router, TypeSc
 | ORM | Prisma |
 | Auth | NextAuth.js (Credentials + OAuth + JWT) |
 | Email | Nodemailer |
-| Push | web-push |
+| Push | Firebase Cloud Messaging |
 | Drag & Drop | @dnd-kit |
 | Testing | Vitest + Playwright |
 
@@ -84,6 +84,11 @@ npm install
 ```bash
 cp .env.example .env
 ```
+
+For push notifications, create a Firebase project with Cloud Messaging enabled, add a web app,
+generate a Web Push certificate (VAPID key) under Cloud Messaging, and a service account key.
+Fill in the `NEXT_PUBLIC_FIREBASE_*` and `FIREBASE_*` variables from `.env.example`.
+Users must re-enable notifications once after upgrading from the old Web Push setup.
 
 ### 3. Start MySQL (Docker option)
 ```bash

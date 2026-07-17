@@ -137,25 +137,23 @@ export async function createNotification(params: {
     messageId: params.messageId,
   });
 
-  const shouldPush =
-    type === "message" ||
-    type === "mention" ||
-    type === "reaction" ||
-    type === "timer_still_running";
+  const url =
+    type === "timer_still_running" || type === "task_assigned" || type === "workspace_invite"
+      ? "/dashboard"
+      : type === "message" || type === "mention" || type === "reaction"
+        ? chatPushUrl(params.conversationId, params.messageId)
+        : params.conversationId
+          ? chatPushUrl(params.conversationId, params.messageId)
+          : "/dashboard";
 
-  if (shouldPush) {
-    await sendPushToUser(params.userId, {
-      title: notificationTitle,
-      body: notificationBody,
-      url:
-        type === "timer_still_running"
-          ? "/dashboard"
-          : chatPushUrl(params.conversationId, params.messageId),
-      icon,
-      conversationId: params.conversationId,
-      messageId: params.messageId,
-    });
-  }
+  await sendPushToUser(params.userId, {
+    title: notificationTitle,
+    body: notificationBody,
+    url,
+    icon,
+    conversationId: params.conversationId,
+    messageId: params.messageId,
+  });
 
   return notification;
 }

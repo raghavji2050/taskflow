@@ -28,6 +28,7 @@ export function InboundWebhookModal({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedExample, setCopiedExample] = useState(false);
 
   const webhookUrl =
     status?.path && typeof window !== "undefined"
@@ -112,6 +113,10 @@ export function InboundWebhookModal({
     }
   };
 
+  const example = webhookUrl
+    ? `curl -X POST "${webhookUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"body":"Hello from my app","senderName":"My App"}'`
+    : "";
+
   const copyUrl = async () => {
     if (!webhookUrl) return;
     try {
@@ -124,9 +129,17 @@ export function InboundWebhookModal({
     }
   };
 
-  const example = webhookUrl
-    ? `curl -X POST "${webhookUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"body":"Hello from my app","senderName":"My App"}'`
-    : "";
+  const copyExample = async () => {
+    if (!example) return;
+    try {
+      await navigator.clipboard.writeText(example);
+      setCopiedExample(true);
+      toast.success("Example request copied");
+      setTimeout(() => setCopiedExample(false), 1500);
+    } catch {
+      toast.error("Could not copy");
+    }
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="External message link" size="md">
@@ -171,9 +184,21 @@ export function InboundWebhookModal({
                   <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
                     Example request
                   </label>
-                  <pre className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface-hover)] p-3 font-mono text-[11px] leading-relaxed text-[var(--muted)]">
-                    {example}
-                  </pre>
+                  <div className="relative">
+                    <pre className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface-hover)] p-3 pr-12 font-mono text-[11px] leading-relaxed text-[var(--muted)]">
+                      {example}
+                    </pre>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="absolute right-2 top-2"
+                      onClick={() => void copyExample()}
+                      aria-label="Copy example request"
+                    >
+                      {copiedExample ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
