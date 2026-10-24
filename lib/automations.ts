@@ -28,16 +28,42 @@ function alreadyFiredToday(config: RuleConfig, taskId: string, ruleId: string) {
   return config._fired?.[key] === todayKey();
 }
 
-async function markFired(ruleId: string, config: RuleConfig, taskId: string) {
-  const key = `${taskId}:${ruleId}`;
+type LoadedRule = {
+  id: string;
+  name: string;
+  action: string;
+  config: string;
+};
+
+async function markFired(rule: LoadedRule, config: RuleConfig, taskId: string) {
+  const key = `${taskId}:${rule.id}`;
   const nextConfig: RuleConfig = {
     ...config,
     _fired: { ...(config._fired ?? {}), [key]: todayKey() },
   };
+  const serialized = JSON.stringify(nextConfig);
+  rule.config = serialized;
   await prisma.automationRule.update({
-    where: { id: ruleId },
-    data: { config: JSON.stringify(nextConfig) },
+    where: { id: rule.id },
+    data: { config: serialized },
   });
+}
+
+async function applyLoadedRules(
+  rules: LoadedRule[],
+  context: AutomationContext,
+  options?: { dedupeDaily?: boolean }
+) {
+  for (const rule of rules) {
+    const config = JSON.parse(rule.config || "{}") as RuleConfig;
+    if (options?.dedupeDaily && alreadyFiredToday(config, context.taskId, rule.id)) {
+      continue;
+    }
+    await executeRuleAction(rule, context, config);
+    if (options?.dedupeDaily) {
+      await markFired(rule, config, context.taskId);
+    }
+  }
 }
 
 async function executeRuleAction(
@@ -94,22 +120,15 @@ export async function runAutomationsForTrigger(
   workspaceId: string,
   trigger: string,
   context: AutomationContext,
-  options?: { dedupeDaily?: boolean }
+  options?: { dedupeDaily?: boolean; rules?: LoadedRule[] }
 ) {
-  const rules = await prisma.automationRule.findMany({
-    where: { workspaceId, enabled: true, trigger },
-  });
+  const rules =
+    options?.rules ??
+    (await prisma.automationRule.findMany({
+      where: { workspaceId, enabled: true, trigger },
+    }));
 
-  for (const rule of rules) {
-    const config = JSON.parse(rule.config || "{}") as RuleConfig;
-    if (options?.dedupeDaily && alreadyFiredToday(config, context.taskId, rule.id)) {
-      continue;
-    }
-    await executeRuleAction(rule, context, config);
-    if (options?.dedupeDaily) {
-      await markFired(rule.id, config, context.taskId);
-    }
-  }
+  await applyLoadedRules(rules, context, options);
 }
 
 export async function runOverdueAutomations() {
@@ -128,11 +147,31 @@ export async function runOverdueAutomations() {
     take: 50,
   });
 
+  const workspaceIds = [
+    ...new Set(
+      overdueTasks
+        .map((task) => task.workspaceId)
+        .filter((id): id is string => !!id)
+    ),
+  ];
+  if (workspaceIds.length === 0) return;
+
+  const rules = await prisma.automationRule.findMany({
+    where: { workspaceId: { in: workspaceIds }, enabled: true, trigger: "task_overdue" },
+  });
+  const rulesByWorkspace = new Map<string, LoadedRule[]>();
+  for (const rule of rules) {
+    const list = rulesByWorkspace.get(rule.workspaceId) ?? [];
+    list.push(rule);
+    rulesByWorkspace.set(rule.workspaceId, list);
+  }
+
   for (const task of overdueTasks) {
     if (!task.workspaceId) continue;
-    await runAutomationsForTrigger(
-      task.workspaceId,
-      "task_overdue",
+    const workspaceRules = rulesByWorkspace.get(task.workspaceId);
+    if (!workspaceRules?.length) continue;
+    await applyLoadedRules(
+      workspaceRules,
       {
         taskId: task.id,
         taskTitle: task.title,
@@ -180,9 +219,8 @@ export async function runDueDateApproachingAutomations() {
     });
 
     for (const task of tasks) {
-      await runAutomationsForTrigger(
-        workspaceId,
-        "due_date_approaching",
+      await applyLoadedRules(
+        workspaceRules,
         {
           taskId: task.id,
           taskTitle: task.title,

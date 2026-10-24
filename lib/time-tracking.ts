@@ -10,6 +10,7 @@ import {
 } from "@/lib/time-format";
 import { getEntryElapsedSeconds, validateSplitSegments } from "@/lib/time-reminder";
 import {
+  canEditFlagsForTaskEntries,
   canEditTimeEntry,
   canStartTimer,
   canViewTimeEntry,
@@ -77,11 +78,10 @@ async function syncEntryLabels(entryId: string, labelIds: string[], userId: stri
   await prisma.timeEntryTag.deleteMany({
     where: { timeEntryId: entryId, labelId: { notIn: validIds } },
   });
-  for (const labelId of validIds) {
-    await prisma.timeEntryTag.upsert({
-      where: { timeEntryId_labelId: { timeEntryId: entryId, labelId } },
-      create: { timeEntryId: entryId, labelId },
-      update: {},
+  if (validIds.length > 0) {
+    await prisma.timeEntryTag.createMany({
+      data: validIds.map((labelId) => ({ timeEntryId: entryId, labelId })),
+      skipDuplicates: true,
     });
   }
 }
@@ -643,13 +643,16 @@ export async function listTaskTimeEntries(
     prisma.timeEntry.count({ where }),
   ]);
 
-  const withPermissions = await Promise.all(
-    entries.map(async (e) => {
-      const formatted = formatTimeEntryForClient(e);
-      formatted.canEdit = await canEditTimeEntry(actorId, e);
-      return formatted;
-    })
+  const editFlags = await canEditFlagsForTaskEntries(
+    actorId,
+    taskId,
+    entries.map((entry) => entry.userId)
   );
+  const withPermissions = entries.map((entry) => {
+    const formatted = formatTimeEntryForClient(entry);
+    formatted.canEdit = editFlags.get(entry.userId) ?? false;
+    return formatted;
+  });
 
   const { getTaskTrackedTime } = await import("@/lib/time-analytics");
   const summary = await getTaskTrackedTime(taskId);
@@ -850,6 +853,17 @@ export async function splitTimeEntry(
 
   const actorName = await getUserName(actorId);
   const sourceLabels = (entry.labels ?? []).map((t) => t.label.id);
+  const foreignTaskIds = [
+    ...new Set(
+      segments
+        .map((segment) => segment.taskId ?? entry.taskId)
+        .filter((taskId) => taskId !== entry.taskId)
+    ),
+  ];
+  if (foreignTaskIds.length > 0) {
+    const allowed = await Promise.all(foreignTaskIds.map((taskId) => canStartTimer(actorId, taskId)));
+    if (allowed.some((ok) => !ok)) throw new Error("Forbidden");
+  }
 
   const created = await prisma.$transaction(async (tx) => {
     const results = [];
@@ -857,9 +871,6 @@ export async function splitTimeEntry(
 
     for (const seg of segments) {
       const taskId = seg.taskId ?? entry.taskId;
-      if (taskId !== entry.taskId && !(await canStartTimer(actorId, taskId))) {
-        throw new Error("Forbidden");
-      }
       const startTime = new Date(cursor);
       const endTime = new Date(cursor + seg.durationSeconds * 1000);
       cursor = endTime.getTime();
@@ -887,15 +898,17 @@ export async function splitTimeEntry(
     if (labelIds.length) await syncEntryLabels(row.id, labelIds, entry.userId);
   }
 
-  const formatted = await Promise.all(
-    created.map(async ({ row }) => {
-      const full = await prisma.timeEntry.findUniqueOrThrow({
-        where: { id: row.id },
-        include: timeEntryInclude,
-      });
-      return formatTimeEntryForClient(full);
-    })
-  );
+  const createdIds = created.map(({ row }) => row.id);
+  const fullRows = await prisma.timeEntry.findMany({
+    where: { id: { in: createdIds } },
+    include: timeEntryInclude,
+  });
+  const fullById = new Map(fullRows.map((row) => [row.id, row]));
+  const formatted = createdIds.map((id) => {
+    const full = fullById.get(id);
+    if (!full) throw new Error("Time entry not found");
+    return formatTimeEntryForClient(full);
+  });
 
   await logTaskActivity(
     entry.taskId,
@@ -919,10 +932,23 @@ export async function mergeTimeEntries(actorId: string, entryIds: string[]) {
 
   const userId = entries[0]!.userId;
   const taskId = entries[0]!.taskId;
+  const entriesByTask = new Map<string, string[]>();
+  for (const entry of entries) {
+    const userIds = entriesByTask.get(entry.taskId) ?? [];
+    userIds.push(entry.userId);
+    entriesByTask.set(entry.taskId, userIds);
+  }
+  const editMaps = await Promise.all(
+    [...entriesByTask.entries()].map(async ([entryTaskId, userIds]) => ({
+      entryTaskId,
+      flags: await canEditFlagsForTaskEntries(actorId, entryTaskId, userIds),
+    }))
+  );
+  const editByTask = new Map(editMaps.map((item) => [item.entryTaskId, item.flags]));
   for (const e of entries) {
     if (e.isRunning) throw new Error("Stop all timers before merging");
     if (e.userId !== userId) throw new Error("Entries must belong to the same user");
-    if (!(await canEditTimeEntry(actorId, e))) throw new Error("Forbidden");
+    if (!editByTask.get(e.taskId)?.get(e.userId)) throw new Error("Forbidden");
   }
 
   const actorName = await getUserName(actorId);

@@ -21,35 +21,46 @@ export async function GET(request: Request) {
   });
 
   let sent = 0;
+  const prefsByUser = new Map<string, Awaited<ReturnType<typeof getTimeTrackingPrefs>>>();
+  const remindedIds: string[] = [];
 
-  for (const entry of running) {
-    const prefs = await getTimeTrackingPrefs(entry.userId);
-    if (
-      !shouldSendRunningReminder({
-        entry,
-        prefs,
-        now,
-      })
-    ) {
-      continue;
+  try {
+    for (const entry of running) {
+      let prefs = prefsByUser.get(entry.userId);
+      if (!prefs) {
+        prefs = await getTimeTrackingPrefs(entry.userId);
+        prefsByUser.set(entry.userId, prefs);
+      }
+      if (
+        !shouldSendRunningReminder({
+          entry,
+          prefs,
+          now,
+        })
+      ) {
+        continue;
+      }
+
+      const elapsed = getEntryElapsedSeconds(entry, now);
+      const body = `Timer on "${entry.task.title}" has been running ${formatDurationShort(elapsed)} — stop or continue?`;
+
+      await createNotification({
+        userId: entry.userId,
+        title: "Timer still running",
+        body,
+        type: "timer_still_running",
+      });
+
+      remindedIds.push(entry.id);
+      sent += 1;
     }
-
-    const elapsed = getEntryElapsedSeconds(entry, now);
-    const body = `Timer on "${entry.task.title}" has been running ${formatDurationShort(elapsed)} — stop or continue?`;
-
-    await createNotification({
-      userId: entry.userId,
-      title: "Timer still running",
-      body,
-      type: "timer_still_running",
-    });
-
-    await prisma.timeEntry.update({
-      where: { id: entry.id },
-      data: { lastReminderAt: now },
-    });
-
-    sent += 1;
+  } finally {
+    if (remindedIds.length > 0) {
+      await prisma.timeEntry.updateMany({
+        where: { id: { in: remindedIds } },
+        data: { lastReminderAt: now },
+      });
+    }
   }
 
   return NextResponse.json({ checked: running.length, sent });

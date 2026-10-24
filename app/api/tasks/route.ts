@@ -88,28 +88,33 @@ export async function GET(request: Request) {
     const skip = (query.page - 1) * query.limit;
     const statsWhere = { ...where, archived: false };
 
-    const [tasks, filteredTotal, breakdown, completed, inProgress, pending, highPriority, recentTasks, dailyUpdates] =
-      await Promise.all([
-        prisma.task.findMany({ where, orderBy, skip, take: query.limit, include: taskListInclude }),
-        prisma.task.count({ where }),
-        prisma.task.groupBy({ by: ["status", "priority"], where: statsWhere, _count: true }),
-        prisma.task.count({ where: { ...statsWhere, status: "COMPLETED" } }),
-        prisma.task.count({ where: { ...statsWhere, status: "IN_PROGRESS" } }),
-        prisma.task.count({ where: { ...statsWhere, status: "PENDING" } }),
-        prisma.task.count({ where: { ...statsWhere, priority: "HIGH", status: { not: "COMPLETED" } } }),
-        prisma.task.findMany({
-          where: statsWhere,
-          orderBy: { createdAt: "desc" },
-          take: 5,
-          include: {
-            category: true,
-            user: { select: { name: true } },
-            assignees: { include: { user: { select: { name: true } } } },
-          },
-        }),
-        query.workspaceId ? Promise.resolve([]) : getDailyUpdatesByCategory(user.id),
-      ]);
+    const [tasks, filteredTotal, breakdown, recentTasks, dailyUpdates] = await Promise.all([
+      prisma.task.findMany({ where, orderBy, skip, take: query.limit, include: taskListInclude }),
+      prisma.task.count({ where }),
+      prisma.task.groupBy({ by: ["status", "priority"], where: statsWhere, _count: true }),
+      prisma.task.findMany({
+        where: statsWhere,
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: {
+          category: true,
+          user: { select: { name: true } },
+          assignees: { include: { user: { select: { name: true } } } },
+        },
+      }),
+      query.workspaceId ? Promise.resolve([]) : getDailyUpdatesByCategory(user.id),
+    ]);
 
+    const countForStatus = (status: "COMPLETED" | "IN_PROGRESS" | "PENDING") =>
+      breakdown.reduce((sum, row) => sum + (row.status === status ? row._count : 0), 0);
+    const completed = countForStatus("COMPLETED");
+    const inProgress = countForStatus("IN_PROGRESS");
+    const pending = countForStatus("PENDING");
+    const highPriority = breakdown.reduce(
+      (sum, row) =>
+        sum + (row.priority === "HIGH" && row.status !== "COMPLETED" ? row._count : 0),
+      0
+    );
     const total = completed + inProgress + pending;
 
     return NextResponse.json({

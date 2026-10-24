@@ -63,13 +63,10 @@ export const timeTrackingPrefsUpdateSchema = timeTrackingPrefsSchema.partial();
 const DEFAULT_LABELS = ["meeting", "dev", "review"] as const;
 
 export async function ensureDefaultTimeEntryLabels(userId: string) {
-  for (const name of DEFAULT_LABELS) {
-    await prisma.timeEntryLabel.upsert({
-      where: { userId_name: { userId, name } },
-      create: { userId, name },
-      update: {},
-    });
-  }
+  await prisma.timeEntryLabel.createMany({
+    data: DEFAULT_LABELS.map((name) => ({ userId, name })),
+    skipDuplicates: true,
+  });
 }
 
 export async function listTimeEntryLabels(userId: string) {

@@ -7,6 +7,7 @@ import { canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
 import {
   createDocumentVersion,
   documentListInclude,
+  documentListSelect,
 } from "@/lib/documents";
 
 export async function GET(request: Request) {
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
 
     const documents = await prisma.document.findMany({
       where,
-      include: documentListInclude,
+      select: documentListSelect,
       orderBy: [{ pinned: "desc" }, { position: "asc" }, { updatedAt: "desc" }],
     });
 

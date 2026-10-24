@@ -1,4 +1,4 @@
-import { ConversationType, WorkspaceRole, ConversationRole } from "@prisma/client";
+import { ConversationType, WorkspaceRole, ConversationRole, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getWorkspaceMembershipIncludingArchived } from "@/lib/workspace";
 import { broadcastConversationRemoved } from "@/lib/realtime";
@@ -286,15 +286,26 @@ export async function syncWorkspaceChannelParticipants(workspaceId: string) {
   const existingIds = new Set(participants.map((p) => p.userId));
   const toAdd = [...memberIds].filter((id) => !existingIds.has(id));
 
+  if (toRemove.length === 0 && toAdd.length === 0) return;
+
   await prisma.$transaction([
-    ...toRemove.map((p) =>
-      prisma.conversationParticipant.delete({ where: { id: p.id } })
-    ),
-    ...toAdd.map((userId) =>
-      prisma.conversationParticipant.create({
-        data: { conversationId: conversation.id, userId },
-      })
-    ),
+    ...(toRemove.length > 0
+      ? [
+          prisma.conversationParticipant.deleteMany({
+            where: { id: { in: toRemove.map((p) => p.id) } },
+          }),
+        ]
+      : []),
+    ...(toAdd.length > 0
+      ? [
+          prisma.conversationParticipant.createMany({
+            data: toAdd.map((userId) => ({
+              conversationId: conversation.id,
+              userId,
+            })),
+          }),
+        ]
+      : []),
   ]);
 }
 
@@ -383,22 +394,6 @@ export async function getConversationUnreadCount(conversationId: string, userId:
   return getUnreadCount(conversationId, userId, row?.lastReadAt ?? null, row?.clearedAt ?? null);
 }
 
-async function getLastVisibleMessage(conversationId: string, clearedAt: Date | null) {
-  return prisma.message.findFirst({
-    where: {
-      conversationId,
-      deletedAt: null,
-      ...afterCleared(clearedAt),
-    },
-    orderBy: { createdAt: "desc" },
-    include: { user: { select: { id: true, name: true } } },
-  });
-}
-
-function afterCleared(clearedAt: Date | null) {
-  return clearedAt ? { createdAt: { gt: clearedAt } } : {};
-}
-
 /** DM initiator sees the chat immediately; the other person only after a message from the peer. */
 export async function isDirectConversationVisible(
   userId: string,
@@ -440,6 +435,190 @@ export function getConversationDisplayName(
   return other?.user.name ?? "Direct message";
 }
 
+type DirectUser = {
+  id: string;
+  name: string;
+  email: string;
+  image: string | null;
+  lastSeenAt: Date | null;
+};
+
+type LastVisibleMessage = {
+  id: string;
+  body: string;
+  createdAt: Date;
+  user: { id: string; name: string };
+};
+
+function asDate(value: Date | string) {
+  return value instanceof Date ? value : new Date(value);
+}
+
+async function visibleDirectConversationIds(userId: string, conversationIds: string[]) {
+  if (conversationIds.length === 0) return new Set<string>();
+  const rows = await prisma.message.findMany({
+    where: {
+      conversationId: { in: conversationIds },
+      deletedAt: null,
+      userId: { not: userId },
+    },
+    distinct: ["conversationId"],
+    select: { conversationId: true },
+  });
+  return new Set(rows.map((row) => row.conversationId));
+}
+
+function isListedConversationVisible(
+  userId: string,
+  conversation: { id: string; type: ConversationType; createdById: string },
+  peerMessageIds: Set<string>
+) {
+  if (conversation.type !== ConversationType.DIRECT) return true;
+  if (conversation.createdById === userId) return true;
+  return peerMessageIds.has(conversation.id);
+}
+
+async function unreadCountsByConversation(userId: string, conversationIds: string[]) {
+  const counts = new Map<string, number>();
+  if (conversationIds.length === 0) return counts;
+  const rows = await prisma.$queryRaw<{ conversationId: string; cnt: bigint | number }[]>`
+    SELECT m.conversationId AS conversationId, COUNT(*) AS cnt
+    FROM Message m
+    INNER JOIN ConversationParticipant p
+      ON p.conversationId = m.conversationId AND p.userId = ${userId}
+    WHERE m.deletedAt IS NULL
+      AND m.userId <> ${userId}
+      AND m.conversationId IN (${Prisma.join(conversationIds)})
+      AND (
+        (p.lastReadAt IS NULL AND p.clearedAt IS NULL)
+        OR (p.lastReadAt IS NULL AND p.clearedAt IS NOT NULL AND m.createdAt > p.clearedAt)
+        OR (p.clearedAt IS NULL AND p.lastReadAt IS NOT NULL AND m.createdAt > p.lastReadAt)
+        OR (
+          p.lastReadAt IS NOT NULL
+          AND p.clearedAt IS NOT NULL
+          AND m.createdAt > IF(p.lastReadAt >= p.clearedAt, p.lastReadAt, p.clearedAt)
+        )
+      )
+    GROUP BY m.conversationId
+  `;
+  for (const row of rows) counts.set(row.conversationId, Number(row.cnt));
+  return counts;
+}
+
+async function lastVisibleMessagesByConversation(userId: string, conversationIds: string[]) {
+  const byConversation = new Map<string, LastVisibleMessage>();
+  if (conversationIds.length === 0) return byConversation;
+  const rows = await prisma.$queryRaw<
+    {
+      id: string;
+      conversationId: string;
+      body: string;
+      createdAt: Date | string;
+      userId: string;
+      userName: string;
+    }[]
+  >`
+    SELECT m.id AS id, m.conversationId AS conversationId, m.body AS body,
+           m.createdAt AS createdAt, u.id AS userId, u.name AS userName
+    FROM Message m
+    INNER JOIN User u ON u.id = m.userId
+    INNER JOIN ConversationParticipant p
+      ON p.conversationId = m.conversationId AND p.userId = ${userId}
+    WHERE m.deletedAt IS NULL
+      AND m.conversationId IN (${Prisma.join(conversationIds)})
+      AND (p.clearedAt IS NULL OR m.createdAt > p.clearedAt)
+      AND m.createdAt = (
+        SELECT MAX(m2.createdAt)
+        FROM Message m2
+        WHERE m2.conversationId = m.conversationId
+          AND m2.deletedAt IS NULL
+          AND (p.clearedAt IS NULL OR m2.createdAt > p.clearedAt)
+      )
+  `;
+  for (const row of rows) {
+    const createdAt = asDate(row.createdAt);
+    const existing = byConversation.get(row.conversationId);
+    if (
+      !existing ||
+      createdAt > existing.createdAt ||
+      (createdAt.getTime() === existing.createdAt.getTime() && row.id > existing.id)
+    ) {
+      byConversation.set(row.conversationId, {
+        id: row.id,
+        body: row.body,
+        createdAt,
+        user: { id: row.userId, name: row.userName },
+      });
+    }
+  }
+  return byConversation;
+}
+
+async function directParticipantsByConversation(conversationIds: string[]) {
+  const grouped = new Map<string, Map<string, DirectUser>>();
+  if (conversationIds.length === 0) return grouped;
+
+  const active = await prisma.conversationParticipant.findMany({
+    where: { conversationId: { in: conversationIds } },
+    include: { user: { select: dmUserSelect } },
+  });
+  for (const row of active) {
+    const users = grouped.get(row.conversationId) ?? new Map<string, DirectUser>();
+    users.set(row.user.id, row.user);
+    grouped.set(row.conversationId, users);
+  }
+
+  const needAuthors = conversationIds.filter((id) => (grouped.get(id)?.size ?? 0) < 2);
+  if (needAuthors.length > 0) {
+    const authors = await prisma.message.findMany({
+      where: { conversationId: { in: needAuthors } },
+      distinct: ["conversationId", "userId"],
+      select: {
+        conversationId: true,
+        userId: true,
+        user: { select: dmUserSelect },
+      },
+    });
+    for (const row of authors) {
+      const users = grouped.get(row.conversationId) ?? new Map<string, DirectUser>();
+      if (!users.has(row.user.id)) users.set(row.user.id, row.user);
+      grouped.set(row.conversationId, users);
+    }
+  }
+
+  return grouped;
+}
+
+async function workspacePostFlags(userId: string, workspaceIds: string[]) {
+  const flags = new Map<string, boolean>();
+  if (workspaceIds.length === 0) return flags;
+  const memberships = await prisma.workspaceMember.findMany({
+    where: { userId, workspaceId: { in: workspaceIds } },
+    select: {
+      workspaceId: true,
+      role: true,
+      workspace: { select: { archivedAt: true } },
+    },
+  });
+  for (const membership of memberships) {
+    flags.set(
+      membership.workspaceId,
+      membership.role !== WorkspaceRole.VIEWER && !membership.workspace.archivedAt
+    );
+  }
+  return flags;
+}
+
+function canPostWithFlags(
+  conversation: { type: ConversationType; workspaceId: string | null },
+  flags: Map<string, boolean>
+) {
+  if (conversation.type === ConversationType.WORKSPACE && conversation.workspaceId) {
+    return flags.get(conversation.workspaceId) ?? false;
+  }
+  return true;
+}
+
 export async function listUserConversations(userId: string) {
   const rows = await prisma.conversationParticipant.findMany({
     where: { userId },
@@ -455,60 +634,80 @@ export async function listUserConversations(userId: string) {
     },
   });
 
-  const enriched = await Promise.all(
-    rows.map(async (row) => {
-      const visible = await isDirectConversationVisible(userId, row.conversation);
-      if (!visible) return null;
-
-      const clearedAt = row.clearedAt ?? null;
-      const [unreadCount, lastMsg] = await Promise.all([
-        getUnreadCount(row.conversationId, userId, row.lastReadAt, clearedAt),
-        getLastVisibleMessage(row.conversationId, clearedAt),
-      ]);
-
-      const participants =
-        row.conversation.type === ConversationType.DIRECT
-          ? await getDirectParticipantUsers(row.conversationId)
-          : row.conversation.participants.map((p) => ({
-              ...p.user,
-              role: p.role as GroupRole,
-            }));
-
-      const conversationForName = {
-        ...row.conversation,
-        participants: participants.map((user) => ({ user })),
-      };
-
-      return {
-        id: row.conversation.id,
-        type: row.conversation.type,
-        name: getConversationDisplayName(conversationForName, userId),
-        rawName: row.conversation.name,
-        workspaceId: row.conversation.workspaceId,
-        workspace: row.conversation.workspace,
-        participants,
-        currentUserRole:
-          row.conversation.type === ConversationType.GROUP
-            ? (row.role as GroupRole)
-            : undefined,
-        lastMessage: lastMsg
-          ? {
-              id: lastMsg.id,
-              body: lastMsg.body,
-              createdAt: lastMsg.createdAt.toISOString(),
-              user: lastMsg.user,
-            }
-          : null,
-        unreadCount,
-        canPost: await userCanPost(userId, row.conversation),
-        archivedAt: row.archivedAt?.toISOString() ?? null,
-        clearedAt: clearedAt?.toISOString() ?? null,
-        updatedAt: row.conversation.updatedAt.toISOString(),
-      };
-    })
+  const hiddenDirectIds = rows
+    .filter(
+      (row) =>
+        row.conversation.type === ConversationType.DIRECT &&
+        row.conversation.createdById !== userId
+    )
+    .map((row) => row.conversationId);
+  const peerVisible = await visibleDirectConversationIds(userId, hiddenDirectIds);
+  const visibleRows = rows.filter((row) =>
+    isListedConversationVisible(userId, row.conversation, peerVisible)
   );
+  const visibleIds = visibleRows.map((row) => row.conversationId);
+  const directIds = visibleRows
+    .filter((row) => row.conversation.type === ConversationType.DIRECT)
+    .map((row) => row.conversationId);
+  const workspaceIds = [
+    ...new Set(
+      visibleRows
+        .filter((row) => row.conversation.type === ConversationType.WORKSPACE)
+        .map((row) => row.conversation.workspaceId)
+        .filter((id): id is string => !!id)
+    ),
+  ];
 
-  const conversations = enriched.filter((c): c is NonNullable<typeof c> => c !== null);
+  const [unreadByConversation, lastByConversation, directUsers, postFlags] = await Promise.all([
+    unreadCountsByConversation(userId, visibleIds),
+    lastVisibleMessagesByConversation(userId, visibleIds),
+    directParticipantsByConversation(directIds),
+    workspacePostFlags(userId, workspaceIds),
+  ]);
+
+  const conversations = visibleRows.map((row) => {
+    const clearedAt = row.clearedAt ?? null;
+    const participants =
+      row.conversation.type === ConversationType.DIRECT
+        ? Array.from(directUsers.get(row.conversationId)?.values() ?? [])
+        : row.conversation.participants.map((p) => ({
+            ...p.user,
+            role: p.role as GroupRole,
+          }));
+
+    const conversationForName = {
+      ...row.conversation,
+      participants: participants.map((user) => ({ user })),
+    };
+    const lastMsg = lastByConversation.get(row.conversationId) ?? null;
+
+    return {
+      id: row.conversation.id,
+      type: row.conversation.type,
+      name: getConversationDisplayName(conversationForName, userId),
+      rawName: row.conversation.name,
+      workspaceId: row.conversation.workspaceId,
+      workspace: row.conversation.workspace,
+      participants,
+      currentUserRole:
+        row.conversation.type === ConversationType.GROUP
+          ? (row.role as GroupRole)
+          : undefined,
+      lastMessage: lastMsg
+        ? {
+            id: lastMsg.id,
+            body: lastMsg.body,
+            createdAt: lastMsg.createdAt.toISOString(),
+            user: lastMsg.user,
+          }
+        : null,
+      unreadCount: unreadByConversation.get(row.conversationId) ?? 0,
+      canPost: canPostWithFlags(row.conversation, postFlags),
+      archivedAt: row.archivedAt?.toISOString() ?? null,
+      clearedAt: clearedAt?.toISOString() ?? null,
+      updatedAt: row.conversation.updatedAt.toISOString(),
+    };
+  });
 
   conversations.sort((a, b) => {
     const aTime = a.lastMessage?.createdAt ?? a.clearedAt ?? a.updatedAt;
@@ -531,12 +730,20 @@ export async function getTotalUnreadCount(userId: string) {
     },
   });
 
+  const hiddenDirectIds = participants
+    .filter(
+      (row) =>
+        row.conversation.type === ConversationType.DIRECT &&
+        row.conversation.createdById !== userId
+    )
+    .map((row) => row.conversationId);
+  const peerVisible = await visibleDirectConversationIds(userId, hiddenDirectIds);
+  const visibleIds = participants
+    .filter((row) => isListedConversationVisible(userId, row.conversation, peerVisible))
+    .map((row) => row.conversationId);
+  const unread = await unreadCountsByConversation(userId, visibleIds);
   let total = 0;
-  for (const p of participants) {
-    const visible = await isDirectConversationVisible(userId, p.conversation);
-    if (!visible) continue;
-    total += await getUnreadCount(p.conversationId, userId, p.lastReadAt, p.clearedAt);
-  }
+  for (const count of unread.values()) total += count;
   return total;
 }
 
@@ -657,12 +864,11 @@ export async function ensureDirectParticipants(conversationId: string, senderId:
   const dmUserIds = new Set(pastSenders.map((m) => m.userId));
   dmUserIds.add(senderId);
 
-  for (const uid of dmUserIds) {
-    if (!activeIds.has(uid)) {
-      await prisma.conversationParticipant.create({
-        data: { conversationId, userId: uid },
-      });
-    }
+  const missing = [...dmUserIds].filter((uid) => !activeIds.has(uid));
+  if (missing.length > 0) {
+    await prisma.conversationParticipant.createMany({
+      data: missing.map((userId) => ({ conversationId, userId })),
+    });
   }
 }
 
@@ -748,11 +954,18 @@ export async function addGroupMembers(
     select: { id: true, name: true },
   });
 
-  for (const memberId of unique) {
-    await prisma.conversationParticipant.upsert({
-      where: { conversationId_userId: { conversationId, userId: memberId } },
-      create: { conversationId, userId: memberId, role: ConversationRole.MEMBER },
-      update: {},
+  const missingIds = unique.filter((id) => !existingIds.has(id));
+  if (addedUsers.length !== missingIds.length) {
+    throw new Error("One or more members not found");
+  }
+  if (addedUsers.length > 0) {
+    await prisma.conversationParticipant.createMany({
+      data: addedUsers.map((user) => ({
+        conversationId,
+        userId: user.id,
+        role: ConversationRole.MEMBER,
+      })),
+      skipDuplicates: true,
     });
   }
 

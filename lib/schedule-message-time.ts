@@ -71,10 +71,13 @@ export function formatCountdownUntil(
   return `${seconds}s`;
 }
 
-export function formatScheduledForShort(scheduledFor: Date | string, timezone: string): string {
+export function formatScheduledForShort(
+  scheduledFor: Date | string,
+  timezone: string,
+  now = new Date()
+): string {
   const date = typeof scheduledFor === "string" ? new Date(scheduledFor) : scheduledFor;
   const tz = isValidTimezone(timezone) ? timezone : "UTC";
-  const now = new Date();
   const todayKey = formatInTimeZone(now, tz, "yyyy-MM-dd");
   const targetKey = formatInTimeZone(date, tz, "yyyy-MM-dd");
   const tomorrowKey = formatInTimeZone(addDays(now, 1), tz, "yyyy-MM-dd");
