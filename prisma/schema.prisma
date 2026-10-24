@@ -203,6 +203,10 @@ model Task {
   @@index([categoryId])
   @@index([boardColumnId])
   @@index([workspaceId])
+  @@index([userId, workspaceId, archived])
+  @@index([workspaceId, archived])
+  @@index([status, archived, completedAt])
+  @@index([archived, status, dueDate])
 }
 
 model BoardColumn {
@@ -323,6 +327,7 @@ model Notification {
   @@index([userId, archivedAt])
   @@index([inviteId])
   @@index([conversationId])
+  @@index([userId, conversationId, type, read])
 }
 
 model PushSubscription {
@@ -397,6 +402,7 @@ model WorkspaceMember {
   workspace        Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, workspaceId])
+  @@index([workspaceId])
 }
 
 model PasswordResetToken {
@@ -490,6 +496,7 @@ model Message {
   scheduledDeliveries  ScheduledMessage[] @relation("ScheduledMessageDelivered")
 
   @@index([conversationId, createdAt])
+  @@index([conversationId, deletedAt, createdAt])
   @@index([conversationId, pinnedAt])
   @@index([userId])
   @@index([parentId])
@@ -571,6 +578,8 @@ model Document {
   @@index([parentId])
   @@index([archived])
   @@index([type])
+  @@index([userId, workspaceId, archived])
+  @@index([workspaceId, archived, parentId])
 }
 
 model DocumentVersion {
@@ -710,6 +719,8 @@ model TimeEntry {
   @@index([taskId])
   @@index([isRunning])
   @@index([userId, isRunning])
+  @@index([userId, isRunning, startTime])
+  @@index([taskId, isRunning, startTime])
   @@index([startTime])
 }
 

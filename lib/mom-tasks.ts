@@ -1,7 +1,7 @@
 import type { Priority, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logTaskActivity } from "@/lib/activity";
-import { linkDocumentToTask } from "@/lib/documents";
+import { getDocumentLinkContext, linkDocumentToTasks } from "@/lib/documents";
 import { canEditMeetingMinutes } from "@/lib/meeting-minutes";
 import {
   mapMomPriorityToTask,
@@ -14,7 +14,7 @@ import {
   type MomStructuredContent,
 } from "@/lib/mom-structured";
 import { broadcastTaskEvent } from "@/lib/realtime";
-import { getTaskWithAssignees, syncTaskAssignees } from "@/lib/task-assignees";
+import { syncTaskAssignees } from "@/lib/task-assignees";
 import { canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
 import { runAutomationsForTrigger } from "@/lib/automations";
 
@@ -56,15 +56,27 @@ function buildTaskDescription(params: {
   return lines.join("\n");
 }
 
-async function createTaskFromActionItem(params: {
-  item: MomActionItem;
-  userId: string;
-  actorName: string | null;
-  momTitle: string;
-  workspaceId: string | null;
-  documentId: string;
-  participants: { id: string; name: string }[];
-}): Promise<MomLinkedTaskSummary> {
+type MomWriteContext = {
+  canLinkDocument: boolean;
+  documentWorkspaceId: string | null;
+  position: { next: number | null };
+  workspaceName: string | undefined;
+  workspaceNameLoaded: boolean;
+  assignedRules: { id: string; name: string; action: string; config: string }[] | null;
+};
+
+async function createTaskFromActionItem(
+  params: {
+    item: MomActionItem;
+    userId: string;
+    actorName: string | null;
+    momTitle: string;
+    workspaceId: string | null;
+    documentId: string;
+    participants: { id: string; name: string }[];
+  },
+  ctx: MomWriteContext
+): Promise<MomLinkedTaskSummary> {
   const { item, userId, actorName, momTitle, workspaceId, documentId, participants } = params;
   const priority = mapMomPriorityToTask(item.priority);
   const status = mapMomStatusToTask(item.status);
@@ -78,10 +90,15 @@ async function createTaskFromActionItem(params: {
     includeOwnerLine: !workspaceId || !ownerUserId,
   });
 
-  const maxPos = await prisma.task.aggregate({
-    where: workspaceId ? { workspaceId } : { userId, workspaceId: null },
-    _max: { position: true },
-  });
+  if (ctx.position.next == null) {
+    const maxPos = await prisma.task.aggregate({
+      where: workspaceId ? { workspaceId } : { userId, workspaceId: null },
+      _max: { position: true },
+    });
+    ctx.position.next = (maxPos._max.position ?? 0) + 1;
+  }
+  const position = ctx.position.next;
+  ctx.position.next += 1;
 
   const task = await prisma.task.create({
     data: {
@@ -92,16 +109,20 @@ async function createTaskFromActionItem(params: {
       completedAt: status === "COMPLETED" ? new Date() : null,
       dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
       workspaceId: workspaceId ?? null,
-      position: (maxPos._max.position ?? 0) + 1,
+      position,
       userId,
     },
   });
 
   if (workspaceId && ownerUserId) {
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { name: true },
-    });
+    if (!ctx.workspaceNameLoaded) {
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { name: true },
+      });
+      ctx.workspaceName = workspace?.name;
+      ctx.workspaceNameLoaded = true;
+    }
     await syncTaskAssignees({
       taskId: task.id,
       workspaceId,
@@ -110,17 +131,40 @@ async function createTaskFromActionItem(params: {
       actorId: userId,
       actorName: actorName ?? undefined,
       taskTitle: task.title,
-      workspaceName: workspace?.name,
+      workspaceName: ctx.workspaceName,
     });
-    await runAutomationsForTrigger(workspaceId, "task_assigned", {
-      taskId: task.id,
-      taskTitle: task.title,
+    if (!ctx.assignedRules) {
+      ctx.assignedRules = await prisma.automationRule.findMany({
+        where: { workspaceId, enabled: true, trigger: "task_assigned" },
+      });
+    }
+    await runAutomationsForTrigger(
       workspaceId,
-      assigneeIds: [ownerUserId],
-    });
+      "task_assigned",
+      {
+        taskId: task.id,
+        taskTitle: task.title,
+        workspaceId,
+        assigneeIds: [ownerUserId],
+      },
+      { rules: ctx.assignedRules }
+    );
   }
 
-  await linkDocumentToTask(userId, documentId, task.id);
+  if (ctx.canLinkDocument) {
+    const docWorkspaceId = ctx.documentWorkspaceId;
+    const taskWorkspaceId = task.workspaceId;
+    const sameWorkspace =
+      !(docWorkspaceId && taskWorkspaceId !== docWorkspaceId) &&
+      !(!docWorkspaceId && taskWorkspaceId);
+    if (sameWorkspace) {
+      await prisma.documentTask.upsert({
+        where: { documentId_taskId: { documentId, taskId: task.id } },
+        update: {},
+        create: { documentId, taskId: task.id },
+      });
+    }
+  }
   await logTaskActivity(task.id, "created", `Task "${task.title}" created from MoM`);
   broadcastTaskEvent({
     type: "task:created",
@@ -130,12 +174,11 @@ async function createTaskFromActionItem(params: {
     taskId: task.id,
   });
 
-  const fullTask = await getTaskWithAssignees(task.id);
   return {
-    id: fullTask!.id,
-    title: fullTask!.title,
-    status: fullTask!.status,
-    workspaceId: fullTask!.workspaceId,
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    workspaceId: task.workspaceId,
     actionItemId: item.id,
   };
 }
@@ -165,6 +208,21 @@ export async function processMomActionItemsForDocument(params: {
         ).map((p) => p.user)
       : [];
 
+  const linkCtx = await getDocumentLinkContext(params.userId, params.documentId);
+  const existingTaskIds = params.content.actionItems
+    .filter((item) => item.task.trim() && item.taskId)
+    .map((item) => item.taskId as string);
+  await linkDocumentToTasks(params.userId, params.documentId, existingTaskIds, linkCtx);
+
+  const writeCtx: MomWriteContext = {
+    canLinkDocument: linkCtx.canEdit,
+    documentWorkspaceId: linkCtx.workspaceId,
+    position: { next: null },
+    workspaceName: undefined,
+    workspaceNameLoaded: false,
+    assignedRules: null,
+  };
+
   const created: MomLinkedTaskSummary[] = [];
   let linked = 0;
   let skipped = 0;
@@ -179,7 +237,6 @@ export async function processMomActionItemsForDocument(params: {
     }
 
     if (item.taskId) {
-      await linkDocumentToTask(params.userId, params.documentId, item.taskId);
       linked += 1;
       nextItems.push(item);
       continue;
@@ -190,15 +247,18 @@ export async function processMomActionItemsForDocument(params: {
       continue;
     }
 
-    const summary = await createTaskFromActionItem({
-      item,
-      userId: params.userId,
-      actorName: params.actorName,
-      momTitle: params.momTitle,
-      workspaceId: params.workspaceId,
-      documentId: params.documentId,
-      participants,
-    });
+    const summary = await createTaskFromActionItem(
+      {
+        item,
+        userId: params.userId,
+        actorName: params.actorName,
+        momTitle: params.momTitle,
+        workspaceId: params.workspaceId,
+        documentId: params.documentId,
+        participants,
+      },
+      writeCtx
+    );
     created.push(summary);
     nextItems.push({ ...item, taskId: summary.id, createTask: true });
   }
@@ -257,13 +317,11 @@ export async function createTasksFromMomActionItems(
   const alreadyLinked = content.actionItems.filter((i) => i.task.trim() && i.taskId).length;
 
   if (pendingCreate.length === 0) {
-    let linkedOnly = 0;
-    for (const item of content.actionItems) {
-      if (item.taskId) {
-        await linkDocumentToTask(userId, mom.documentId, item.taskId);
-        linkedOnly += 1;
-      }
-    }
+    const linkedIds = content.actionItems
+      .filter((item) => item.taskId)
+      .map((item) => item.taskId as string);
+    await linkDocumentToTasks(userId, mom.documentId, linkedIds);
+    const linkedOnly = linkedIds.length;
     return {
       created: [],
       skipped: content.actionItems.filter((i) => !i.task.trim()).length,

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveTimeRange, type TimeRangePreset } from "@/lib/time-format";
 
@@ -10,12 +10,41 @@ function buildDateFilter(from: Date | null, to: Date | null): Prisma.TimeEntryWh
   return filter;
 }
 
-async function sumDuration(where: Prisma.TimeEntryWhereInput): Promise<number> {
-  const result = await prisma.timeEntry.aggregate({
-    where: { ...where, isRunning: false },
-    _sum: { duration: true },
-  });
-  return result._sum.duration ?? 0;
+function sqlNumber(value: bigint | number | null | undefined) {
+  if (value == null) return 0;
+  return Number(value);
+}
+
+type WindowSums = { total: number; today: number; week: number; month: number };
+
+async function sumDurationWindows(extra: Prisma.Sql): Promise<WindowSums> {
+  const today = resolveTimeRange("today");
+  const week = resolveTimeRange("week");
+  const month = resolveTimeRange("month");
+  const rows = await prisma.$queryRaw<
+    {
+      total: bigint | number | null;
+      today: bigint | number | null;
+      week: bigint | number | null;
+      month: bigint | number | null;
+    }[]
+  >`
+    SELECT
+      COALESCE(SUM(te.duration), 0) AS total,
+      COALESCE(SUM(CASE WHEN te.startTime >= ${today.from} AND te.startTime <= ${today.to} THEN te.duration ELSE 0 END), 0) AS today,
+      COALESCE(SUM(CASE WHEN te.startTime >= ${week.from} AND te.startTime <= ${week.to} THEN te.duration ELSE 0 END), 0) AS week,
+      COALESCE(SUM(CASE WHEN te.startTime >= ${month.from} AND te.startTime <= ${month.to} THEN te.duration ELSE 0 END), 0) AS month
+    FROM TimeEntry te
+    INNER JOIN Task t ON t.id = te.taskId
+    WHERE te.isRunning = 0 AND ${extra}
+  `;
+  const row = rows[0];
+  return {
+    total: sqlNumber(row?.total),
+    today: sqlNumber(row?.today),
+    week: sqlNumber(row?.week),
+    month: sqlNumber(row?.month),
+  };
 }
 
 type ReportTaskAgg = {
@@ -26,17 +55,11 @@ type ReportTaskAgg = {
   allTimeTotal: number;
 };
 
-async function getByTagReport(where: Prisma.TimeEntryWhereInput) {
-  const tagged = await prisma.timeEntry.findMany({
-    where: { ...where, isRunning: false },
-    select: {
-      duration: true,
-      labels: { include: { label: { select: { id: true, name: true } } } },
-    },
-  });
-
+function aggregateByTag(
+  entries: { duration: number; labels: { label: { id: string; name: string } }[] }[]
+) {
   const byTagMap = new Map<string, { labelId: string; name: string; total: number }>();
-  for (const entry of tagged) {
+  for (const entry of entries) {
     for (const { label } of entry.labels) {
       const agg = byTagMap.get(label.id) ?? {
         labelId: label.id,
@@ -49,6 +72,42 @@ async function getByTagReport(where: Prisma.TimeEntryWhereInput) {
   }
 
   return [...byTagMap.values()].sort((a, b) => b.total - a.total);
+}
+
+function bucketTrend(
+  entries: { startTime: Date; duration: number }[],
+  granularity: "daily" | "weekly" | "monthly"
+) {
+  const buckets = new Map<string, number>();
+
+  for (const entry of entries) {
+    const d = entry.startTime;
+    let key: string;
+    if (granularity === "daily") {
+      key = d.toISOString().slice(0, 10);
+    } else if (granularity === "weekly") {
+      const weekStart = new Date(d);
+      const day = weekStart.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      weekStart.setDate(weekStart.getDate() - diff);
+      key = weekStart.toISOString().slice(0, 10);
+    } else {
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    }
+    buckets.set(key, (buckets.get(key) ?? 0) + entry.duration);
+  }
+
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, seconds]) => ({ date, seconds, hours: Math.round((seconds / 3600) * 100) / 100 }));
+}
+
+async function loadTrendEntries(where: Prisma.TimeEntryWhereInput) {
+  return prisma.timeEntry.findMany({
+    where,
+    select: { startTime: true, duration: true },
+    orderBy: { startTime: "asc" },
+  });
 }
 
 async function enrichReportTaskAggs(
@@ -75,62 +134,46 @@ export async function getTaskTrackedTime(taskId: string) {
   const now = new Date();
   const today = resolveTimeRange("today");
   const week = resolveTimeRange("week");
-
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    select: { estimatedMinutes: true },
-  });
-
-  const [total, todaySeconds, weekSeconds] = await Promise.all([
-    sumDuration({ taskId }),
-    sumDuration({ taskId, ...buildDateFilter(today.from, today.to) }),
-    sumDuration({ taskId, ...buildDateFilter(week.from, week.to) }),
-  ]);
+  const rows = await prisma.$queryRaw<
+    {
+      estimatedMinutes: number | null;
+      total: bigint | number | null;
+      today: bigint | number | null;
+      week: bigint | number | null;
+    }[]
+  >`
+    SELECT
+      t.estimatedMinutes AS estimatedMinutes,
+      COALESCE(SUM(te.duration), 0) AS total,
+      COALESCE(SUM(CASE WHEN te.startTime >= ${today.from} AND te.startTime <= ${today.to} THEN te.duration ELSE 0 END), 0) AS today,
+      COALESCE(SUM(CASE WHEN te.startTime >= ${week.from} AND te.startTime <= ${week.to} THEN te.duration ELSE 0 END), 0) AS week
+    FROM Task t
+    LEFT JOIN TimeEntry te ON te.taskId = t.id AND te.isRunning = 0
+    WHERE t.id = ${taskId}
+    GROUP BY t.id, t.estimatedMinutes
+  `;
+  const row = rows[0];
 
   return {
-    total,
-    today: todaySeconds,
-    week: weekSeconds,
+    total: sqlNumber(row?.total),
+    today: sqlNumber(row?.today),
+    week: sqlNumber(row?.week),
     asOf: now.toISOString(),
-    estimatedMinutes: task?.estimatedMinutes ?? null,
+    estimatedMinutes: row?.estimatedMinutes == null ? null : Number(row.estimatedMinutes),
   };
 }
 
 export async function getUserTrackedTime(userId: string, workspaceId?: string) {
-  const taskFilter: Prisma.TimeEntryWhereInput = workspaceId
-    ? { task: { workspaceId } }
-    : {};
-
-  const today = resolveTimeRange("today");
-  const week = resolveTimeRange("week");
-  const month = resolveTimeRange("month");
-
-  const base = { userId, ...taskFilter };
-
-  const [total, todaySeconds, weekSeconds, monthSeconds] = await Promise.all([
-    sumDuration(base),
-    sumDuration({ ...base, ...buildDateFilter(today.from, today.to) }),
-    sumDuration({ ...base, ...buildDateFilter(week.from, week.to) }),
-    sumDuration({ ...base, ...buildDateFilter(month.from, month.to) }),
-  ]);
-
-  return { total, today: todaySeconds, week: weekSeconds, month: monthSeconds };
+  const extra = workspaceId
+    ? Prisma.sql`te.userId = ${userId} AND t.workspaceId = ${workspaceId}`
+    : Prisma.sql`te.userId = ${userId}`;
+  const sums = await sumDurationWindows(extra);
+  return { total: sums.total, today: sums.today, week: sums.week, month: sums.month };
 }
 
 export async function getWorkspaceTrackedTime(workspaceId: string) {
-  const today = resolveTimeRange("today");
-  const week = resolveTimeRange("week");
-  const month = resolveTimeRange("month");
-  const base = { task: { workspaceId } };
-
-  const [total, todaySeconds, weekSeconds, monthSeconds] = await Promise.all([
-    sumDuration(base),
-    sumDuration({ ...base, ...buildDateFilter(today.from, today.to) }),
-    sumDuration({ ...base, ...buildDateFilter(week.from, week.to) }),
-    sumDuration({ ...base, ...buildDateFilter(month.from, month.to) }),
-  ]);
-
-  return { total, today: todaySeconds, week: weekSeconds, month: monthSeconds };
+  const sums = await sumDurationWindows(Prisma.sql`t.workspaceId = ${workspaceId}`);
+  return { total: sums.total, today: sums.today, week: sums.week, month: sums.month };
 }
 
 export function personalTaskFilter(userId: string): Prisma.TimeEntryWhereInput {
@@ -138,19 +181,10 @@ export function personalTaskFilter(userId: string): Prisma.TimeEntryWhereInput {
 }
 
 export async function getPersonalTrackedTime(userId: string) {
-  const today = resolveTimeRange("today");
-  const week = resolveTimeRange("week");
-  const month = resolveTimeRange("month");
-  const base = personalTaskFilter(userId);
-
-  const [total, todaySeconds, weekSeconds, monthSeconds] = await Promise.all([
-    sumDuration(base),
-    sumDuration({ ...base, ...buildDateFilter(today.from, today.to) }),
-    sumDuration({ ...base, ...buildDateFilter(week.from, week.to) }),
-    sumDuration({ ...base, ...buildDateFilter(month.from, month.to) }),
-  ]);
-
-  return { total, today: todaySeconds, week: weekSeconds, month: monthSeconds };
+  const sums = await sumDurationWindows(
+    Prisma.sql`t.userId = ${userId} AND t.workspaceId IS NULL`
+  );
+  return { total: sums.total, today: sums.today, week: sums.week, month: sums.month };
 }
 
 export async function getPersonalProductivityTrend(
@@ -160,38 +194,12 @@ export async function getPersonalProductivityTrend(
   to?: Date | null
 ) {
   const range = from && to ? { from, to } : resolveTimeRange("month");
-  const entries = await prisma.timeEntry.findMany({
-    where: {
-      ...personalTaskFilter(userId),
-      isRunning: false,
-      ...buildDateFilter(range.from, range.to),
-    },
-    select: { startTime: true, duration: true },
-    orderBy: { startTime: "asc" },
+  const entries = await loadTrendEntries({
+    ...personalTaskFilter(userId),
+    isRunning: false,
+    ...buildDateFilter(range.from, range.to),
   });
-
-  const buckets = new Map<string, number>();
-
-  for (const entry of entries) {
-    const d = entry.startTime;
-    let key: string;
-    if (granularity === "daily") {
-      key = d.toISOString().slice(0, 10);
-    } else if (granularity === "weekly") {
-      const weekStart = new Date(d);
-      const day = weekStart.getDay();
-      const diff = day === 0 ? 6 : day - 1;
-      weekStart.setDate(weekStart.getDate() - diff);
-      key = weekStart.toISOString().slice(0, 10);
-    } else {
-      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    }
-    buckets.set(key, (buckets.get(key) ?? 0) + entry.duration);
-  }
-
-  return [...buckets.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, seconds]) => ({ date, seconds, hours: Math.round((seconds / 3600) * 100) / 100 }));
+  return bucketTrend(entries, granularity);
 }
 
 export async function getPersonalReport(
@@ -218,6 +226,7 @@ export async function getPersonalReport(
       startTime: true,
       user: { select: { id: true, name: true } },
       task: { select: { id: true, title: true, estimatedMinutes: true } },
+      labels: { include: { label: { select: { id: true, name: true } } } },
     },
   });
 
@@ -262,12 +271,19 @@ export async function getPersonalReport(
     byTaskMap.set(e.taskId, taskAgg);
   }
 
-  const [trendDaily, trendWeekly, byTask, byTag] = await Promise.all([
-    getPersonalProductivityTrend(userId, "daily", filters.from, filters.to),
-    getPersonalProductivityTrend(userId, "weekly", filters.from, filters.to),
+  const trendRange =
+    filters.from && filters.to ? { from: filters.from, to: filters.to } : resolveTimeRange("month");
+  const [trendEntries, byTask] = await Promise.all([
+    loadTrendEntries({
+      ...personalTaskFilter(userId),
+      isRunning: false,
+      ...buildDateFilter(trendRange.from, trendRange.to),
+    }),
     enrichReportTaskAggs(byTaskMap, personalTaskFilter(userId)),
-    getByTagReport(where),
   ]);
+  const trendDaily = bucketTrend(trendEntries, "daily");
+  const trendWeekly = bucketTrend(trendEntries, "weekly");
+  const byTag = aggregateByTag(entries);
 
   return {
     byUser: [...byUserMap.values()].sort((a, b) => b.total - a.total),
@@ -286,38 +302,12 @@ export async function getProductivityTrend(
   to?: Date | null
 ) {
   const range = from && to ? { from, to } : resolveTimeRange("month");
-  const entries = await prisma.timeEntry.findMany({
-    where: {
-      task: { workspaceId },
-      isRunning: false,
-      ...buildDateFilter(range.from, range.to),
-    },
-    select: { startTime: true, duration: true },
-    orderBy: { startTime: "asc" },
+  const entries = await loadTrendEntries({
+    task: { workspaceId },
+    isRunning: false,
+    ...buildDateFilter(range.from, range.to),
   });
-
-  const buckets = new Map<string, number>();
-
-  for (const entry of entries) {
-    const d = entry.startTime;
-    let key: string;
-    if (granularity === "daily") {
-      key = d.toISOString().slice(0, 10);
-    } else if (granularity === "weekly") {
-      const weekStart = new Date(d);
-      const day = weekStart.getDay();
-      const diff = day === 0 ? 6 : day - 1;
-      weekStart.setDate(weekStart.getDate() - diff);
-      key = weekStart.toISOString().slice(0, 10);
-    } else {
-      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    }
-    buckets.set(key, (buckets.get(key) ?? 0) + entry.duration);
-  }
-
-  return [...buckets.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, seconds]) => ({ date, seconds, hours: Math.round((seconds / 3600) * 100) / 100 }));
+  return bucketTrend(entries, granularity);
 }
 
 export async function getWorkspaceReport(
@@ -346,6 +336,7 @@ export async function getWorkspaceReport(
       startTime: true,
       user: { select: { id: true, name: true } },
       task: { select: { id: true, title: true, estimatedMinutes: true } },
+      labels: { include: { label: { select: { id: true, name: true } } } },
     },
   });
 
@@ -390,12 +381,19 @@ export async function getWorkspaceReport(
     byTaskMap.set(e.taskId, taskAgg);
   }
 
-  const [trendDaily, trendWeekly, byTask, byTag] = await Promise.all([
-    getProductivityTrend(workspaceId, "daily", filters.from, filters.to),
-    getProductivityTrend(workspaceId, "weekly", filters.from, filters.to),
+  const trendRange =
+    filters.from && filters.to ? { from: filters.from, to: filters.to } : resolveTimeRange("month");
+  const [trendEntries, byTask] = await Promise.all([
+    loadTrendEntries({
+      task: { workspaceId },
+      isRunning: false,
+      ...buildDateFilter(trendRange.from, trendRange.to),
+    }),
     enrichReportTaskAggs(byTaskMap, { task: { workspaceId } }),
-    getByTagReport(where),
   ]);
+  const trendDaily = bucketTrend(trendEntries, "daily");
+  const trendWeekly = bucketTrend(trendEntries, "weekly");
+  const byTag = aggregateByTag(entries);
 
   return {
     byUser: [...byUserMap.values()].sort((a, b) => b.total - a.total),

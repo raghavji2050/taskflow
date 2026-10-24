@@ -16,6 +16,23 @@ export const documentListInclude = {
   },
 } as const;
 
+/** List rows omit `body` (LongText). Detail routes still return it. */
+export const documentListSelect = {
+  id: true,
+  title: true,
+  type: true,
+  icon: true,
+  userId: true,
+  workspaceId: true,
+  parentId: true,
+  position: true,
+  pinned: true,
+  archived: true,
+  createdAt: true,
+  updatedAt: true,
+  ...documentListInclude,
+} as const;
+
 export const documentAttachmentSelect = {
   id: true,
   filename: true,
@@ -101,15 +118,22 @@ export async function canAccessDocument(userId: string, documentId: string) {
   });
 }
 
-export async function canEditDocument(userId: string, documentId: string) {
+export async function getDocumentLinkContext(userId: string, documentId: string) {
   const doc = await prisma.document.findFirst({
     where: { id: documentId },
     select: { userId: true, workspaceId: true },
   });
-  if (!doc) return false;
-  if (!doc.workspaceId) return doc.userId === userId;
+  if (!doc) return { canEdit: false, workspaceId: null };
+  if (!doc.workspaceId) {
+    return { canEdit: doc.userId === userId, workspaceId: null };
+  }
   const membership = await getWorkspaceMembership(userId, doc.workspaceId);
-  return canEditWorkspaceTasks(membership);
+  return { canEdit: canEditWorkspaceTasks(membership), workspaceId: doc.workspaceId };
+}
+
+export async function canEditDocument(userId: string, documentId: string) {
+  const ctx = await getDocumentLinkContext(userId, documentId);
+  return ctx.canEdit;
 }
 
 export async function canAccessMessage(userId: string, messageId: string) {
@@ -171,6 +195,44 @@ export async function linkDocumentToTask(
     update: {},
     create: { documentId, taskId },
   });
+}
+
+export async function linkDocumentToTasks(
+  userId: string,
+  documentId: string,
+  taskIds: string[],
+  preloaded?: { canEdit: boolean; workspaceId: string | null }
+) {
+  const unique = [...new Set(taskIds)];
+  if (unique.length === 0) return [];
+
+  const ctx = preloaded ?? (await getDocumentLinkContext(userId, documentId));
+  if (!ctx.canEdit) return [];
+
+  const tasks = await prisma.task.findMany({
+    where: {
+      id: { in: unique },
+      OR: [
+        { userId },
+        { assignees: { some: { userId } } },
+        { workspace: { members: { some: { userId } } } },
+      ],
+    },
+    select: { id: true, workspaceId: true },
+  });
+
+  const linkable = tasks.filter((task) => {
+    if (ctx.workspaceId && task.workspaceId !== ctx.workspaceId) return false;
+    if (!ctx.workspaceId && task.workspaceId) return false;
+    return true;
+  });
+  if (linkable.length === 0) return [];
+
+  await prisma.documentTask.createMany({
+    data: linkable.map((task) => ({ documentId, taskId: task.id })),
+    skipDuplicates: true,
+  });
+  return linkable.map((task) => task.id);
 }
 
 export async function linkDocumentToMessage(

@@ -14,39 +14,56 @@ export async function GET(_request: Request, context: RouteContext) {
     const membership = await getWorkspaceMembership(user.id, id);
     if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const members = await prisma.workspaceMember.findMany({
-      where: { workspaceId: id },
-      include: { user: { select: { id: true, name: true, email: true } } },
-    });
+    const [members, tasks] = await Promise.all([
+      prisma.workspaceMember.findMany({
+        where: { workspaceId: id },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      }),
+      prisma.task.findMany({
+        where: { workspaceId: id, archived: false },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+          assignees: { select: { userId: true } },
+        },
+        orderBy: { dueDate: "asc" },
+      }),
+    ]);
 
-    const workload = await Promise.all(
-      members.map(async (member) => {
-        const tasks = await prisma.task.findMany({
-          where: {
-            workspaceId: id,
-            archived: false,
-            assignees: { some: { userId: member.userId } },
-          },
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            priority: true,
-            dueDate: true,
-          },
-          orderBy: { dueDate: "asc" },
-        });
-        return {
-          member: member.user,
-          role: member.role,
-          taskCount: tasks.length,
-          tasks,
-        };
-      })
-    );
+    const tasksByAssignee = new Map<string, typeof tasks>();
+    let unassigned = 0;
+    for (const task of tasks) {
+      if (task.assignees.length === 0) {
+        unassigned += 1;
+        continue;
+      }
+      const seen = new Set<string>();
+      for (const assignee of task.assignees) {
+        if (seen.has(assignee.userId)) continue;
+        seen.add(assignee.userId);
+        const list = tasksByAssignee.get(assignee.userId) ?? [];
+        list.push(task);
+        tasksByAssignee.set(assignee.userId, list);
+      }
+    }
 
-    const unassigned = await prisma.task.count({
-      where: { workspaceId: id, archived: false, assignees: { none: {} } },
+    const workload = members.map((member) => {
+      const memberTasks = (tasksByAssignee.get(member.userId) ?? []).map((task) => ({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate,
+      }));
+      return {
+        member: member.user,
+        role: member.role,
+        taskCount: memberTasks.length,
+        tasks: memberTasks,
+      };
     });
 
     return NextResponse.json({ workload, unassigned });

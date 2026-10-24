@@ -222,17 +222,17 @@ export async function searchMessagesGlobal(userId: string, query: string, limit 
 
 export async function listMessageDates(conversationId: string, userId: string) {
   const clearedAt = await getParticipantClearedAt(conversationId, userId);
-  const rows = await prisma.message.findMany({
-    where: {
-      conversationId,
-      deletedAt: null,
-      ...afterCleared(clearedAt),
-    },
-    select: { createdAt: true },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-  });
+  // createdAt is stored in UTC, matching Date#toISOString().slice(0, 10).
+  const rows = await prisma.$queryRaw<{ dayKey: string }[]>`
+    SELECT DISTINCT DATE_FORMAT(createdAt, '%Y-%m-%d') AS dayKey
+    FROM Message
+    WHERE conversationId = ${conversationId}
+      AND deletedAt IS NULL
+      AND (${clearedAt} IS NULL OR createdAt > ${clearedAt})
+    ORDER BY dayKey DESC
+  `;
 
-  return [...new Set(rows.map((r) => r.createdAt.toISOString().slice(0, 10)))];
+  return rows.map((row) => row.dayKey);
 }
 
 export async function getMessagesForDate(
@@ -254,29 +254,23 @@ export async function getMessagesForDate(
     include: messageInclude,
   });
 
-  const hasMoreBefore = await prisma.message.count({
-    where: {
-      conversationId,
-      deletedAt: null,
-      createdAt: { lt: start },
-      ...afterCleared(clearedAt),
-    },
-  });
-
-  const hasMoreAfter = await prisma.message.count({
-    where: {
-      conversationId,
-      deletedAt: null,
-      createdAt: { gt: end },
-      ...afterCleared(clearedAt),
-    },
-  });
+  const bounds = await prisma.$queryRaw<{ beforeCount: bigint | number | null; afterCount: bigint | number | null }[]>`
+    SELECT
+      SUM(CASE WHEN createdAt < ${start} THEN 1 ELSE 0 END) AS beforeCount,
+      SUM(CASE WHEN createdAt > ${end} THEN 1 ELSE 0 END) AS afterCount
+    FROM Message
+    WHERE conversationId = ${conversationId}
+      AND deletedAt IS NULL
+      AND (${clearedAt} IS NULL OR createdAt > ${clearedAt})
+  `;
+  const beforeCount = Number(bounds[0]?.beforeCount ?? 0);
+  const afterCount = Number(bounds[0]?.afterCount ?? 0);
 
   return {
     messages: messages.map((m) => formatMessageForClient(m, userId)),
     date: dateKey,
-    hasMoreBefore: hasMoreBefore > 0,
-    hasMoreAfter: hasMoreAfter > 0,
+    hasMoreBefore: beforeCount > 0,
+    hasMoreAfter: afterCount > 0,
   };
 }
 
