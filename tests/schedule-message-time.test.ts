@@ -34,8 +34,11 @@ describe("schedule-message-time", () => {
     const tomorrow = addDays(now, 1);
     tomorrow.setUTCHours(9, 0, 0, 0);
 
-    expect(formatScheduledForShort(todayLater, tz)).toContain("Today at");
-    expect(formatScheduledForShort(tomorrow, tz)).toContain("Tomorrow at");
+    expect(formatScheduledForShort(todayLater, tz, now)).toBe("Today at 3:00 PM");
+    expect(formatScheduledForShort(tomorrow, tz, now)).toBe("Tomorrow at 9:00 AM");
+    expect(formatScheduledForShort(new Date("2026-07-04T15:00:00.000Z"), tz, now)).toBe(
+      "Jul 4 at 3:00 PM"
+    );
   });
 
   it("returns quick schedule presets", () => {
