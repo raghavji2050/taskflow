@@ -26,6 +26,9 @@ export interface Task {
   updatedAt: string;
   category?: { id: string; name: string; color: string } | null;
   workspaceId?: string | null;
+  projectId?: string | null;
+  sectionId?: string | null;
+  position?: number;
   canEdit?: boolean;
   assignees?: TaskAssigneeUser[];
   user?: { id: string; name: string } | null;

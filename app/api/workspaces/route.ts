@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { workspaceSchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
+import {
+  DEFAULT_PROJECT_COLOR,
+  DEFAULT_PROJECT_DESCRIPTION,
+  DEFAULT_PROJECT_NAME,
+  DEFAULT_SECTION_NAME,
+} from "@/lib/project-sections";
 
 export async function GET() {
   try {
@@ -52,6 +58,15 @@ export async function POST(request: Request) {
       data: {
         name,
         members: { create: { userId: user.id, role: "OWNER" } },
+        projects: {
+          create: {
+            name: DEFAULT_PROJECT_NAME,
+            description: DEFAULT_PROJECT_DESCRIPTION,
+            color: DEFAULT_PROJECT_COLOR,
+            members: { create: { userId: user.id, role: "OWNER" } },
+            sections: { create: { name: DEFAULT_SECTION_NAME, position: 0 } },
+          },
+        },
       },
       include: { members: { include: { user: { select: { id: true, name: true } } } } },
     });

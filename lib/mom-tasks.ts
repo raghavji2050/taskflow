@@ -17,6 +17,7 @@ import { broadcastTaskEvent } from "@/lib/realtime";
 import { syncTaskAssignees } from "@/lib/task-assignees";
 import { canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
 import { runAutomationsForTrigger } from "@/lib/automations";
+import { resolveTaskPlacement } from "@/lib/projects";
 
 export type MomLinkedTaskSummary = {
   id: string;
@@ -60,6 +61,7 @@ type MomWriteContext = {
   canLinkDocument: boolean;
   documentWorkspaceId: string | null;
   position: { next: number | null };
+  placement: { projectId: string; sectionId: string; position: number } | null;
   workspaceName: string | undefined;
   workspaceNameLoaded: boolean;
   assignedRules: { id: string; name: string; action: string; config: string }[] | null;
@@ -90,15 +92,28 @@ async function createTaskFromActionItem(
     includeOwnerLine: !workspaceId || !ownerUserId,
   });
 
-  if (ctx.position.next == null) {
-    const maxPos = await prisma.task.aggregate({
-      where: workspaceId ? { workspaceId } : { userId, workspaceId: null },
-      _max: { position: true },
-    });
-    ctx.position.next = (maxPos._max.position ?? 0) + 1;
+  let projectId: string | null = null;
+  let sectionId: string | null = null;
+  let position: number;
+
+  if (workspaceId) {
+    const placement = ctx.placement ?? await resolveTaskPlacement({ workspaceId });
+    ctx.placement = placement;
+    projectId = placement.projectId;
+    sectionId = placement.sectionId;
+    position = placement.position;
+    placement.position += 1;
+  } else {
+    if (ctx.position.next == null) {
+      const maxPos = await prisma.task.aggregate({
+        where: { userId, workspaceId: null },
+        _max: { position: true },
+      });
+      ctx.position.next = (maxPos._max.position ?? 0) + 1;
+    }
+    position = ctx.position.next;
+    ctx.position.next += 1;
   }
-  const position = ctx.position.next;
-  ctx.position.next += 1;
 
   const task = await prisma.task.create({
     data: {
@@ -109,6 +124,8 @@ async function createTaskFromActionItem(
       completedAt: status === "COMPLETED" ? new Date() : null,
       dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
       workspaceId: workspaceId ?? null,
+      projectId,
+      sectionId,
       position,
       userId,
     },
@@ -218,6 +235,7 @@ export async function processMomActionItemsForDocument(params: {
     canLinkDocument: linkCtx.canEdit,
     documentWorkspaceId: linkCtx.workspaceId,
     position: { next: null },
+    placement: null,
     workspaceName: undefined,
     workspaceNameLoaded: false,
     assignedRules: null,

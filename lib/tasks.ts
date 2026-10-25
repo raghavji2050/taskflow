@@ -12,6 +12,8 @@ export const taskListInclude = {
   assignees: taskAssigneeInclude,
   user: { select: { id: true, name: true } },
   workspace: { select: { id: true, name: true } },
+  project: { select: { id: true, name: true, color: true } },
+  section: { select: { id: true, name: true } },
   _count: { select: { comments: true, attachments: true } },
 };
 

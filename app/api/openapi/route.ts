@@ -59,6 +59,37 @@ const spec = {
       get: { summary: "List workspaces", tags: ["Workspaces"] },
       post: { summary: "Create workspace", tags: ["Workspaces"] },
     },
+    "/api/workspaces/{id}/projects": {
+      get: { summary: "List projects in a workspace", tags: ["Projects"] },
+      post: { summary: "Create a project", tags: ["Projects"] },
+    },
+    "/api/projects/{id}": {
+      get: { summary: "Get a project with sections and tasks", tags: ["Projects"] },
+      patch: { summary: "Update a project", tags: ["Projects"] },
+      delete: { summary: "Delete a project", tags: ["Projects"] },
+    },
+    "/api/projects/{id}/sections": {
+      get: { summary: "List project sections", tags: ["Projects"] },
+      post: { summary: "Create a section", tags: ["Projects"] },
+    },
+    "/api/projects/{id}/sections/{sectionId}": {
+      patch: { summary: "Rename a section", tags: ["Projects"] },
+      delete: { summary: "Delete a section", tags: ["Projects"] },
+    },
+    "/api/projects/{id}/sections/reorder": {
+      put: { summary: "Reorder sections", tags: ["Projects"] },
+    },
+    "/api/projects/{id}/tasks/move": {
+      post: { summary: "Move or reorder a task within a project", tags: ["Projects"] },
+    },
+    "/api/projects/{id}/members": {
+      get: { summary: "List project members", tags: ["Projects"] },
+      post: { summary: "Add a project member", tags: ["Projects"] },
+    },
+    "/api/projects/{id}/members/{memberId}": {
+      patch: { summary: "Change a project member role", tags: ["Projects"] },
+      delete: { summary: "Remove a project member", tags: ["Projects"] },
+    },
     "/api/events": {
       get: { summary: "SSE real-time events", tags: ["Real-time"] },
     },

@@ -1,5 +1,11 @@
 import { PrismaClient, Priority, TaskStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import {
+  DEFAULT_PROJECT_COLOR,
+  DEFAULT_PROJECT_DESCRIPTION,
+  DEFAULT_PROJECT_NAME,
+  DEFAULT_SECTION_NAME,
+} from "../lib/project-sections";
 
 const prisma = new PrismaClient();
 
@@ -118,6 +124,15 @@ async function main() {
       data: {
         name: "Demo Team",
         members: { create: { userId: user.id, role: "OWNER" } },
+        projects: {
+          create: {
+            name: DEFAULT_PROJECT_NAME,
+            description: DEFAULT_PROJECT_DESCRIPTION,
+            color: DEFAULT_PROJECT_COLOR,
+            members: { create: { userId: user.id, role: "OWNER" } },
+            sections: { create: { name: DEFAULT_SECTION_NAME, position: 0 } },
+          },
+        },
       },
     });
   }

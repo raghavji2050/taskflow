@@ -26,6 +26,8 @@ export const taskSchema = z.object({
   assigneeIds: z.array(z.string()).default([]),
   primaryAssigneeId: z.string().optional().nullable(),
   workspaceId: z.string().optional().nullable(),
+  projectId: z.string().optional().nullable(),
+  sectionId: z.string().optional().nullable(),
   recurrenceRule: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional().nullable(),
   tagIds: z.array(z.string()).optional(),
   position: z.number().int().optional(),
@@ -42,6 +44,8 @@ export const taskQuerySchema = z.object({
   categoryId: z.string().optional(),
   tagId: z.string().optional(),
   workspaceId: z.string().optional(),
+  projectId: z.string().optional(),
+  sectionId: z.string().optional(),
   assignee: z.enum(["all", "me", "unassigned"]).optional().default("all"),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(10),
@@ -168,6 +172,47 @@ export const resetPasswordSchema = z.object({
 
 export const workspaceSchema = z.object({
   name: z.string().trim().min(1, "Workspace name is required").max(100),
+});
+
+export const projectColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Color must be a hex value");
+
+export const projectSchema = z.object({
+  name: z.string().trim().min(1, "Project name is required").max(100),
+  description: z.string().trim().max(2000).optional().nullable(),
+  color: projectColorSchema.optional(),
+});
+
+export const projectUpdateSchema = projectSchema.partial().extend({
+  archived: z.boolean().optional(),
+});
+
+export const projectSectionSchema = z.object({
+  name: z.string().trim().min(1, "Section name is required").max(80),
+});
+
+export const projectSectionReorderSchema = z.object({
+  sectionIds: z.array(z.string().min(1)).min(1),
+});
+
+export const projectTaskMoveSchema = z.object({
+  taskId: z.string().min(1),
+  sectionId: z.string().min(1),
+  position: z.number().int().min(0),
+});
+
+export const projectRoleSchema = z.enum(["OWNER", "ADMIN", "MEMBER", "VIEWER"]);
+
+export const projectMemberSchema = z.object({
+  userId: z.string().min(1),
+  role: projectRoleSchema.optional().default("MEMBER"),
+});
+
+export const projectMemberUpdateSchema = z.object({
+  role: projectRoleSchema,
+});
+
+export const projectListQuerySchema = z.object({
+  archived: z.enum(["true", "false", "all"]).optional().default("false"),
 });
 
 export const bulkTaskSchema = z.object({

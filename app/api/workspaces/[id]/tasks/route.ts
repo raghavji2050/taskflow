@@ -5,6 +5,7 @@ import { canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
 import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { taskListInclude } from "@/lib/tasks";
 import { taskSchema } from "@/lib/validations";
+import { placementForNewTask } from "@/lib/projects";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -55,6 +56,13 @@ export async function POST(request: Request, context: RouteContext) {
     const data = taskSchema.parse(await request.json());
     const { assigneeIds, primaryAssigneeId, tagIds, ...taskData } = data;
 
+    const placement = await placementForNewTask({
+      userId: user.id,
+      workspaceId: id,
+      projectId: taskData.projectId,
+      sectionId: taskData.sectionId,
+    });
+
     const task = await prisma.task.create({
       data: {
         title: taskData.title,
@@ -63,6 +71,9 @@ export async function POST(request: Request, context: RouteContext) {
         status: taskData.status ?? "PENDING",
         dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
         workspaceId: id,
+        projectId: placement.projectId,
+        sectionId: placement.sectionId,
+        position: placement.position,
         userId: user.id,
         tags: tagIds?.length ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,
       },
