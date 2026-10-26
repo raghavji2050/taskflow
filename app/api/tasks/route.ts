@@ -11,6 +11,7 @@ import { getDailyUpdatesByCategory } from "@/lib/daily-update";
 import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { runAutomationsForTrigger } from "@/lib/automations";
 import { taskListInclude } from "@/lib/tasks";
+import { placementForNewTask, requireProjectAccess } from "@/lib/projects";
 
 function applyAssigneeFilter(
   where: Prisma.TaskWhereInput,
@@ -42,6 +43,8 @@ export async function GET(request: Request) {
       categoryId: searchParams.get("categoryId") ?? undefined,
       tagId: searchParams.get("tagId") ?? undefined,
       workspaceId: searchParams.get("workspaceId") ?? undefined,
+      projectId: searchParams.get("projectId") ?? undefined,
+      sectionId: searchParams.get("sectionId") ?? undefined,
       assignee: searchParams.get("assignee") ?? undefined,
       page: searchParams.get("page") ?? undefined,
       limit: searchParams.get("limit") ?? undefined,
@@ -49,7 +52,13 @@ export async function GET(request: Request) {
 
     let where: Prisma.TaskWhereInput;
 
-    if (query.workspaceId) {
+    if (query.projectId) {
+      const access = await requireProjectAccess(user.id, query.projectId);
+      if (query.workspaceId && query.workspaceId !== access.project.workspaceId) {
+        return NextResponse.json({ error: "Project is not in this workspace" }, { status: 400 });
+      }
+      where = { projectId: query.projectId };
+    } else if (query.workspaceId) {
       if (!(await isWorkspaceMember(user.id, query.workspaceId))) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
@@ -57,6 +66,8 @@ export async function GET(request: Request) {
     } else {
       where = { userId: user.id, workspaceId: null };
     }
+
+    if (query.sectionId) where.sectionId = query.sectionId;
 
     if (query.archived === "true") where.archived = true;
     else if (query.archived === "false") where.archived = false;
@@ -161,12 +172,27 @@ export async function POST(request: Request) {
       }
     }
 
-    const maxPos = await prisma.task.aggregate({
-      where: taskData.workspaceId
-        ? { workspaceId: taskData.workspaceId }
-        : { userId: user.id, workspaceId: null },
-      _max: { position: true },
-    });
+    let position: number;
+    let projectId: string | null = null;
+    let sectionId: string | null = null;
+
+    if (taskData.workspaceId) {
+      const placement = await placementForNewTask({
+        userId: user.id,
+        workspaceId: taskData.workspaceId,
+        projectId: taskData.projectId,
+        sectionId: taskData.sectionId,
+      });
+      projectId = placement.projectId;
+      sectionId = placement.sectionId;
+      position = placement.position;
+    } else {
+      const maxPos = await prisma.task.aggregate({
+        where: { userId: user.id, workspaceId: null },
+        _max: { position: true },
+      });
+      position = (maxPos._max.position ?? 0) + 1;
+    }
 
     const task = await prisma.task.create({
       data: {
@@ -179,9 +205,11 @@ export async function POST(request: Request) {
         categoryId: taskData.categoryId || null,
         boardColumnId: taskData.boardColumnId ?? null,
         workspaceId: taskData.workspaceId || null,
+        projectId,
+        sectionId,
         recurrenceRule: taskData.recurrenceRule || null,
         estimatedMinutes: taskData.estimatedMinutes ?? null,
-        position: (maxPos._max.position ?? 0) + 1,
+        position,
         userId: user.id,
         tags: tagIds?.length ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,
       },

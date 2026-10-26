@@ -28,6 +28,7 @@ import {
   MessageSquare,
   BookOpen,
   Users,
+  FolderKanban,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -102,6 +103,12 @@ const collaborateNavItems: NavItem[] = [
 ];
 
 const workspaceNavItems: NavItem[] = [
+  {
+    href: "/dashboard/projects",
+    label: "Projects",
+    icon: FolderKanban,
+    match: (p) => p.startsWith("/dashboard/projects"),
+  },
   {
     href: "/dashboard/team",
     label: "Team",

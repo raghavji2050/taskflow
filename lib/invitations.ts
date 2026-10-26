@@ -149,6 +149,9 @@ export async function acceptInvitation(invitationId: string, userId: string) {
   const { addUserToWorkspaceChannel } = await import("@/lib/conversations");
   await addUserToWorkspaceChannel(invitation.workspaceId, userId);
 
+  const { addUserToDefaultProject } = await import("@/lib/projects");
+  await addUserToDefaultProject(invitation.workspaceId, userId, "MEMBER");
+
   await createNotification({
     userId: invitation.inviterId,
     title: "Invitation accepted",

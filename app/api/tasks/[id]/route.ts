@@ -10,6 +10,7 @@ import { completedAtForStatusChange } from "@/lib/auto-archive";
 import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { runAutomationsForTrigger } from "@/lib/automations";
 import { taskDetailInclude } from "@/lib/tasks";
+import { nextSectionPosition, projectFieldsForTaskUpdate } from "@/lib/projects";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -61,6 +62,14 @@ export async function PUT(request: Request, context: RouteContext) {
 
     const completedAt = completedAtForStatusChange(taskData.status, existing.status);
     const statusChanged = taskData.status !== existing.status;
+    const projectFields = await projectFieldsForTaskUpdate({
+      userId: user.id,
+      workspaceId: existing.workspaceId,
+      currentProjectId: existing.projectId,
+      currentSectionId: existing.sectionId,
+      projectId: taskData.projectId,
+      sectionId: taskData.sectionId,
+    });
 
     await prisma.task.update({
       where: { id },
@@ -75,6 +84,7 @@ export async function PUT(request: Request, context: RouteContext) {
         recurrenceRule: taskData.recurrenceRule || null,
         estimatedMinutes: taskData.estimatedMinutes ?? null,
         position: taskData.position,
+        ...(projectFields ?? {}),
         ...(completedAt !== undefined && { completedAt }),
       },
     });
@@ -131,7 +141,9 @@ export async function PUT(request: Request, context: RouteContext) {
           categoryId: task.categoryId,
           userId: user.id,
           workspaceId: task.workspaceId,
-          position: task.position + 1,
+          projectId: task.projectId,
+          sectionId: task.sectionId,
+          position: task.sectionId ? await nextSectionPosition(task.sectionId) : task.position + 1,
         },
       });
     }

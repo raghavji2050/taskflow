@@ -2,12 +2,17 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ProjectError } from "@/lib/project-sections";
 
 export function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
 export function handleApiError(error: unknown) {
+  if (error instanceof ProjectError) {
+    return jsonError(error.message, error.status);
+  }
+
   if (error instanceof ZodError) {
     return NextResponse.json(
       { error: error.issues[0]?.message ?? "Validation failed" },
