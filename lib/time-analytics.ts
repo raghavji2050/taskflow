@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveTimeRange, type TimeRangePreset } from "@/lib/time-format";
+import { visibleTaskSql, visibleTaskWhere } from "@/lib/visible-records";
 
 function buildDateFilter(from: Date | null, to: Date | null): Prisma.TimeEntryWhereInput {
   if (!from && !to) return {};
@@ -36,7 +37,7 @@ async function sumDurationWindows(extra: Prisma.Sql): Promise<WindowSums> {
       COALESCE(SUM(CASE WHEN te.startTime >= ${month.from} AND te.startTime <= ${month.to} THEN te.duration ELSE 0 END), 0) AS month
     FROM TimeEntry te
     INNER JOIN Task t ON t.id = te.taskId
-    WHERE te.isRunning = 0 AND ${extra}
+    WHERE te.isRunning = 0 AND ${visibleTaskSql("t")} AND ${extra}
   `;
   const row = rows[0];
   return {
@@ -150,6 +151,7 @@ export async function getTaskTrackedTime(taskId: string) {
     FROM Task t
     LEFT JOIN TimeEntry te ON te.taskId = t.id AND te.isRunning = 0
     WHERE t.id = ${taskId}
+      AND ${visibleTaskSql("t")}
     GROUP BY t.id, t.estimatedMinutes
   `;
   const row = rows[0];
@@ -177,7 +179,7 @@ export async function getWorkspaceTrackedTime(workspaceId: string) {
 }
 
 export function personalTaskFilter(userId: string): Prisma.TimeEntryWhereInput {
-  return { task: { userId, workspaceId: null } };
+  return { task: visibleTaskWhere({ userId, workspaceId: null }) };
 }
 
 export async function getPersonalTrackedTime(userId: string) {
@@ -303,7 +305,7 @@ export async function getProductivityTrend(
 ) {
   const range = from && to ? { from, to } : resolveTimeRange("month");
   const entries = await loadTrendEntries({
-    task: { workspaceId },
+    task: visibleTaskWhere({ workspaceId }),
     isRunning: false,
     ...buildDateFilter(range.from, range.to),
   });
@@ -320,7 +322,7 @@ export async function getWorkspaceReport(
   }
 ) {
   const where: Prisma.TimeEntryWhereInput = {
-    task: { workspaceId },
+    task: visibleTaskWhere({ workspaceId }),
     isRunning: false,
     ...buildDateFilter(filters.from ?? null, filters.to ?? null),
   };
@@ -385,11 +387,11 @@ export async function getWorkspaceReport(
     filters.from && filters.to ? { from: filters.from, to: filters.to } : resolveTimeRange("month");
   const [trendEntries, byTask] = await Promise.all([
     loadTrendEntries({
-      task: { workspaceId },
+      task: visibleTaskWhere({ workspaceId }),
       isRunning: false,
       ...buildDateFilter(trendRange.from, trendRange.to),
     }),
-    enrichReportTaskAggs(byTaskMap, { task: { workspaceId } }),
+    enrichReportTaskAggs(byTaskMap, { task: visibleTaskWhere({ workspaceId }) }),
   ]);
   const trendDaily = bucketTrend(trendEntries, "daily");
   const trendWeekly = bucketTrend(trendEntries, "weekly");

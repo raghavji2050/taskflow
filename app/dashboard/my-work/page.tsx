@@ -108,7 +108,7 @@ export default function MyWorkPage() {
     setIsDeleting(true);
     const res = await fetch(`/api/tasks/${deletingTask.id}`, { method: "DELETE" });
     if (res.ok) {
-      toast.success("Task deleted");
+      toast.success("Moved to Trash");
       setDeletingTask(null);
       await load();
     } else {

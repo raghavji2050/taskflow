@@ -1,5 +1,6 @@
 import type { Priority, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { visibleTaskWhere } from "@/lib/visible-records";
 import { logTaskActivity } from "@/lib/activity";
 import { getDocumentLinkContext, linkDocumentToTasks } from "@/lib/documents";
 import { canEditMeetingMinutes } from "@/lib/meeting-minutes";
@@ -106,7 +107,7 @@ async function createTaskFromActionItem(
   } else {
     if (ctx.position.next == null) {
       const maxPos = await prisma.task.aggregate({
-        where: { userId, workspaceId: null },
+        where: visibleTaskWhere({ userId, workspaceId: null }),
         _max: { position: true },
       });
       ctx.position.next = (maxPos._max.position ?? 0) + 1;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 export async function GET() {
   try {
@@ -17,7 +18,7 @@ export async function GET() {
         email: true,
         role: true,
         createdAt: true,
-        _count: { select: { tasks: true } },
+        _count: { select: { tasks: { where: visibleTaskWhere() } } },
       },
       orderBy: { createdAt: "desc" },
     });

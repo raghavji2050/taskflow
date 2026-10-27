@@ -5,6 +5,7 @@ import { sendEmail, digestEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
 import { archiveStaleCompletedTasks } from "@/lib/auto-archive";
 import { runOverdueAutomations, runDueDateApproachingAutomations } from "@/lib/automations";
+import { visibleTaskSql, visibleTaskWhere } from "@/lib/visible-records";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
   await runDueDateApproachingAutomations();
 
   const dueReminders = await prisma.reminder.findMany({
-    where: { remindAt: { lte: now }, sent: false },
+    where: { remindAt: { lte: now }, sent: false, task: visibleTaskWhere() },
     include: { task: { include: { user: true } } },
   });
 
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
 
   const pendingGroups = await prisma.task.groupBy({
     by: ["userId"],
-    where: { status: { not: "COMPLETED" }, archived: false },
+    where: visibleTaskWhere({ status: { not: "COMPLETED" }, archived: false }),
     _count: { _all: true },
   });
 
@@ -73,6 +74,7 @@ export async function GET(request: Request) {
             AND dueDate IS NOT NULL
             AND dueDate < ${now}
             AND userId IN (${Prisma.join(userIds)})
+            AND ${visibleTaskSql("Task")}
         ) ranked
         WHERE rn <= 5
       `,

@@ -29,7 +29,7 @@ const spec = {
       get: { summary: "Get task", tags: ["Tasks"] },
       put: { summary: "Update task", tags: ["Tasks"] },
       patch: { summary: "Archive/unarchive task", tags: ["Tasks"] },
-      delete: { summary: "Delete task", tags: ["Tasks"] },
+      delete: { summary: "Move task to Trash", tags: ["Tasks"] },
     },
     "/api/tasks/bulk": {
       post: { summary: "Bulk complete/archive/delete", tags: ["Tasks"] },
@@ -66,7 +66,15 @@ const spec = {
     "/api/projects/{id}": {
       get: { summary: "Get a project with sections and tasks", tags: ["Projects"] },
       patch: { summary: "Update a project", tags: ["Projects"] },
-      delete: { summary: "Delete a project", tags: ["Projects"] },
+      delete: { summary: "Move a project to Trash", tags: ["Projects"] },
+    },
+    "/api/trash": {
+      get: { summary: "List personal Trash", tags: ["Trash"] },
+      post: { summary: "Restore or permanently delete a personal trashed task", tags: ["Trash"] },
+    },
+    "/api/workspaces/{id}/trash": {
+      get: { summary: "List Trash for a workspace", tags: ["Trash"] },
+      post: { summary: "Restore or permanently delete a trashed task or project", tags: ["Trash"] },
     },
     "/api/projects/{id}/sections": {
       get: { summary: "List project sections", tags: ["Projects"] },

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { workspaceSchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
+import { visibleTaskWhere } from "@/lib/visible-records";
 import {
   DEFAULT_PROJECT_COLOR,
   DEFAULT_PROJECT_DESCRIPTION,
@@ -21,7 +22,7 @@ export async function GET() {
           include: { user: { select: { id: true, name: true, email: true } } },
           orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
         },
-        _count: { select: { tasks: true } },
+        _count: { select: { tasks: { where: visibleTaskWhere() } } },
       },
       orderBy: [{ archivedAt: "asc" }, { name: "asc" }],
     });

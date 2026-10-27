@@ -179,6 +179,7 @@ model Task {
   dueDate        DateTime?
   completedAt    DateTime?
   archived       Boolean    @default(false)
+  deletedAt      DateTime?
   position       Int        @default(0)
   recurrenceRule   String?
   estimatedMinutes Int?
@@ -212,6 +213,8 @@ model Task {
   @@index([priority])
   @@index([dueDate])
   @@index([archived])
+  @@index([deletedAt])
+  @@index([workspaceId, deletedAt])
   @@index([categoryId])
   @@index([boardColumnId])
   @@index([workspaceId])
@@ -427,6 +430,7 @@ model Project {
   description String?  @db.Text
   color       String   @default("#6366f1")
   archived    Boolean  @default(false)
+  deletedAt   DateTime?
   workspaceId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -438,6 +442,8 @@ model Project {
 
   @@index([workspaceId])
   @@index([workspaceId, archived])
+  @@index([deletedAt])
+  @@index([workspaceId, deletedAt])
 }
 
 model ProjectMember {

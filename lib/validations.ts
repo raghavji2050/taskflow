@@ -220,6 +220,12 @@ export const bulkTaskSchema = z.object({
   action: z.enum(["complete", "archive", "delete", "pending"]),
 });
 
+export const trashActionSchema = z.object({
+  action: z.enum(["restore", "purge"]),
+  kind: z.enum(["task", "project"]),
+  id: z.string().min(1),
+});
+
 export const documentTypeSchema = z.enum(["DOC", "SOP", "MEETING_NOTES", "NOTE"]);
 
 export const documentSchema = z.object({

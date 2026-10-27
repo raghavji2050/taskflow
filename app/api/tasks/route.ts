@@ -12,6 +12,7 @@ import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { runAutomationsForTrigger } from "@/lib/automations";
 import { taskListInclude } from "@/lib/tasks";
 import { placementForNewTask, requireProjectAccess } from "@/lib/projects";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 function applyAssigneeFilter(
   where: Prisma.TaskWhereInput,
@@ -97,7 +98,8 @@ export async function GET(request: Request) {
     else orderBy.push({ dueDate: query.order });
 
     const skip = (query.page - 1) * query.limit;
-    const statsWhere = { ...where, archived: false };
+    const statsWhere = visibleTaskWhere({ ...where, archived: false });
+    where = visibleTaskWhere(where);
 
     const [tasks, filteredTotal, breakdown, recentTasks, dailyUpdates] = await Promise.all([
       prisma.task.findMany({ where, orderBy, skip, take: query.limit, include: taskListInclude }),
@@ -188,7 +190,7 @@ export async function POST(request: Request) {
       position = placement.position;
     } else {
       const maxPos = await prisma.task.aggregate({
-        where: { userId: user.id, workspaceId: null },
+        where: visibleTaskWhere({ userId: user.id, workspaceId: null }),
         _max: { position: true },
       });
       position = (maxPos._max.position ?? 0) + 1;

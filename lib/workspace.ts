@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { visibleTaskWhere } from "@/lib/visible-records";
 import { canEditWorkspaceTasks } from "@/lib/workspace-permissions";
 
 export { canEditWorkspaceTasks } from "@/lib/workspace-permissions";
@@ -36,21 +37,21 @@ export async function getWorkspaceMembershipIncludingArchived(
 
 export async function canAccessTask(userId: string, taskId: string) {
   const task = await prisma.task.findFirst({
-    where: {
+    where: visibleTaskWhere({
       id: taskId,
       OR: [
         { userId },
         { assignees: { some: { userId } } },
         { workspace: { members: { some: { userId } } } },
       ],
-    },
+    }),
   });
   return task;
 }
 
 export async function canEditTask(userId: string, taskId: string) {
   const task = await prisma.task.findFirst({
-    where: { id: taskId },
+    where: visibleTaskWhere({ id: taskId }),
     select: { userId: true, workspaceId: true },
   });
   if (!task) return false;

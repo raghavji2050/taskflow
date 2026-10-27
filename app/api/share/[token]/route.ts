@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
@@ -13,7 +14,7 @@ export async function GET(_request: Request, context: RouteContext) {
     },
     include: {
       tasks: {
-        where: { archived: false },
+        where: visibleTaskWhere({ archived: false }),
         orderBy: { dueDate: "asc" },
         select: {
           id: true,

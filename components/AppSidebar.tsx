@@ -29,6 +29,7 @@ import {
   BookOpen,
   Users,
   FolderKanban,
+  Trash2,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -102,6 +103,13 @@ const collaborateNavItems: NavItem[] = [
   },
 ];
 
+const trashNavItem: NavItem = {
+  href: "/dashboard/trash",
+  label: "Trash",
+  icon: Trash2,
+  match: (p) => p.startsWith("/dashboard/trash"),
+};
+
 const workspaceNavItems: NavItem[] = [
   {
     href: "/dashboard/projects",
@@ -115,6 +123,7 @@ const workspaceNavItems: NavItem[] = [
     icon: Users,
     match: (p) => p.startsWith("/dashboard/team"),
   },
+  trashNavItem,
 ];
 
 function SidebarUserMenu({ collapsed }: { collapsed?: boolean }) {
@@ -243,7 +252,7 @@ function SidebarContent({
   const { isPersonal } = useWorkspace();
 
   const sections = [
-    { label: "Tasks", items: taskNavItems },
+    { label: "Tasks", items: isPersonal ? [...taskNavItems, trashNavItem] : taskNavItems },
     ...(isPersonal ? [] : [{ label: "Workspace", items: workspaceNavItems }]),
     { label: "Collaboration", items: collaborateNavItems },
   ];

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { taskListInclude } from "@/lib/tasks";
+import { visibleTaskWhere } from "@/lib/visible-records";
 import { canEditWorkspaceTasks } from "@/lib/workspace-permissions";
 import type { WorkspaceRole } from "@prisma/client";
 
@@ -34,10 +35,10 @@ export async function GET() {
 
     const [assignedRaw, overdueRaw] = await Promise.all([
       prisma.task.findMany({
-        where: {
+        where: visibleTaskWhere({
           archived: false,
           assignees: { some: { userId: user.id } },
-        },
+        }),
         include: {
           ...taskListInclude,
           workspace: { select: { id: true, name: true } },
@@ -46,12 +47,12 @@ export async function GET() {
         take: 100,
       }),
       prisma.task.findMany({
-        where: {
+        where: visibleTaskWhere({
           archived: false,
           status: { not: "COMPLETED" },
           dueDate: { lt: now },
           assignees: { some: { userId: user.id } },
-        },
+        }),
         include: taskListInclude,
         orderBy: { dueDate: "asc" },
         take: 20,

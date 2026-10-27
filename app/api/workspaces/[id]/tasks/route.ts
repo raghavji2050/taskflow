@@ -6,6 +6,7 @@ import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { taskListInclude } from "@/lib/tasks";
 import { taskSchema } from "@/lib/validations";
 import { placementForNewTask } from "@/lib/projects";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -30,7 +31,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     const tasks = await prisma.task.findMany({
-      where: { workspaceId: id, archived: false },
+      where: visibleTaskWhere({ workspaceId: id, archived: false }),
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
       include: taskListInclude,
     });

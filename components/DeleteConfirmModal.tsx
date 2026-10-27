@@ -26,7 +26,7 @@ export function DeleteConfirmModal({
         <span className="font-medium text-zinc-900 dark:text-zinc-100">
           {task?.title}
         </span>
-        ? This action cannot be undone.
+        ? It moves to Trash for 30 days, where you can restore it.
       </p>
       <div className="mt-6 flex justify-end gap-3">
         <Button variant="secondary" onClick={onClose} disabled={isDeleting}>
