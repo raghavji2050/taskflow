@@ -33,6 +33,14 @@ import { useActiveTimer } from "@/lib/useActiveTimer";
 import { useOpenTaskListener } from "@/lib/open-task-event";
 import { useTasksRefreshListener } from "@/lib/tasks-refresh-event";
 import { useTimeRealtime } from "@/lib/useTimeRealtime";
+import {
+  applyOptimisticTaskChange,
+  confirmOptimisticSave,
+  createOptimisticTaskId,
+  optimisticTaskFromInput,
+  type OptimisticListFilters,
+  type TaskBoardState,
+} from "@/lib/dashboard-task-list";
 
 const defaultFilters: TaskFiltersState = {
   search: "", status: "ALL", priority: "ALL", sort: "dueDate", order: "asc",
@@ -70,14 +78,42 @@ export function DashboardClient({ userName }: DashboardClientProps) {
   const [categoryRefreshKey, setCategoryRefreshKey] = useState(0);
   const [boardListsKey, setBoardListsKey] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const fetchGen = useRef(0);
+  const boardRef = useRef<TaskBoardState>({ tasks, recentTasks, stats });
+  boardRef.current = { tasks, recentTasks, stats };
+
+  const commitBoard = (next: TaskBoardState) => {
+    boardRef.current = next;
+    setTasks(next.tasks);
+    setRecentTasks(next.recentTasks);
+    setStats(next.stats);
+  };
+
+  const listFilters = (
+    currentFilters: TaskFiltersState,
+    catId: string | null
+  ): OptimisticListFilters => ({
+    search: currentFilters.search,
+    status: currentFilters.status,
+    priority: currentFilters.priority,
+    archived: currentFilters.archived,
+    categoryId: catId || currentFilters.categoryId,
+  });
+
+  const invalidateTaskFetches = () => {
+    fetchGen.current += 1;
+    setIsLoading(false);
+  };
 
   const fetchTasks = useCallback(async (
     currentFilters: TaskFiltersState,
     currentPage: number,
     catId: string | null,
     wsId: string | null,
-    silent = false
+    silent = false,
+    reportErrors = true
   ) => {
+    const gen = ++fetchGen.current;
     if (!silent) setIsLoading(true);
     try {
       const params = new URLSearchParams();
@@ -97,18 +133,26 @@ export function DashboardClient({ userName }: DashboardClientProps) {
 
       const response = await fetch(`/api/tasks?${params.toString()}`);
       const data = await response.json();
+      if (gen !== fetchGen.current) return;
       if (!response.ok) throw new Error(data.error || "Failed to fetch tasks");
 
-      setTasks(data.tasks);
-      setStats(data.stats);
-      setRecentTasks(data.stats.recentTasks);
+      const nextBoard: TaskBoardState = {
+        tasks: data.tasks,
+        recentTasks: data.stats.recentTasks ?? [],
+        stats: data.stats,
+      };
+      boardRef.current = nextBoard;
+      setTasks(nextBoard.tasks);
+      setStats(nextBoard.stats);
+      setRecentTasks(nextBoard.recentTasks);
       setDailyUpdates(data.stats.dailyUpdates ?? []);
       setTotalPages(data.pagination?.totalPages ?? 1);
       if (!wsId) setCategoryRefreshKey((k) => k + 1);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load tasks");
+      if (gen !== fetchGen.current) return;
+      if (reportErrors) toast.error(error instanceof Error ? error.message : "Failed to load tasks");
     } finally {
-      if (!silent) setIsLoading(false);
+      if (gen === fetchGen.current) setIsLoading(false);
     }
   }, []);
 
@@ -160,20 +204,37 @@ export function DashboardClient({ userName }: DashboardClientProps) {
 
   const handleCreateOrUpdate = async (formData: TaskInput, options?: TaskFormSubmitOptions) => {
     setIsSubmitting(true);
+    const previousTask = editingTask;
+    const snapshot = boardRef.current;
+    const tempId = previousTask?.id ?? createOptimisticTaskId();
+    const payload = withWorkspace(formData);
+    const optimistic = optimisticTaskFromInput(payload, tempId, previousTask);
+    const filtersNow = listFilters(filters, categoryId);
+    invalidateTaskFetches();
+    commitBoard(
+      applyOptimisticTaskChange(
+        snapshot,
+        previousTask
+          ? { type: "update", previous: previousTask, task: optimistic }
+          : { type: "create", task: optimistic },
+        filtersNow
+      )
+    );
     try {
-      const payload = withWorkspace(formData);
-      await saveTaskWithOptionalTimer(payload, editingTask?.id ?? null, options);
-      if (!editingTask && options?.startTimer) {
+      const saved = await saveTaskWithOptionalTimer(payload, previousTask?.id ?? null, options);
+      commitBoard(confirmOptimisticSave(boardRef.current, tempId, saved, filtersNow));
+      if (!previousTask && options?.startTimer) {
         dispatchTasksRefresh();
         void refreshActiveTimer();
         toast.success("Task created and timer started");
       } else {
-        toast.success(editingTask ? "Task updated" : "Task created");
+        toast.success(previousTask ? "Task updated" : "Task created");
       }
       setIsFormOpen(false);
       setEditingTask(null);
-      await fetchTasks(filters, page, categoryId, selectedWorkspaceId);
+      void fetchTasks(filters, page, categoryId, selectedWorkspaceId, true, false);
     } catch (error) {
+      commitBoard(snapshot);
       toast.error(error instanceof Error ? error.message : "Failed to save task");
     } finally {
       setIsSubmitting(false);
@@ -182,43 +243,74 @@ export function DashboardClient({ userName }: DashboardClientProps) {
 
   const handleDelete = async () => {
     if (!deletingTask) return;
+    const removed = deletingTask;
+    const snapshot = boardRef.current;
     setIsDeleting(true);
+    setDeletingTask(null);
+    invalidateTaskFetches();
+    commitBoard(
+      applyOptimisticTaskChange(snapshot, { type: "delete", task: removed }, listFilters(filters, categoryId))
+    );
     try {
-      const response = await fetch(`/api/tasks/${deletingTask.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/tasks/${removed.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error((await response.json()).error);
       toast.success("Moved to Trash");
-      setDeletingTask(null);
-      await fetchTasks(filters, page, categoryId, selectedWorkspaceId);
+      void fetchTasks(filters, page, categoryId, selectedWorkspaceId, true, false);
     } catch (error) {
+      commitBoard(snapshot);
+      setDeletingTask(removed);
       toast.error(error instanceof Error ? error.message : "Failed to delete");
     } finally { setIsDeleting(false); }
   };
 
   const handleArchive = async (task: Task) => {
-    const response = await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ archived: !task.archived }),
-    });
-    if (response.ok) {
+    const snapshot = boardRef.current;
+    const optimistic = { ...task, archived: !task.archived, updatedAt: new Date().toISOString() };
+    const filtersNow = listFilters(filters, categoryId);
+    invalidateTaskFetches();
+    commitBoard(
+      applyOptimisticTaskChange(snapshot, { type: "update", previous: task, task: optimistic }, filtersNow)
+    );
+    try {
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: !task.archived }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Failed to update");
+      if (data.task) commitBoard(confirmOptimisticSave(boardRef.current, task.id, data.task, filtersNow));
       toast.success(task.archived ? "Task restored" : "Task archived");
-      await fetchTasks(filters, page, categoryId, selectedWorkspaceId);
+      void fetchTasks(filters, page, categoryId, selectedWorkspaceId, true, false);
+    } catch (error) {
+      commitBoard(snapshot);
+      toast.error(error instanceof Error ? error.message : "Failed to update");
     }
   };
 
   const handleToggleStatus = async (task: Task) => {
-    const nextStatus =
+    const nextStatus: Task["status"] =
       task.status === "PENDING" ? "IN_PROGRESS" : task.status === "IN_PROGRESS" ? "COMPLETED" : "PENDING";
+    const snapshot = boardRef.current;
+    const optimistic = { ...task, status: nextStatus, updatedAt: new Date().toISOString() };
+    const filtersNow = listFilters(filters, categoryId);
     setUpdatingTaskId(task.id);
+    invalidateTaskFetches();
+    commitBoard(
+      applyOptimisticTaskChange(snapshot, { type: "update", previous: task, task: optimistic }, filtersNow)
+    );
     try {
       const response = await fetch(`/api/tasks/${task.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(withWorkspace(toTaskInput(task, { status: nextStatus }))),
       });
-      if (!response.ok) throw new Error((await response.json()).error);
-      await fetchTasks(filters, page, categoryId, selectedWorkspaceId);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Failed to update");
+      if (data.task) commitBoard(confirmOptimisticSave(boardRef.current, task.id, data.task, filtersNow));
+      void fetchTasks(filters, page, categoryId, selectedWorkspaceId, true, false);
     } catch (error) {
+      commitBoard(snapshot);
       toast.error(error instanceof Error ? error.message : "Failed to update");
     } finally { setUpdatingTaskId(null); }
   };

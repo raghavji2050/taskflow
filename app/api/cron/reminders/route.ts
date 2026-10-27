@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   }
 
   const now = new Date();
+  // Archive yesterday's completed tasks here (daily cron), not on GET /api/tasks.
   const archivedCount = await archiveStaleCompletedTasks();
   await runOverdueAutomations();
   await runDueDateApproachingAutomations();

@@ -3,7 +3,7 @@ import { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { visibleTaskWhere } from "@/lib/visible-records";
 
-/** Archive completed tasks from before today (visible on completion day only). */
+/** Archive completed tasks from before today (visible on completion day only). Run from the daily reminders cron. */
 export async function archiveStaleCompletedTasks() {
   const startOfToday = startOfDay(new Date());
 

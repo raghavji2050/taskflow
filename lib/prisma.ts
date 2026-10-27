@@ -1,16 +1,30 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 500;
+/**
+ * One extra attempt after a dropped connection. A longer chain (and any retry
+ * of a timeout that already blocked) turns a single slow query into a multi-second stall.
+ */
+const MAX_RETRIES = 1;
+const RETRY_DELAY_MS = 200;
+/** Seconds. Caps the old 300s default so a new handshake cannot park a request. */
+const CONNECT_TIMEOUT_SECONDS = 10;
+const POOL_TIMEOUT_SECONDS = 10;
+const CONNECTION_LIMIT = 5;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Transient connection failures common on Railway free (sleep / cold start / dropped TCP). */
-function isRetryablePrismaError(error: unknown): boolean {
+const RETRYABLE_CODES = new Set(["P1001", "P1017"]);
+
+/**
+ * Retry dropped connections only. Operation timeouts (P1008), connect timeouts
+ * (P1002), and pool timeouts (P2024) have already waited — retrying them stacks
+ * that wait onto an ordinary request.
+ */
+export function isRetryablePrismaError(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    return ["P1001", "P1002", "P1008", "P1017", "P2024"].includes(error.code);
+    return RETRYABLE_CODES.has(error.code);
   }
   if (error instanceof Prisma.PrismaClientInitializationError) {
     return true;
@@ -22,12 +36,12 @@ function isRetryablePrismaError(error: unknown): boolean {
       : typeof error === "string"
         ? error
         : "";
-  return /can'?t reach database|connection (timed out|reset|refused|lost)|server has gone away|econnreset|etimedout|econnrefused|socket hang up|too many connections/i.test(
+  return /can'?t reach database|connection (reset|refused|lost)|server has gone away|econnreset|econnrefused|socket hang up/i.test(
     message
   );
 }
 
-async function withPrismaRetry<T>(operation: () => Promise<T>): Promise<T> {
+export async function withPrismaRetry<T>(operation: () => Promise<T>): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -37,31 +51,49 @@ async function withPrismaRetry<T>(operation: () => Promise<T>): Promise<T> {
       if (attempt === MAX_RETRIES || !isRetryablePrismaError(error)) {
         throw error;
       }
-      const delay = BASE_DELAY_MS * 2 ** attempt;
       console.warn(
-        `[prisma] connection error — retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`,
+        `[prisma] connection error — retry ${attempt + 1}/${MAX_RETRIES} in ${RETRY_DELAY_MS}ms`,
         error instanceof Error ? error.message : error
       );
-      await sleep(delay);
+      await sleep(RETRY_DELAY_MS);
     }
   }
   throw lastError;
 }
 
-/** Prefer a longer connect timeout and a small pool for hosted DBs. */
+function upsertQueryParam(
+  url: string,
+  key: string,
+  value: string,
+  mode: "set-if-missing" | "cap"
+): string {
+  const pattern = new RegExp(`([?&])${key}=([^&]*)`, "i");
+  const match = url.match(pattern);
+  if (!match) {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}${key}=${value}`;
+  }
+  if (mode === "set-if-missing") return url;
+  const current = Number(match[2]);
+  if (Number.isFinite(current) && current <= Number(value)) return url;
+  return url.replace(pattern, `$1${key}=${value}`);
+}
+
+/**
+ * Short connect/pool timeouts and a small pool. Explicit connection_limit is kept.
+ * A connect_timeout above 10s (including the old 300s example) is capped.
+ */
+export function databaseUrlWithPoolDefaults(url: string): string {
+  let next = upsertQueryParam(url, "connect_timeout", String(CONNECT_TIMEOUT_SECONDS), "cap");
+  next = upsertQueryParam(next, "connection_limit", String(CONNECTION_LIMIT), "set-if-missing");
+  next = upsertQueryParam(next, "pool_timeout", String(POOL_TIMEOUT_SECONDS), "cap");
+  return next;
+}
+
 function databaseUrlWithTimeout(): string | undefined {
   const url = process.env.DATABASE_URL;
   if (!url) return undefined;
-
-  const params: string[] = [];
-  if (!/[?&]connect_timeout=/i.test(url)) params.push("connect_timeout=300");
-  // Default Prisma pool is ~num_cpus*2+1; that exhausts small VPS max_connections.
-  if (!/[?&]connection_limit=/i.test(url)) params.push("connection_limit=5");
-  if (!/[?&]pool_timeout=/i.test(url)) params.push("pool_timeout=20");
-  if (params.length === 0) return url;
-
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}${params.join("&")}`;
+  return databaseUrlWithPoolDefaults(url);
 }
 
 function createPrismaClient(): PrismaClient {
@@ -82,6 +114,10 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+function clientHasCurrentModels(client: PrismaClient): boolean {
+  return "document" in client && "documentAttachment" in client && "scheduledMessage" in client;
+}
+
 function getPrisma(): PrismaClient {
   if (process.env.NEXT_RUNTIME === "edge") {
     throw new Error(
@@ -90,18 +126,16 @@ function getPrisma(): PrismaClient {
   }
 
   const existing = globalForPrisma.prisma;
-  if (
-    existing &&
-    "document" in existing &&
-    "documentAttachment" in existing &&
-    "scheduledMessage" in existing
-  ) {
+  if (existing && clientHasCurrentModels(existing)) {
     return existing;
   }
 
   const client = createPrismaClient();
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = client;
+  // Cache in every environment. The exported client is a proxy, so without this
+  // assignment production builds a new pool on every property access.
+  globalForPrisma.prisma = client;
+  if (existing) {
+    void existing.$disconnect().catch(() => {});
   }
   return client;
 }

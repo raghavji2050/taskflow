@@ -6,7 +6,6 @@ import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { logTaskActivity } from "@/lib/activity";
 import { isWorkspaceMember, canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
 import { broadcastTaskEvent } from "@/lib/realtime";
-import { archiveStaleCompletedTasks } from "@/lib/auto-archive";
 import { getDailyUpdatesByCategory } from "@/lib/daily-update";
 import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { runAutomationsForTrigger } from "@/lib/automations";
@@ -30,8 +29,6 @@ export async function GET(request: Request) {
   try {
     const user = await getAuthenticatedUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    await archiveStaleCompletedTasks();
 
     const { searchParams } = new URL(request.url);
     const query = taskQuerySchema.parse({
