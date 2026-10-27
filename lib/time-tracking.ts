@@ -17,6 +17,7 @@ import {
   canViewUserTimeEntries,
 } from "@/lib/time-permissions";
 import { canAccessTask, canEditTask, getWorkspaceMembership, isWorkspaceMember } from "@/lib/workspace";
+import { visibleTaskWhere } from "@/lib/visible-records";
 import { canManageWorkspace, canViewWorkspace } from "@/lib/workspace-permissions";
 import { promoteTaskToInProgress } from "@/lib/time-task-status";
 
@@ -705,9 +706,9 @@ export async function listUserTimeEntries(
   };
 
   if (query.personal) {
-    where.task = { userId: targetUserId, workspaceId: null };
+    where.task = visibleTaskWhere({ userId: targetUserId, workspaceId: null });
   } else if (query.workspaceId) {
-    where.task = { workspaceId: query.workspaceId };
+    where.task = visibleTaskWhere({ workspaceId: query.workspaceId });
   } else if (actorId !== targetUserId) {
     throw new Error("Forbidden");
   }
@@ -771,7 +772,7 @@ export async function listWorkspaceTimeEntries(
   const { from, to } = resolveTimeRange(query.range ?? "all", query.from, query.to);
 
   const where: Prisma.TimeEntryWhereInput = {
-    task: { workspaceId },
+    task: visibleTaskWhere({ workspaceId }),
     isRunning: false,
     ...buildDateFilter(from, to),
   };

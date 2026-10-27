@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tagSchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 export async function GET() {
   try {
@@ -10,7 +11,7 @@ export async function GET() {
 
     const tags = await prisma.tag.findMany({
       where: { userId: user.id },
-      include: { _count: { select: { tasks: true } } },
+      include: { _count: { select: { tasks: { where: { task: visibleTaskWhere() } } } } },
       orderBy: { name: "asc" },
     });
 

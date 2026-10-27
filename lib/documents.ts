@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { serializeLinkedMessage } from "@/lib/message-audience";
 import { canAccessTask, canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 export const documentListInclude = {
   user: { select: { id: true, name: true } },
@@ -210,14 +211,14 @@ export async function linkDocumentToTasks(
   if (!ctx.canEdit) return [];
 
   const tasks = await prisma.task.findMany({
-    where: {
+    where: visibleTaskWhere({
       id: { in: unique },
       OR: [
         { userId },
         { assignees: { some: { userId } } },
         { workspace: { members: { some: { userId } } } },
       ],
-    },
+    }),
     select: { id: true, workspaceId: true },
   });
 

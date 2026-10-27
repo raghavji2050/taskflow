@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { bulkTaskSchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
-import { canAccessTask } from "@/lib/workspace";
+import { canAccessTask, canEditTask } from "@/lib/workspace";
 import { broadcastTaskEvent } from "@/lib/realtime";
 
 export async function POST(request: Request) {
@@ -17,26 +17,37 @@ export async function POST(request: Request) {
       taskIds.map(async (id) => canAccessTask(user.id, id))
     );
     const tasks = accessibleTasks.filter((t): t is NonNullable<typeof t> => t !== null);
-    const ids = tasks.map((t) => t.id);
+    let affected = tasks;
 
     if (action === "delete") {
-      await prisma.task.deleteMany({ where: { id: { in: ids } } });
+      const editable = [];
+      for (const task of tasks) {
+        if (await canEditTask(user.id, task.id)) editable.push(task);
+      }
+      if (editable.length === 0) {
+        return NextResponse.json({ error: "You do not have permission to delete these tasks" }, { status: 403 });
+      }
+      affected = editable;
+      await prisma.task.updateMany({
+        where: { id: { in: editable.map((task) => task.id) }, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
     } else if (action === "archive") {
-      await prisma.task.updateMany({ where: { id: { in: ids } }, data: { archived: true } });
+      await prisma.task.updateMany({ where: { id: { in: tasks.map((task) => task.id) } }, data: { archived: true } });
     } else if (action === "complete") {
       await prisma.task.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: tasks.map((task) => task.id) } },
         data: { status: "COMPLETED", completedAt: new Date() },
       });
     } else if (action === "pending") {
       await prisma.task.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: tasks.map((task) => task.id) } },
         data: { status: "PENDING", completedAt: null },
       });
     }
 
     const seen = new Set<string>();
-    for (const task of tasks) {
+    for (const task of affected) {
       const key = task.workspaceId ?? `personal:${task.userId}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -48,7 +59,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ message: `Bulk ${action} completed`, count: ids.length });
+    return NextResponse.json({ message: `Bulk ${action} completed`, count: affected.length });
   } catch (error) {
     return handleApiError(error);
   }

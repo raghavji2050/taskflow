@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { visibleTaskWhere } from "@/lib/visible-records";
 import { createNotification } from "@/lib/notifications";
 
 interface AutomationContext {
@@ -84,6 +85,11 @@ async function executeRuleAction(
       break;
     case "set_status":
       if (config.status) {
+        const visible = await prisma.task.findFirst({
+          where: visibleTaskWhere({ id: context.taskId }),
+          select: { id: true },
+        });
+        if (!visible) break;
         await prisma.task.update({
           where: { id: context.taskId },
           data: { status: config.status as "PENDING" | "IN_PROGRESS" | "COMPLETED" },
@@ -134,12 +140,12 @@ export async function runAutomationsForTrigger(
 export async function runOverdueAutomations() {
   const now = new Date();
   const overdueTasks = await prisma.task.findMany({
-    where: {
+    where: visibleTaskWhere({
       workspaceId: { not: null },
       archived: false,
       status: { not: "COMPLETED" },
       dueDate: { lt: now },
-    },
+    }),
     include: {
       assignees: { select: { userId: true } },
       workspace: { select: { id: true, name: true } },
@@ -208,12 +214,12 @@ export async function runDueDateApproachingAutomations() {
     const windowEnd = new Date(now.getTime() + hoursBefore * 60 * 60 * 1000);
 
     const tasks = await prisma.task.findMany({
-      where: {
+      where: visibleTaskWhere({
         workspaceId,
         archived: false,
         status: { not: "COMPLETED" },
         dueDate: { gt: now, lte: windowEnd },
-      },
+      }),
       include: { assignees: { select: { userId: true } } },
       take: 50,
     });

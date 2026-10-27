@@ -1,5 +1,6 @@
 import { startOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { visibleTaskWhere } from "@/lib/visible-records";
 import type { DailyUpdateGroup } from "@/lib/daily-update-format";
 
 export type { DailyUpdateGroup, DailyUpdateTask } from "@/lib/daily-update-format";
@@ -100,7 +101,7 @@ export async function getDailyUpdatesByCategory(userId: string): Promise<DailyUp
   const startOfToday = startOfDay(new Date());
 
   const tasks = await prisma.task.findMany({
-    where: {
+    where: visibleTaskWhere({
       archived: false,
       AND: [
         {
@@ -130,7 +131,7 @@ export async function getDailyUpdatesByCategory(userId: string): Promise<DailyUp
           ],
         },
       ],
-    },
+    }),
     select: {
       id: true,
       title: true,

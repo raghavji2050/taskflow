@@ -4,6 +4,7 @@ import { createNotification } from "@/lib/notifications";
 import { getTimeTrackingPrefs } from "@/lib/time-tracking-prefs";
 import { getEntryElapsedSeconds, shouldSendRunningReminder } from "@/lib/time-reminder";
 import { formatDurationShort } from "@/lib/time-format";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const running = await prisma.timeEntry.findMany({
-    where: { isRunning: true, isPaused: false },
+    where: { isRunning: true, isPaused: false, task: visibleTaskWhere() },
     include: {
       task: { select: { id: true, title: true } },
       user: { select: { id: true, name: true } },

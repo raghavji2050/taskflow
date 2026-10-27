@@ -8,6 +8,7 @@ import {
   linkDocumentToMessage,
   linkDocumentToTask,
 } from "@/lib/documents";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,7 +24,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const [tasks, messages] = await Promise.all([
       prisma.documentTask.findMany({
-        where: { documentId: id },
+        where: { documentId: id, task: visibleTaskWhere() },
         include: {
           task: {
             select: { id: true, title: true, status: true, workspaceId: true },

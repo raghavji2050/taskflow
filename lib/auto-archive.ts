@@ -1,13 +1,14 @@
 import { startOfDay } from "date-fns";
 import { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 /** Archive completed tasks from before today (visible on completion day only). */
 export async function archiveStaleCompletedTasks() {
   const startOfToday = startOfDay(new Date());
 
-  const result = await prisma.task.updateMany({
-    where: {
+  const stale = await prisma.task.findMany({
+    where: visibleTaskWhere({
       status: TaskStatus.COMPLETED,
       archived: false,
       OR: [
@@ -17,7 +18,14 @@ export async function archiveStaleCompletedTasks() {
           updatedAt: { lt: startOfToday },
         },
       ],
-    },
+    }),
+    select: { id: true },
+  });
+  if (stale.length === 0) return 0;
+
+  // updateMany cannot filter on the project relation, so archive by the visible ids.
+  const result = await prisma.task.updateMany({
+    where: { id: { in: stale.map((task) => task.id) } },
     data: { archived: true },
   });
 

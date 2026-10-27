@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { categorySchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { randomBytes } from "crypto";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 export async function GET() {
   try {
@@ -15,7 +16,7 @@ export async function GET() {
         _count: {
           select: {
             tasks: {
-              where: { workspaceId: null, archived: false },
+              where: visibleTaskWhere({ workspaceId: null, archived: false }),
             },
           },
         },

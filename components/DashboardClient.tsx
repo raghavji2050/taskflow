@@ -186,7 +186,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
     try {
       const response = await fetch(`/api/tasks/${deletingTask.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error((await response.json()).error);
-      toast.success("Task deleted");
+      toast.success("Moved to Trash");
       setDeletingTask(null);
       await fetchTasks(filters, page, categoryId, selectedWorkspaceId);
     } catch (error) {

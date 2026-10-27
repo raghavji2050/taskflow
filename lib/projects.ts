@@ -1,6 +1,7 @@
 import type { ProjectRole, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { broadcastTaskEvent } from "@/lib/realtime";
+import { visibleProjectWhere, visibleTaskWhere } from "@/lib/visible-records";
 import { getWorkspaceMembership } from "@/lib/workspace";
 import {
   DEFAULT_PROJECT_COLOR,
@@ -33,7 +34,7 @@ export async function nextSectionPosition(sectionId: string) {
 
 export async function ensureDefaultProject(workspaceId: string) {
   const existing = await prisma.project.findFirst({
-    where: { workspaceId, archived: false },
+    where: visibleProjectWhere({ workspaceId, archived: false }),
     orderBy: { createdAt: "asc" },
     include: { sections: { orderBy: { position: "asc" }, take: 1 } },
   });
@@ -148,9 +149,9 @@ export async function resolveTaskPlacement(input: {
   if (input.sectionId) {
     const section = await prisma.projectSection.findUnique({
       where: { id: input.sectionId },
-      include: { project: { select: { id: true, workspaceId: true, archived: true } } },
+      include: { project: { select: { id: true, workspaceId: true, archived: true, deletedAt: true } } },
     });
-    if (!section || section.project.workspaceId !== input.workspaceId) {
+    if (!section || section.project.workspaceId !== input.workspaceId || section.project.deletedAt) {
       throw new ProjectError("Section not found in this workspace", 400);
     }
     if (requestedProjectId && requestedProjectId !== section.projectId) {
@@ -168,7 +169,7 @@ export async function resolveTaskPlacement(input: {
 
   if (requestedProjectId) {
     const project = await prisma.project.findFirst({
-      where: { id: requestedProjectId, workspaceId: input.workspaceId },
+      where: visibleProjectWhere({ id: requestedProjectId, workspaceId: input.workspaceId }),
       include: { sections: { orderBy: { position: "asc" }, take: 1 } },
     });
     if (!project) throw new ProjectError("Project not found in this workspace", 400);
@@ -198,7 +199,7 @@ export async function requireProjectAccess(userId: string, projectId: string) {
     where: { id: projectId },
     include: { workspace: { select: { id: true, name: true, archivedAt: true } } },
   });
-  if (!project || project.workspace.archivedAt) {
+  if (!project || project.workspace.archivedAt || project.deletedAt) {
     throw new ProjectError("Project not found", 404);
   }
 
@@ -250,18 +251,18 @@ export async function listVisibleProjects(
 
   const seesAll = membership.role === "OWNER" || membership.role === "ADMIN";
   const projects = await prisma.project.findMany({
-    where: {
+    where: visibleProjectWhere({
       workspaceId,
       ...(archived === "all" ? {} : { archived: archived === "true" }),
       ...(seesAll ? {} : { members: { some: { userId } } }),
-    },
+    }),
     include: {
       members: { where: { userId }, select: { role: true } },
       _count: {
         select: {
           members: true,
           sections: true,
-          tasks: { where: { archived: false } },
+          tasks: { where: { archived: false, deletedAt: null } },
         },
       },
     },
@@ -325,7 +326,7 @@ export async function getProjectDetail(userId: string, projectId: string) {
       orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
     }),
     prisma.task.findMany({
-      where: { projectId, archived: false },
+      where: visibleTaskWhere({ projectId, archived: false }),
       orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       include: {
         assignees: {
@@ -374,7 +375,16 @@ export async function updateProject(
 export async function deleteProject(userId: string, projectId: string) {
   const access = await requireProjectAccess(userId, projectId);
   if (!access.canManage) throw new ProjectError("You do not have permission to delete this project", 403);
-  await prisma.project.delete({ where: { id: projectId } });
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { deletedAt: new Date() },
+  });
+  broadcastTaskEvent({
+    type: "task:bulk",
+    workspaceId: access.project.workspaceId,
+    ownerId: userId,
+    actorId: userId,
+  });
 }
 
 export async function createSection(userId: string, projectId: string, name: string) {
@@ -431,6 +441,7 @@ export async function deleteSection(userId: string, projectId: string, sectionId
 
   const [moving, maxPos] = await Promise.all([
     prisma.task.findMany({
+      // Include trashed tasks so they keep a section when this one is removed.
       where: { sectionId },
       orderBy: { position: "asc" },
       select: { id: true },
@@ -492,7 +503,7 @@ export async function moveProjectTask(input: {
   if (!section) throw new ProjectError("Section not found", 404);
 
   const task = await prisma.task.findFirst({
-    where: { id: input.taskId, projectId: input.projectId },
+    where: visibleTaskWhere({ id: input.taskId, projectId: input.projectId }),
     select: { id: true, sectionId: true, position: true, archived: true, userId: true },
   });
   if (!task) throw new ProjectError("Task not found in this project", 404);
@@ -500,7 +511,7 @@ export async function moveProjectTask(input: {
 
   const sourceId = task.sectionId;
   const rows = await prisma.task.findMany({
-    where: {
+    where: visibleTaskWhere({
       projectId: input.projectId,
       archived: false,
       OR: [
@@ -508,7 +519,7 @@ export async function moveProjectTask(input: {
         ...(sourceId ? [{ sectionId: sourceId }] : []),
         { id: task.id },
       ],
-    },
+    }),
     select: { id: true, sectionId: true, position: true },
   });
 

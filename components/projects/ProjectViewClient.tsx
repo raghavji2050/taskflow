@@ -200,13 +200,14 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
   };
 
   const deleteProject = async () => {
-    if (!project || !confirm(`Delete “${project.name}”? Tasks stay in the workspace.`)) return;
+    if (!project || !confirm(`Move “${project.name}” to Trash? Its tasks stay hidden until you restore the project.`)) return;
     const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       toast.error(data.error ?? "Could not delete project");
       return;
     }
+    toast.success("Moved to Trash");
     router.push("/dashboard/projects");
   };
 

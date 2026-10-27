@@ -240,6 +240,9 @@ Common status codes:
 | GET | `/api/share/[token]` | Public shared list |
 | GET | `/api/admin/users` | Admin user list |
 | GET | `/api/cron/reminders` | Process reminders (cron) |
+| GET/POST | `/api/trash` | Personal Trash: list, restore, or permanently delete |
+| GET/POST | `/api/workspaces/[id]/trash` | Workspace Trash: list, restore, or permanently delete |
+| GET | `/api/cron/trash` | Purge Trash older than 30 days (cron) |
 | GET | `/api/openapi` | OpenAPI specification |
 
 Interactive docs: `http://localhost:3000/docs`

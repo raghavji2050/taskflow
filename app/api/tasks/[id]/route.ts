@@ -11,6 +11,7 @@ import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { runAutomationsForTrigger } from "@/lib/automations";
 import { taskDetailInclude } from "@/lib/tasks";
 import { nextSectionPosition, projectFieldsForTaskUpdate } from "@/lib/projects";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -24,7 +25,7 @@ export async function GET(_request: Request, context: RouteContext) {
     if (!accessible) return NextResponse.json({ error: "Task not found" }, { status: 404 });
 
     const task = await prisma.task.findFirst({
-      where: { id },
+      where: visibleTaskWhere({ id }),
       include: taskDetailInclude,
     });
 
@@ -108,7 +109,7 @@ export async function PUT(request: Request, context: RouteContext) {
     }
 
     const task = await prisma.task.findFirst({
-      where: { id },
+      where: visibleTaskWhere({ id }),
       include: taskDetailInclude,
     });
 
@@ -173,7 +174,10 @@ export async function DELETE(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "You do not have permission to delete this task" }, { status: 403 });
     }
 
-    await prisma.task.delete({ where: { id } });
+    await prisma.task.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
     broadcastTaskEvent({
       type: "task:deleted",
       workspaceId: existing.workspaceId,

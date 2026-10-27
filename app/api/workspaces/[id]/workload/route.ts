@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { getWorkspaceMembership } from "@/lib/workspace";
+import { visibleTaskWhere } from "@/lib/visible-records";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -20,7 +21,7 @@ export async function GET(_request: Request, context: RouteContext) {
         include: { user: { select: { id: true, name: true, email: true } } },
       }),
       prisma.task.findMany({
-        where: { workspaceId: id, archived: false },
+        where: visibleTaskWhere({ workspaceId: id, archived: false }),
         select: {
           id: true,
           title: true,
