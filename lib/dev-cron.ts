@@ -1,6 +1,8 @@
 /**
  * Runs scheduled-message delivery on an interval during local development.
- * Production uses Vercel Cron → GET /api/cron/scheduled-messages
+ * GET /api/cron/scheduled-messages does the same work, but Hobby Vercel Cron
+ * cannot call it: that plan allows two jobs, each once per day, and those
+ * slots are the trash purge and the reminders/archive maintenance job.
  */
 
 import { msUntilNextMinute, startMinuteAlignedInterval } from "./cron-minute-align";

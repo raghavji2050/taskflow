@@ -239,10 +239,10 @@ Common status codes:
 | GET | `/api/events` | SSE real-time stream |
 | GET | `/api/share/[token]` | Public shared list |
 | GET | `/api/admin/users` | Admin user list |
-| GET | `/api/cron/reminders` | Process reminders (cron) |
+| GET | `/api/cron/reminders` | Daily maintenance (08:00 UTC): due reminders, archive stale completed tasks. Requires `Authorization: Bearer CRON_SECRET` |
 | GET/POST | `/api/trash` | Personal Trash: list, restore, or permanently delete |
 | GET/POST | `/api/workspaces/[id]/trash` | Workspace Trash: list, restore, or permanently delete |
-| GET | `/api/cron/trash` | Purge Trash older than 30 days (cron) |
+| GET | `/api/cron/trash` | Daily purge (03:30 UTC) of Trash older than 30 days. Requires `Authorization: Bearer CRON_SECRET` |
 | GET | `/api/openapi` | OpenAPI specification |
 
 Interactive docs: `http://localhost:3000/docs`

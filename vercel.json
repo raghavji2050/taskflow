@@ -1,5 +1,15 @@
 {
   "buildCommand": "npm run vercel-build",
   "installCommand": "npm install",
-  "regions": ["sin1"]
+  "regions": ["sin1"],
+  "crons": [
+    {
+      "path": "/api/cron/trash",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "0 8 * * *"
+    }
+  ]
 }
