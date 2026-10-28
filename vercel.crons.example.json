@@ -1,5 +1,5 @@
 {
-  "_note": "Vercel Cron requires a paid plan. When enabled, merge this crons array into vercel.json.",
+  "_note": "vercel.json registers only the two once-per-day Hobby jobs below (trash purge at 03:30 UTC, reminders and archive at 08:00 UTC). Do not copy timer-reminders or scheduled-messages into vercel.json. Hobby rejects schedules more frequent than once a day and allows at most two cron entries. Timer reminders need an hourly check while a timer is running. Scheduled chat messages are delivered on the minute; local dev runs them from lib/dev-cron.ts.",
   "crons": [
     {
       "path": "/api/cron/reminders",

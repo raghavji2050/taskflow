@@ -125,6 +125,22 @@ npm run dev
 | `npm run db:migrate` | Run migrations |
 | `npm run db:seed` | Seed demo data |
 
+## Scheduled maintenance (Vercel Cron)
+
+Hobby allows two cron jobs, each once per day. `vercel.json` registers both. Vercel invokes them with `Authorization: Bearer <CRON_SECRET>`. Set `CRON_SECRET` in the Vercel project environment variables (see `.env.example`); the routes return 401 without it. Schedules are UTC.
+
+| Path | Schedule | Work |
+|------|----------|------|
+| `GET /api/cron/trash` | `30 3 * * *` (03:30) | Hard-deletes tasks and projects whose Trash `deletedAt` is older than 30 days, in batches. Tasks that belong to an expired project are removed first (`projectId` is `ON DELETE SET NULL`). Child rows cascade. |
+| `GET /api/cron/reminders` | `0 8 * * *` (08:00) | Sends task reminders a user set (`remindAt` reached, `sent` still false) and archives completed tasks from before today. Also runs the existing daily digest and due-date automations. |
+
+Repeating either job is safe for purge, reminder delivery, and archive: purged rows are gone, reminders are marked `sent`, and archived tasks stay archived. A second run the same day can send the digest email again.
+
+These routes exist but are not on the Hobby schedule:
+
+- `GET /api/cron/timer-reminders` needs an hourly check while a timer is running. A daily tick would miss that window.
+- `GET /api/cron/scheduled-messages` delivers chat messages on the minute. Local `npm run dev` still runs that job. A daily cron would send them late.
+
 ## API Documentation
 
 - Interactive docs: [http://localhost:3000/docs](http://localhost:3000/docs)

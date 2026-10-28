@@ -1,10 +1,17 @@
-import type { WorkspaceRole } from "@prisma/client";
+import { Prisma, type WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   canManageProject,
   type ProjectAccessRoles,
 } from "@/lib/project-sections";
 import { broadcastTaskEvent } from "@/lib/realtime";
+import {
+  TRASH_PURGE_BATCH_SIZE,
+  TRASH_PURGE_MAX_BATCHES,
+  expiredDeletedAtWhere,
+  selectExpiredTrashIds,
+  taskIdsInProjects,
+} from "@/lib/trash-purge";
 import { trashPurgeCutoff } from "@/lib/trash-policy";
 import { getWorkspaceMembership } from "@/lib/workspace";
 import { canEditWorkspaceTasks } from "@/lib/workspace-permissions";
@@ -170,32 +177,113 @@ export async function purgeExpiredTrash(now = new Date()) {
   let tasksPurged = 0;
   let projectsPurged = 0;
 
-  await prisma.$transaction(async (tx) => {
-    const expiredProjects = await tx.$queryRaw<{ id: string }[]>`
+  for (let batch = 0; batch < TRASH_PURGE_MAX_BATCHES; batch++) {
+    const candidates = await prisma.project.findMany({
+      where: { deletedAt: expiredDeletedAtWhere(cutoff) },
+      select: { id: true, deletedAt: true },
+      orderBy: [{ deletedAt: "asc" }, { id: "asc" }],
+      take: TRASH_PURGE_BATCH_SIZE,
+    });
+    const projectIds = selectExpiredTrashIds(candidates, cutoff);
+    if (projectIds.length === 0) break;
+
+    const removed = await deleteExpiredProjectBatch(projectIds, cutoff);
+    tasksPurged += removed.tasks;
+    projectsPurged += removed.projects;
+    if (removed.tasks === 0 && removed.projects === 0) break;
+    if (removed.projects === projectIds.length && projectIds.length < TRASH_PURGE_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  for (let batch = 0; batch < TRASH_PURGE_MAX_BATCHES; batch++) {
+    const candidates = await prisma.task.findMany({
+      where: { deletedAt: expiredDeletedAtWhere(cutoff) },
+      select: { id: true, deletedAt: true },
+      orderBy: [{ deletedAt: "asc" }, { id: "asc" }],
+      take: TRASH_PURGE_BATCH_SIZE,
+    });
+    const taskIds = selectExpiredTrashIds(candidates, cutoff);
+    if (taskIds.length === 0) break;
+
+    const removed = await deleteExpiredTaskBatch(taskIds, cutoff);
+    tasksPurged += removed;
+    if (removed === 0) break;
+    if (taskIds.length < TRASH_PURGE_BATCH_SIZE) break;
+  }
+
+  const [projectsLeft, tasksLeft] = await Promise.all([
+    prisma.project.count({ where: { deletedAt: expiredDeletedAtWhere(cutoff) } }),
+    prisma.task.count({ where: { deletedAt: expiredDeletedAtWhere(cutoff) } }),
+  ]);
+
+  return {
+    tasksPurged,
+    projectsPurged,
+    cutoff: cutoff.toISOString(),
+    truncated: projectsLeft > 0 || tasksLeft > 0,
+  };
+}
+
+/**
+ * Hard-delete one batch of expired projects and the tasks that reference them.
+ * Child task rows (comments, reminders, time entries, and the rest) cascade.
+ * Projects stay until their tasks are gone, because Task.projectId is SET NULL.
+ */
+async function deleteExpiredProjectBatch(candidateIds: string[], cutoff: Date) {
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM Project
-      WHERE deletedAt IS NOT NULL AND deletedAt < ${cutoff}
+      WHERE id IN (${Prisma.join(candidateIds)})
+        AND deletedAt IS NOT NULL
+        AND deletedAt < ${cutoff}
       FOR UPDATE
     `;
-    const projectIds = expiredProjects.map((project) => project.id);
+    const projectIds = locked.map((project) => project.id);
+    if (projectIds.length === 0) return { tasks: 0, projects: 0 };
 
-    if (projectIds.length > 0) {
+    const taskRows = await tx.task.findMany({
+      where: { projectId: { in: projectIds } },
+      select: { id: true, projectId: true },
+      orderBy: { id: "asc" },
+      take: TRASH_PURGE_BATCH_SIZE,
+    });
+    const taskIds = taskIdsInProjects(taskRows, projectIds);
+    let tasks = 0;
+    if (taskIds.length > 0) {
       const removedTasks = await tx.task.deleteMany({
-        where: { projectId: { in: projectIds } },
+        where: { id: { in: taskIds } },
       });
-      tasksPurged += removedTasks.count;
-      const removedProjects = await tx.project.deleteMany({
-        where: { id: { in: projectIds } },
-      });
-      projectsPurged += removedProjects.count;
+      tasks = removedTasks.count;
     }
 
-    const removedTasks = await tx.task.deleteMany({
-      where: { deletedAt: { not: null, lt: cutoff } },
+    const remainingTasks = await tx.task.count({
+      where: { projectId: { in: projectIds } },
     });
-    tasksPurged += removedTasks.count;
-  });
+    if (remainingTasks > 0) return { tasks, projects: 0 };
 
-  return { tasksPurged, projectsPurged, cutoff: cutoff.toISOString() };
+    const removedProjects = await tx.project.deleteMany({
+      where: { id: { in: projectIds } },
+    });
+    return { tasks, projects: removedProjects.count };
+  });
+}
+
+async function deleteExpiredTaskBatch(candidateIds: string[], cutoff: Date) {
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM Task
+      WHERE id IN (${Prisma.join(candidateIds)})
+        AND deletedAt IS NOT NULL
+        AND deletedAt < ${cutoff}
+      FOR UPDATE
+    `;
+    if (locked.length === 0) return 0;
+    const removed = await tx.task.deleteMany({
+      where: { id: { in: locked.map((task) => task.id) } },
+    });
+    return removed.count;
+  });
 }
 
 async function restorePersonalTask(userId: string, taskId: string) {
