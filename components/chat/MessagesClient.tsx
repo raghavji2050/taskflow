@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { conversationNavMode } from "@/lib/chat-history";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Loader2, MessageSquarePlus, Search, Users } from "lucide-react";
@@ -57,10 +58,19 @@ export function MessagesClient() {
     }
   }, [status, loadConversations]);
 
+  const selectedIdRef = useRef<string | null>(null);
+  const pushedEntryRef = useRef(false);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
   useEffect(() => {
     const paramId = searchParams.get("c");
     if (paramId) setSelectedId(paramId);
-    else setSelectedId(null);
+    else {
+      setSelectedId(null);
+      pushedEntryRef.current = false;
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -276,8 +286,16 @@ export function MessagesClient() {
   const openConversation = useCallback(
     (id: string) => {
       if (!confirmLeaveActiveMomMeeting()) return false;
+      const mode = conversationNavMode(selectedIdRef.current);
       setSelectedId(id);
-      router.replace(`/dashboard/messages?c=${id}`, { scroll: false });
+      // Opening from the list pushes a history entry so the browser/PWA back
+      // button closes the conversation instead of leaving the messages page.
+      if (mode === "push") {
+        pushedEntryRef.current = true;
+        router.push(`/dashboard/messages?c=${id}`, { scroll: false });
+      } else {
+        router.replace(`/dashboard/messages?c=${id}`, { scroll: false });
+      }
       return true;
     },
     [router]
@@ -311,7 +329,12 @@ export function MessagesClient() {
   const handleBack = () => {
     if (!confirmLeaveActiveMomMeeting()) return;
     setSelectedId(null);
-    router.replace("/dashboard/messages", { scroll: false });
+    if (pushedEntryRef.current) {
+      pushedEntryRef.current = false;
+      router.back();
+    } else {
+      router.replace("/dashboard/messages", { scroll: false });
+    }
   };
 
   const handleCreated = (id: string) => {
