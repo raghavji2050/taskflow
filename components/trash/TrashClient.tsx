@@ -9,8 +9,8 @@ import { useWorkspace } from "@/components/WorkspaceProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { PageLoader } from "@/components/ui/PageLoader";
-import { TRASH_RETENTION_DAYS, trashPurgeAt } from "@/lib/trash-policy";
-import { formatDueDate, formatRelativeDate } from "@/lib/utils";
+import { TRASH_RETENTION_DAYS, trashPurgeLabel } from "@/lib/trash-policy";
+import { formatRelativeDate } from "@/lib/utils";
 
 type TrashItem = {
   kind: "task" | "project";
@@ -134,7 +134,7 @@ function TrashSection({
       <h2 className="mb-3 text-sm font-semibold text-[var(--foreground)]">{title}</h2>
       <ul className="space-y-2">
         {items.map((item) => {
-          const purgeAt = trashPurgeAt(new Date(item.deletedAt));
+          const purgeLabel = trashPurgeLabel(item.deletedAt);
           const key = `${item.kind}:${item.id}`;
           const busy = pending?.key === key;
           return (
@@ -155,7 +155,7 @@ function TrashSection({
                   Deleted {formatRelativeDate(item.deletedAt)}
                   {item.detail ? ` · ${item.detail}` : ""}
                   {" · "}
-                  Removed {formatDueDate(purgeAt)}
+                  {purgeLabel}
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
