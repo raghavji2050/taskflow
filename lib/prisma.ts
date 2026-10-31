@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from "@prisma/client";
+import { reportQueryDuration } from "@/lib/slow-query";
 
 /**
  * One extra attempt after a dropped connection. A longer chain (and any retry
@@ -105,7 +106,14 @@ function createPrismaClient(): PrismaClient {
 
   // Use $use (not $extends) so the client stays typed as PrismaClient and
   // $transaction callbacks remain compatible with Prisma.TransactionClient.
-  client.$use(async (params, next) => withPrismaRetry(() => next(params)));
+  client.$use(async (params, next) => {
+    const started = performance.now();
+    try {
+      return await withPrismaRetry(() => next(params));
+    } finally {
+      reportQueryDuration(params.model, params.action, performance.now() - started);
+    }
+  });
 
   return client;
 }

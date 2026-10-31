@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth.config";
+import { getOrCreateRequestId, REQUEST_ID_HEADER } from "@/lib/request-id";
 
 const { auth } = NextAuth(authConfig);
 
@@ -48,7 +49,12 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  return NextResponse.next();
+  const requestId = getOrCreateRequestId(req.headers);
+  const forwarded = new Headers(req.headers);
+  forwarded.set(REQUEST_ID_HEADER, requestId);
+  const response = NextResponse.next({ request: { headers: forwarded } });
+  response.headers.set(REQUEST_ID_HEADER, requestId);
+  return response;
 });
 
 export const config = {
