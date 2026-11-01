@@ -70,3 +70,18 @@ test("login, then create, edit, complete, trash and restore a task", async ({ pa
   await page.goto("/dashboard");
   await expect(page.locator(".task-row", { hasText: edited })).toBeVisible();
 });
+
+test("Hinglish quick-add parses date, time and priority from the title", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: /New Task/ }).first().click();
+  await page.getByLabel("Title").fill(`kal 5 baje client call ${stamp} !high`);
+  const preview = page.getByTestId("quick-add-preview");
+  await expect(preview).toContainText(`client call ${stamp}`);
+  await expect(preview).toContainText("Kal");
+  await expect(preview).toContainText("5:00 PM");
+  await expect(preview).toContainText("High priority");
+  await page.getByRole("button", { name: "Create Task" }).click();
+  const row = page.locator(".task-row", { hasText: `client call ${stamp}` });
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText("kal 5 baje");
+});
