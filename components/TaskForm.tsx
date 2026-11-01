@@ -16,6 +16,15 @@ import { getAssigneePayloadFromTask } from "@/lib/task-ui";
 import { toDateInputValue, cn } from "@/lib/utils";
 import { hoursMinutesToMinutes, minutesToHoursMinutes } from "@/lib/time-format";
 import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
+import { parseQuickAdd, formatQuickAddPreview, DEFAULT_QUICK_ADD_TZ } from "@/lib/quick-add";
+
+function browserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_QUICK_ADD_TZ;
+  } catch {
+    return DEFAULT_QUICK_ADD_TZ;
+  }
+}
 
 interface Category { id: string; name: string; color: string }
 interface Tag { id: string; name: string }
@@ -100,6 +109,13 @@ export function TaskForm({
   });
 
   const dueDate = watch("dueDate");
+  const titleValue = watch("title");
+  const quickAdd = useMemo(() => {
+    if (initialData || !titleValue) return null;
+    const tz = browserTimeZone();
+    const r = parseQuickAdd(titleValue, { timeZone: tz });
+    return r.matched ? { result: r, preview: formatQuickAddPreview(r, { timeZone: tz }) } : null;
+  }, [initialData, titleValue]);
   const selectedCategoryId = watch("categoryId");
   const selectedBoardColumnId = watch("boardColumnId");
   const selectedStatus = watch("status");
@@ -238,6 +254,14 @@ export function TaskForm({
     if (data.dueDate && dueTime) {
       finalDueDate = `${data.dueDate}T${dueTime}:00`;
     }
+    if (quickAdd) {
+      const q = quickAdd.result;
+      data = { ...data, title: q.title };
+      if (q.priority) data.priority = q.priority;
+      if (q.date && !data.dueDate) {
+        finalDueDate = q.time ? `${q.date}T${q.time}:00` : q.date;
+      }
+    }
     await onSubmit(
       {
         ...data,
@@ -288,7 +312,7 @@ export function TaskForm({
         <TaskFormSection title="Basics">
           <Input
             label="Title"
-            placeholder="Enter task title"
+            placeholder={initialData ? "Enter task title" : "e.g. kal 5 baje client call !high"}
             error={errors.title?.message}
             {...titleField}
             ref={(el) => {
@@ -296,6 +320,14 @@ export function TaskForm({
               titleInputRef.current = el;
             }}
           />
+          {quickAdd && (
+            <p
+              data-testid="quick-add-preview"
+              className="-mt-2 text-xs text-indigo-600 dark:text-indigo-400"
+            >
+              ⚡ &ldquo;{quickAdd.result.title}&rdquo; · {quickAdd.preview}
+            </p>
+          )}
           <Textarea
             label="Description"
             placeholder="Add details"
