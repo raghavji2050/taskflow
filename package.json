@@ -20,7 +20,9 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:email": "node scripts/test-email.mjs",
-    "cron:scheduled-messages": "tsx scripts/run-scheduled-messages-cron.ts"
+    "cron:scheduled-messages": "tsx scripts/run-scheduled-messages-cron.ts",
+    "db:backup": "tsx scripts/db-backup.ts",
+    "db:restore": "tsx scripts/db-restore.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
