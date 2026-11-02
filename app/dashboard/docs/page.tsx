@@ -11,7 +11,7 @@ export const metadata: Metadata = appPageMetadata(
 
 export default async function DocsPage() {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect("/api/session-ended");
 
   return (
     <div className="space-y-6">

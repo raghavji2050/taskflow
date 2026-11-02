@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
 import { getGitHubOAuthConfig, getGoogleOAuthConfig } from "@/lib/oauth";
 import { authConfig } from "@/lib/auth.config";
+import { isSessionRevoked } from "@/lib/session-version";
 import type { NextAuthConfig } from "next-auth";
 
 const providers: NextAuthConfig["providers"] = [
@@ -119,6 +120,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
     async jwt({ token, user }) {
+      const freshSignIn = Boolean(user?.id);
       if (user?.id) {
         token.id = user.id;
         token.sub = user.id;
@@ -134,10 +136,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       const dbUser = await prisma.user.findUnique({
         where: { id: token.id as string },
-        select: { id: true, name: true, email: true, role: true },
+        select: { id: true, name: true, email: true, role: true, sessionVersion: true },
       });
 
       if (!dbUser) {
+        return { ...token, id: undefined, sub: undefined, deleted: true };
+      }
+
+      if (freshSignIn) {
+        token.sessionVersion = dbUser.sessionVersion;
+      } else if (isSessionRevoked(token.sessionVersion, dbUser.sessionVersion)) {
+        // Password changed/reset or "sign out everywhere": this token is no longer valid.
         return { ...token, id: undefined, sub: undefined, deleted: true };
       }
 

@@ -20,9 +20,13 @@ export async function PUT(request: Request) {
     if (!valid) return NextResponse.json({ error: "Current password is incorrect" }, { status: 400 });
 
     const hashed = await bcrypt.hash(data.newPassword, 12);
-    await prisma.user.update({ where: { id: user.id }, data: { password: hashed } });
+    // Changing the password signs out every device (including this one).
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed, sessionVersion: { increment: 1 } },
+    });
 
-    return NextResponse.json({ message: "Password updated" });
+    return NextResponse.json({ message: "Password updated", signedOut: true });
   } catch (error) {
     return handleApiError(error);
   }
