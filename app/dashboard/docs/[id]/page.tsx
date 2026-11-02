@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function DocumentPage({ params }: PageProps) {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect("/api/session-ended");
 
   const { id } = await params;
 

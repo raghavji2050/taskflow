@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Clock } from "lucide-react";
@@ -69,9 +69,24 @@ export default function SettingsPage() {
       body: JSON.stringify(data),
     });
     if (res.ok) {
-      toast.success("Password updated");
+      toast.success("Password updated. Please sign in again.");
       passwordForm.reset();
+      await signOut({ callbackUrl: "/login" });
     } else toast.error((await res.json()).error);
+  };
+
+  const [signingOutAll, setSigningOutAll] = useState(false);
+  const onSignOutEverywhere = async () => {
+    if (!window.confirm("Sign out of Taskflow on all devices, including this one?")) return;
+    setSigningOutAll(true);
+    const res = await fetch("/api/user/sessions", { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Signed out of all devices");
+      await signOut({ callbackUrl: "/login" });
+    } else {
+      setSigningOutAll(false);
+      toast.error((await res.json()).error ?? "Could not sign out of all devices");
+    }
   };
 
   return (
@@ -157,6 +172,17 @@ export default function SettingsPage() {
           </p>
         </Card>
       ) : null}
+
+      <Card className="mt-6 p-6">
+        <h2 className="section-label mb-2">Active sessions</h2>
+        <p className="mb-4 text-sm text-[var(--muted)]">
+          Lost a phone or used a shared computer? Sign out everywhere. Sessions also expire after
+          14 days, and changing or resetting your password signs out all devices.
+        </p>
+        <Button type="button" variant="danger" onClick={onSignOutEverywhere} disabled={signingOutAll}>
+          {signingOutAll ? "Signing out..." : "Sign out of all devices"}
+        </Button>
+      </Card>
     </div>
   );
 }
