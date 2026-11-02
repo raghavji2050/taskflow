@@ -1,4 +1,5 @@
 "use client";
+import { updateAppBadge } from "@/lib/app-badge";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -73,6 +74,11 @@ export function NotificationBell({ placement = "default" }: NotificationBellProp
       window.removeEventListener("scroll", updatePosition, true);
     };
   }, [open, updatePosition]);
+
+  // Mirror unread count onto the installed app icon (Badging API).
+  useEffect(() => {
+    void updateAppBadge(unreadCount);
+  }, [unreadCount]);
 
   const fetchNotifications = useCallback(async () => {
     const params = new URLSearchParams();

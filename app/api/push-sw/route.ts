@@ -111,6 +111,13 @@ messaging.onBackgroundMessage(function (payload) {
         : "taskflow";
   var url = data.url || "/dashboard/messages";
 
+  try {
+    if (self.navigator && typeof self.navigator.setAppBadge === "function") {
+      var bc = parseInt(data.badgeCount || "", 10);
+      self.navigator.setAppBadge(bc > 0 ? bc : undefined).catch(function () {});
+    }
+  } catch (e) {}
+
   return self.registration.showNotification(title, {
     body: body,
     icon: icon,
