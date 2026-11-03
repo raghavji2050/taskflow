@@ -121,7 +121,8 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
     server.registerTool(name, { title: name.replace(/_/g, " "), description, inputSchema, annotations: readOnly ? ro : { destructiveHint: name.startsWith("delete") } }, ((args: never) => runTool(() => fn(args))) as never);
   const id = z.string().min(1);
 
-  add("list_workspaces", "List workspaces you belong to and your role.", {}, () => extra.listWorkspaces(user), true);
+  add("whoami", "Show which taskflow account this connection is signed in as, with counts of workspaces, tasks and notifications.", {}, () => extra.whoami(user), true);
+  add("list_workspaces", "List workspaces you belong to and your role. Archived workspaces are hidden unless includeArchived=true.", { includeArchived: z.boolean().optional() }, (a: { includeArchived?: boolean }) => extra.listWorkspaces(user, a), true);
   add("list_workspace_members", "List members of a workspace (use their ids to assign tasks).", { workspaceId: id }, (a: { workspaceId: string }) => extra.listWorkspaceMembers(user, a), true);
   add("assign_task", "Set the assignees of a workspace task (replaces existing). Empty list unassigns.", { taskId: id, assigneeIds: z.array(id).max(20) }, (a: { taskId: string; assigneeIds: string[] }) => extra.assignTask(user, a));
   add("create_project", "Create a project in a workspace (not allowed for viewers).", { workspaceId: id, name: z.string().trim().min(1).max(100), description: z.string().max(1000).optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() }, (a: Parameters<typeof extra.createProject>[1]) => extra.createProject(user, a));
@@ -140,7 +141,8 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   add("list_tags", "List your labels/tags.", {}, () => extra.listTags(user), true);
   add("set_task_tags", "Set your labels on a task by name (creates missing labels). Empty list clears.", { taskId: id, tags: z.array(z.string().max(50)).max(20) }, (a: { taskId: string; tags: string[] }) => extra.setTaskTags(user, a));
   add("set_recurrence", "Make a task repeat DAILY/WEEKLY/MONTHLY, or null to stop.", { taskId: id, rule: z.enum(extra.RECURRENCES).nullable() }, (a: Parameters<typeof extra.setRecurrence>[1]) => extra.setRecurrence(user, a));
-  add("list_notifications", "List your notifications and unread count.", { unreadOnly: z.boolean().optional(), limit: z.number().int().min(1).max(100).optional() }, (a: { unreadOnly?: boolean; limit?: number }) => extra.listNotifications(user, a), true);
+  add("list_notifications", "List your notifications (full body, plus the short stored preview) and unread count.", { unreadOnly: z.boolean().optional(), limit: z.number().int().min(1).max(100).optional() }, (a: { unreadOnly?: boolean; limit?: number }) => extra.listNotifications(user, a), true);
+  add("get_notification", "Read one notification with its full body (chat notifications resolve the full message).", { id }, (a: { id: string }) => extra.getNotification(user, a), true);
   add("mark_notifications_read", "Mark notifications read by ids, or all=true.", { ids: z.array(id).max(100).optional(), all: z.boolean().optional() }, (a: { ids?: string[]; all?: boolean }) => extra.markNotificationsRead(user, a));
 
   return server;
