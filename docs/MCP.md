@@ -18,6 +18,21 @@ Taskflow exposes a [Model Context Protocol](https://modelcontextprotocol.io) ser
 | `update_task` | `taskId` + any of `title`, `status`, `priority`, `dueDate`, `assigneeId` (`null` clears due date / assignee) |
 | `add_comment` | `taskId`, `body` |
 
+| `list_workspaces` / `list_workspace_members` | Your workspaces + roles; members (ids for assigning) |
+| `assign_task` | Replace assignees (`assigneeIds`, empty = unassign) |
+| `create_project` / `update_project` | Create; rename/recolor/describe or `archived: true/false` (needs manage rights) |
+| `list_sections` / `create_section` | Project sections (board columns) |
+| `move_task` | Move to another `sectionId` and/or `projectId` |
+| `delete_task` / `list_trash` / `restore_from_trash` | Soft delete to trash and restore (task or project) |
+| `list_subtasks` / `create_subtask` / `update_subtask` | Subtasks (rename / complete) |
+| `list_comments` | All comments on a task |
+| `search_tasks` | Search title + description across everything you can see |
+| `list_tags` / `set_task_tags` | Your personal labels (by name, auto-created) |
+| `set_recurrence` | `DAILY` / `WEEKLY` / `MONTHLY` / `null` |
+| `list_notifications` / `mark_notifications_read` | Inbox + unread count; mark by ids or `all` |
+
+All tools use the same RBAC as the app (viewers are read-only, private projects stay hidden). Task dependencies don't exist in the data model yet, so there is no tool for them.
+
 Status: `PENDING`, `IN_PROGRESS`, `COMPLETED`. Priority: `LOW`, `MEDIUM`, `HIGH`. Dates: ISO (`2026-11-10` or full datetime).
 
 ## 0. Claude mobile / claude.ai (OAuth — easiest)
