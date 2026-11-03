@@ -10,6 +10,7 @@ import * as msgs from "@/lib/messages";
 import { createDirectConversation, findDirectConversation, getConversationDisplayName, getMentionCandidatesForConversation, listUserConversations } from "@/lib/conversations";
 import { sendWorkspaceInvite } from "@/lib/invitations";
 import { canInviteMembers } from "@/lib/workspace-permissions";
+import { getWorkspaceMembership as getInviteMembership } from "@/lib/workspace-membership";
 import { McpToolError, type McpUser } from "@/lib/mcp/tools";
 
 async function taskFor(user: McpUser, taskId: string, edit: boolean) {
@@ -181,7 +182,7 @@ export async function startDirectChat(u: McpUser, a: { userId: string }) {
 
 // ---- workspace
 export async function inviteMember(u: McpUser, a: { workspaceId: string; email: string }) {
-  const m = await getWorkspaceMembership(u.id, a.workspaceId);
+  const m = await getInviteMembership(u.id, a.workspaceId);
   if (!m || !canInviteMembers(m, m.workspace)) throw new McpToolError("You do not have permission to invite members");
   const r = (await sendWorkspaceInvite({ workspaceId: a.workspaceId, inviterId: u.id, inviteeEmail: a.email })) as { error?: string };
   if (r && r.error) throw new McpToolError(r.error);

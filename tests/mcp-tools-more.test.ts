@@ -17,6 +17,8 @@ vi.mock("@/lib/chat-access", () => chat);
 vi.mock("@/lib/messages", () => msgs);
 vi.mock("@/lib/invitations", () => inv);
 vi.mock("@/lib/workspace-permissions", () => perms);
+const im = vi.hoisted(() => ({ getWorkspaceMembership: vi.fn() }));
+vi.mock("@/lib/workspace-membership", () => im);
 vi.mock("@/lib/conversations", () => ({ createDirectConversation: vi.fn(), findDirectConversation: vi.fn(), getConversationDisplayName: () => "Chat", getMentionCandidatesForConversation: vi.fn().mockResolvedValue([]), listUserConversations: vi.fn() }));
 vi.mock("@/lib/projects", () => ({ requireProjectAccess: vi.fn() }));
 vi.mock("@/lib/time-tracking", () => ({ createManualEntry: vi.fn().mockResolvedValue({ id: "e1" }) }));
@@ -71,7 +73,7 @@ describe("mcp tools-more", () => {
     await expect(m.sendChatMessage(user, { conversationId: "c1", body: "hi" })).resolves.toEqual({ message: { id: "m1" } });
   });
   it("invite needs admin rights and surfaces errors", async () => {
-    ws.getWorkspaceMembership.mockResolvedValue({ role: "MEMBER", workspace: {} });
+    im.getWorkspaceMembership.mockResolvedValue({ role: "MEMBER", workspace: {} });
     perms.canInviteMembers.mockReturnValue(false);
     await expect(m.inviteMember(user, { workspaceId: "w1", email: "a@b.co" })).rejects.toThrow(/permission/);
     perms.canInviteMembers.mockReturnValue(true);
