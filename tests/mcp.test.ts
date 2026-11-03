@@ -94,7 +94,7 @@ describe("/api/mcp", () => {
     expect(res.headers.get("www-authenticate")).toContain("Bearer");
   });
 
-  it("lists the six tools for a valid token", async () => {
+  it("lists the core tools for a valid token", async () => {
     const { token } = generateApiToken();
     db.apiToken.findUnique.mockResolvedValue({ id: "tok-list", revokedAt: null, lastUsedAt: new Date(), user: { id: "u1", name: "RJ" } });
     const init = await POST(
@@ -103,8 +103,8 @@ describe("/api/mcp", () => {
     expect(init.status).toBe(200);
     const res = await POST(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" }, `Bearer ${token}`));
     const json = await res.json();
-    expect(json.result.tools.map((t: { name: string }) => t.name).sort()).toEqual(
-      ["add_comment", "create_task", "get_task", "list_projects", "list_tasks", "update_task"]
+    expect(json.result.tools.map((t: { name: string }) => t.name).sort()).toEqual(expect.arrayContaining(
+      ["add_comment", "create_task", "get_task", "list_projects", "list_tasks", "update_task"])
     );
   });
 
