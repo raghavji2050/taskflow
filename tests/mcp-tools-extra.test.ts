@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => {
   const m = () => ({ findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn(), create: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn(), aggregate: vi.fn(), count: vi.fn(), upsert: vi.fn() });
-  return { task: m(), subtask: m(), comment: m(), tag: m(), taskTag: m(), notification: m(), projectSection: m(), workspaceMember: m() };
+  return { task: m(), subtask: m(), comment: m(), tag: m(), taskTag: m(), notification: { ...m(), findFirst: vi.fn() }, message: m(), user: m(), projectSection: m(), workspaceMember: m() };
 });
 const ws = vi.hoisted(() => ({ canAccessTask: vi.fn(), canEditTask: vi.fn(), getUserWorkspaceIds: vi.fn(), getWorkspaceMembership: vi.fn(), getWorkspaceMembers: vi.fn() }));
 const proj = vi.hoisted(() => ({ createProject: vi.fn(), createSection: vi.fn(), projectFieldsForTaskUpdate: vi.fn(), requireProjectAccess: vi.fn(), updateProject: vi.fn() }));
@@ -116,12 +116,35 @@ describe("tools", () => {
     expect(db.notification.updateMany.mock.calls[0][0].where.userId).toBe("u1");
     await expect(x.markNotificationsRead(user, {})).rejects.toThrow();
   });
+  it("notifications return full message body + preview", async () => {
+    const long = "x".repeat(150);
+    const row = { id: "n1", title: "Msg", body: `${long.slice(0, 80)}…`, read: false, type: "message", createdAt: new Date(0), messageId: "m1", conversationId: "c1" };
+    db.notification.findMany.mockResolvedValue([row]);
+    db.notification.count.mockResolvedValue(1);
+    db.message.findMany.mockResolvedValue([{ id: "m1", body: long }]);
+    const r = await x.listNotifications(user, {});
+    expect(r.notifications[0].body).toBe(long);
+    expect(r.notifications[0].preview).toBe(row.body);
+    expect(r.notifications[0].truncated).toBe(true);
+    expect(db.message.findMany.mock.calls[0][0].where.conversation.participants.some.userId).toBe("u1");
+    db.notification.findFirst.mockResolvedValue(null);
+    await expect(x.getNotification(user, { id: "nope" })).rejects.toThrow(/not found/i);
+    db.notification.findFirst.mockResolvedValue({ ...row, messageId: null, body: "short" });
+    expect((await x.getNotification(user, { id: "n1" })).notification.body).toBe("short");
+    expect(db.notification.findFirst.mock.calls[1][0].where.userId).toBe("u1");
+  });
+  it("list_workspaces can include archived", async () => {
+    db.workspaceMember.findMany.mockResolvedValue([{ role: "OWNER", workspace: { id: "w", name: "W", archivedAt: new Date() } }]);
+    const r = await x.listWorkspaces(user, { includeArchived: true });
+    expect(r.workspaces[0].archived).toBe(true);
+    expect(db.workspaceMember.findMany.mock.calls[0][0].where.workspace).toBeUndefined();
+  });
   it("subtask update checks parent task", async () => {
     db.subtask.findUnique.mockResolvedValue(null);
     await expect(x.updateSubtask(user, { subtaskId: "s", completed: true })).rejects.toThrow(/not found/);
   });
   it("server registers all tools", () => {
     const s = createTaskflowMcpServer(user) as unknown as { _registeredTools: Record<string, unknown> };
-    expect(Object.keys(s._registeredTools).length).toBe(27);
+    expect(Object.keys(s._registeredTools).length).toBe(29);
   });
 });

@@ -35,12 +35,12 @@ function touched(user: McpUser, task: { id: string; workspaceId: string | null; 
 }
 
 // ---- workspaces & members
-export async function listWorkspaces(user: McpUser) {
+export async function listWorkspaces(user: McpUser, input: { includeArchived?: boolean } = {}) {
   const rows = await prisma.workspaceMember.findMany({
-    where: { userId: user.id, workspace: { archivedAt: null } },
-    select: { role: true, workspace: { select: { id: true, name: true } } },
+    where: { userId: user.id, ...(input.includeArchived ? {} : { workspace: { archivedAt: null } }) },
+    select: { role: true, workspace: { select: { id: true, name: true, archivedAt: true } } },
   });
-  return { workspaces: rows.map((r) => ({ id: r.workspace.id, name: r.workspace.name, role: r.role })) };
+  return { workspaces: rows.map((r) => ({ id: r.workspace.id, name: r.workspace.name, role: r.role, archived: !!r.workspace.archivedAt })) };
 }
 
 export async function listWorkspaceMembers(user: McpUser, input: { workspaceId: string }) {
@@ -211,13 +211,52 @@ export async function setRecurrence(user: McpUser, input: { taskId: string; rule
 }
 
 // ---- notifications
+const notifSelect = { id: true, title: true, body: true, read: true, type: true, createdAt: true, messageId: true, conversationId: true } as const;
+type NotifRow = { id: string; title: string; body: string; read: boolean; type: string; createdAt: Date; messageId: string | null; conversationId: string | null };
+
+/** Chat notifications store an 80-char preview; resolve the full message body when the user can still see it. */
+async function withFullBody(userId: string, rows: NotifRow[]) {
+  const ids = [...new Set(rows.map((r) => r.messageId).filter((v): v is string => !!v))];
+  const messages = ids.length
+    ? await prisma.message.findMany({
+        where: { id: { in: ids }, deletedAt: null, conversation: { participants: { some: { userId } } } },
+        select: { id: true, body: true },
+      })
+    : [];
+  const full = new Map(messages.map((m) => [m.id, m.body]));
+  return rows.map(({ messageId, ...n }) => {
+    const body = (messageId && full.get(messageId)) || n.body;
+    return { ...n, body, preview: n.body, truncated: body !== n.body, messageId, createdAt: n.createdAt.toISOString() };
+  });
+}
+
 export async function listNotifications(user: McpUser, input: { unreadOnly?: boolean; limit?: number }) {
   const where = { userId: user.id, archivedAt: null, ...(input.unreadOnly ? { read: false } : {}) };
   const [notifications, unreadCount] = await Promise.all([
-    prisma.notification.findMany({ where, orderBy: { createdAt: "desc" }, take: Math.min(input.limit ?? 30, 100), select: { id: true, title: true, body: true, read: true, type: true, createdAt: true } }),
+    prisma.notification.findMany({ where, orderBy: { createdAt: "desc" }, take: Math.min(input.limit ?? 30, 100), select: notifSelect }),
     prisma.notification.count({ where: { userId: user.id, archivedAt: null, read: false } }),
   ]);
-  return { unreadCount, notifications: notifications.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() })) };
+  return { unreadCount, notifications: await withFullBody(user.id, notifications) };
+}
+
+export async function getNotification(user: McpUser, input: { id: string }) {
+  const n = await prisma.notification.findFirst({ where: { id: input.id, userId: user.id }, select: notifSelect });
+  if (!n) throw new McpToolError("Notification not found");
+  const [row] = await withFullBody(user.id, [n]);
+  return { notification: row };
+}
+
+/** Who the token belongs to plus data counts, so a client can verify account mapping. */
+export async function whoami(user: McpUser) {
+  const [u, workspaces, archivedWorkspaces, personalTasks, assignedTasks, notifications] = await Promise.all([
+    prisma.user.findUnique({ where: { id: user.id }, select: { id: true, name: true, email: true } }),
+    prisma.workspaceMember.count({ where: { userId: user.id, workspace: { archivedAt: null } } }),
+    prisma.workspaceMember.count({ where: { userId: user.id, workspace: { archivedAt: { not: null } } } }),
+    prisma.task.count({ where: visibleTaskWhere({ userId: user.id, workspaceId: null, archived: false }) }),
+    prisma.task.count({ where: visibleTaskWhere({ assignees: { some: { userId: user.id } }, archived: false }) }),
+    prisma.notification.count({ where: { userId: user.id, archivedAt: null } }),
+  ]);
+  return { user: u, counts: { workspaces, archivedWorkspaces, personalTasks, assignedTasks, notifications } };
 }
 
 export async function markNotificationsRead(user: McpUser, input: { ids?: string[]; all?: boolean }) {

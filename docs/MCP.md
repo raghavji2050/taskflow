@@ -104,3 +104,9 @@ curl -s https://<your-taskflow-domain>/api/mcp \
 - Tokens are 256-bit random, prefixed `tf_`, stored hashed; `lastUsedAt` is tracked.
 - Max 20 active tokens per user; token creation is rate-limited.
 - Missing/invalid/revoked token → HTTP 401 with `WWW-Authenticate: Bearer`.
+
+### Notifications & account check
+- `list_notifications` returns the full `body` (chat notifications resolve the full message), plus the stored 80-char `preview` and `truncated`.
+- `get_notification(id)` reads one notification in full.
+- `whoami` shows the signed-in account and counts (workspaces, archived workspaces, personal/assigned tasks, notifications). Use it when lists look empty: chat notifications don't need any workspace or task, so a chat-only account legitimately has empty task lists.
+- `list_workspaces(includeArchived=true)` also shows archived workspaces (hidden by default, which hides their projects/tasks too).
