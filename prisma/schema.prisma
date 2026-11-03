@@ -116,6 +116,7 @@ model User {
   scheduledMessages        ScheduledMessage[]
   conversationActivitiesAsActor   ConversationActivity[] @relation("ConversationActivityActor")
   conversationActivitiesAsTarget  ConversationActivity[] @relation("ConversationActivityTarget")
+  apiTokens                ApiToken[]
 }
 
 model Account {
@@ -853,4 +854,19 @@ model ScheduledMessageAttachment {
   scheduledMessage ScheduledMessage @relation(fields: [scheduledMessageId], references: [id], onDelete: Cascade)
 
   @@index([scheduledMessageId])
+}
+
+/// Personal API tokens for the MCP endpoint. Only a SHA-256 hash is stored.
+model ApiToken {
+  id         String    @id @default(cuid())
+  name       String
+  tokenHash  String    @unique
+  prefix     String
+  userId     String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
