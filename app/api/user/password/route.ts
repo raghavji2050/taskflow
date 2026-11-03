@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { passwordSchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
+import { revokeAllOAuthGrants } from "@/lib/mcp/connected-apps";
 
 export async function PUT(request: Request) {
   try {
@@ -25,6 +26,8 @@ export async function PUT(request: Request) {
       where: { id: user.id },
       data: { password: hashed, sessionVersion: { increment: 1 } },
     });
+    // OAuth-connected apps (Claude connectors) must re-authorize too.
+    await revokeAllOAuthGrants(user.id);
 
     return NextResponse.json({ message: "Password updated", signedOut: true });
   } catch (error) {

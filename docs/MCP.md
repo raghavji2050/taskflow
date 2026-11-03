@@ -110,3 +110,7 @@ curl -s https://<your-taskflow-domain>/api/mcp \
 - `get_notification(id)` reads one notification in full.
 - `whoami` shows the signed-in account and counts (workspaces, archived workspaces, personal/assigned tasks, notifications). Use it when lists look empty: chat notifications don't need any workspace or task, so a chat-only account legitimately has empty task lists.
 - `list_workspaces(includeArchived=true)` also shows archived workspaces (hidden by default, which hides their projects/tasks too).
+
+## Connected apps (OAuth)
+
+Settings → **Connected apps** lists every OAuth client that still holds a live access or refresh token for you, with a **Disconnect** button (`DELETE /api/user/oauth-apps/:clientId`) that revokes all of that client's tokens immediately. "Sign out of all devices", changing your password and resetting your password also revoke every OAuth grant, so connectors must re-authorize. Personal `tf_` API tokens are managed separately in the API tokens card.

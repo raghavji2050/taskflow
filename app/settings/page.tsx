@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PushSubscribe } from "@/components/PushSubscribe";
 import { TimeTrackingSettingsCard } from "@/components/TimeTrackingSettingsCard";
 import { ApiTokensCard } from "@/components/ApiTokensCard";
+import { ConnectedAppsCard } from "@/components/ConnectedAppsCard";
 import { z } from "zod";
 
 type ProfileInput = z.infer<typeof profileSchema>;
@@ -141,6 +142,8 @@ export default function SettingsPage() {
       <TimeTrackingSettingsCard />
 
       <ApiTokensCard />
+
+      <ConnectedAppsCard />
 
       {user?.hasPassword ? (
         <Card className="p-6">

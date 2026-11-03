@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resetPasswordSchema } from "@/lib/validations";
 import { handleApiError } from "@/lib/api";
 import { rateLimit } from "@/lib/rate-limit";
+import { revokeAllOAuthGrants } from "@/lib/mcp/connected-apps";
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       }),
       prisma.passwordResetToken.delete({ where: { id: resetToken.id } }),
     ]);
+    await revokeAllOAuthGrants(resetToken.userId);
 
     return NextResponse.json({ message: "Password reset successful" });
   } catch (error) {
