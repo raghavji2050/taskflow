@@ -7,7 +7,9 @@ Taskflow exposes a [Model Context Protocol](https://modelcontextprotocol.io) ser
 - **Scope:** the token acts as you. It sees only what you can see in the app and obeys workspace/project roles (viewers can't edit or comment).
 - **Rate limit:** 60 requests / minute per token.
 
-## Tools (69)
+## Tools (72)
+
+Smart tools: `plan_my_day`, `find_blockers`, `weekly_report` compute prioritized plans and reports from your live data.
 
 | Tool | What it does |
 |---|---|
@@ -80,6 +82,9 @@ Taskflow exposes a [Model Context Protocol](https://modelcontextprotocol.io) ser
 | `search_messages` | Search your chat messages. |
 | `start_direct_chat` | Open (or find) a direct chat with a user; returns conversationId. |
 | `invite_member` | Invite someone to a workspace by email (owner/admin only). |
+| `plan_my_day` | Your prioritized plan for today: overdue first, then due today, then high-priority / in-progress, plus your active timer. tzOffsetMinutes defaults to IST (330). |
+| `find_blockers` | Find stuck work: overdue tasks, in-progress tasks with open subtasks, and tasks with no activity for staleDays (default 7), counted per assignee. Scope by workspaceId/projectId or all you can see. |
+| `weekly_report` | Summary for the last `days` (default 7): completed, created, overdue now, hours logged, and per-member breakdown. Scope by workspaceId/projectId or all you can see. |
 
 ## 0. Claude mobile / claude.ai (OAuth — easiest)
 
