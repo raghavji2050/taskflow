@@ -13,8 +13,16 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { OAuthButtons } from "@/components/OAuthButtons";
 
+function safeNext() {
+  if (typeof window === "undefined") return "/dashboard";
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/dashboard";
+}
+
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [nextUrl, setNextUrl] = useState("/dashboard");
+  useEffect(() => setNextUrl(safeNext()), []);
 
   useEffect(() => {
     const error = new URLSearchParams(window.location.search).get("error");
@@ -46,7 +54,7 @@ export default function LoginPage() {
         email: data.email,
         password: data.password,
         redirect: false,
-        callbackUrl: "/dashboard",
+        callbackUrl: safeNext(),
       });
 
       if (signInResult?.error) {
@@ -60,7 +68,7 @@ export default function LoginPage() {
         throw new Error("Sign in failed. Please try again.");
       }
 
-      window.location.href = "/dashboard";
+      window.location.href = safeNext();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Login failed");
     } finally {
@@ -125,7 +133,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <OAuthButtons callbackUrl="/dashboard" />
+          <OAuthButtons callbackUrl={nextUrl} />
 
           <p className="mt-6 text-center text-sm text-[var(--muted)]">
             Don&apos;t have an account?{" "}

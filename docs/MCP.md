@@ -3,7 +3,7 @@
 Taskflow exposes a [Model Context Protocol](https://modelcontextprotocol.io) server so Claude (and any MCP client) can read and manage your tasks.
 
 - **Endpoint:** `https://<your-taskflow-domain>/api/mcp` (Streamable HTTP, stateless, JSON responses)
-- **Auth:** `Authorization: Bearer tf_...` — a personal API token
+- **Auth:** OAuth 2.1 (claude.ai / Claude mobile / any MCP client — just paste the URL) **or** `Authorization: Bearer tf_...` personal API token
 - **Scope:** the token acts as you. It sees only what you can see in the app and obeys workspace/project roles (viewers can't edit or comment).
 - **Rate limit:** 60 requests / minute per token.
 
@@ -19,6 +19,22 @@ Taskflow exposes a [Model Context Protocol](https://modelcontextprotocol.io) ser
 | `add_comment` | `taskId`, `body` |
 
 Status: `PENDING`, `IN_PROGRESS`, `COMPLETED`. Priority: `LOW`, `MEDIUM`, `HIGH`. Dates: ISO (`2026-11-10` or full datetime).
+
+## 0. Claude mobile / claude.ai (OAuth — easiest)
+
+1. claude.ai (web) → Settings → **Connectors** → **Add custom connector**.
+2. Name `Taskflow`, URL `https://<your-taskflow-domain>/api/mcp`. Leave OAuth Client ID/Secret empty → **Add**.
+3. Click **Connect** → Taskflow login opens → sign in → **Allow**.
+4. The connector syncs to the Claude mobile app automatically (enable it from the chat's tools menu).
+
+How it works (MCP authorization spec):
+- `/api/mcp` without a token → `401` + `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource/api/mcp"`.
+- `/.well-known/oauth-protected-resource[/api/mcp]` and `/.well-known/oauth-authorization-server` publish metadata (CORS enabled).
+- `/oauth/register` — Dynamic Client Registration (public clients, `token_endpoint_auth_method: none`).
+- `/oauth/authorize` — uses your normal Taskflow login, shows a consent page. PKCE **S256 required**, `redirect_uri` must exactly match a registered one.
+- `/oauth/token` — `authorization_code` and `refresh_token` grants. Codes live 5 min and are single-use; access tokens (`tfo_`) live 1 h; refresh tokens (`tfr_`) live 30 days and rotate on every use. Reusing a code or an old refresh token revokes the whole grant.
+- `/oauth/revoke` — RFC 7009 revocation.
+- Everything is stored as SHA-256 hashes (`OAuthClient`, `OAuthGrant` tables). Set `MCP_PUBLIC_URL` if the public origin differs from the request host.
 
 ## 1. Create a token
 
