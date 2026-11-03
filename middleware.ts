@@ -46,7 +46,9 @@ export default auth((req) => {
   }
 
   if (isAuthPage && isLoggedIn) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    const next = req.nextUrl.searchParams.get("next");
+    const target = next && next.startsWith("/oauth/") ? next : "/dashboard";
+    return NextResponse.redirect(new URL(target, req.url));
   }
 
   const requestId = getOrCreateRequestId(req.headers);

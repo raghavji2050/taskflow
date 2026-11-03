@@ -71,52 +71,53 @@ enum DocumentType {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String?
-  role          UserRole  @default(USER)
-  emailVerified DateTime?
+  id             String    @id @default(cuid())
+  name           String
+  email          String    @unique
+  password       String?
+  role           UserRole  @default(USER)
+  emailVerified  DateTime?
   /// Bumped to revoke every existing session (password change/reset, sign out everywhere).
-  sessionVersion Int      @default(0)
-  image         String?
-  lastSeenAt         DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  sessionVersion Int       @default(0)
+  image          String?
+  lastSeenAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  tasks                   Task[]                    @relation("TaskOwner")
-  taskAssignments         TaskAssignee[]
-  taskAssignmentsMade     TaskAssignee[]            @relation("TaskAssignmentsMade")
-  categories              Category[]
-  boardColumns            BoardColumn[]
-  tags                    Tag[]
-  comments                Comment[]
-  notifications           Notification[]
-  pushSubscriptions       PushSubscription[]
-  workspaceMembers        WorkspaceMember[]
-  projectMembers          ProjectMember[]
-  invitationsReceived     WorkspaceInvitation[] @relation("InvitationsReceived")
-  invitationsSent         WorkspaceInvitation[] @relation("InvitationsSent")
-  passwordResetTokens     PasswordResetToken[]
-  emailVerificationTokens EmailVerificationToken[]
-  accounts                Account[]
-  conversationsCreated    Conversation[]            @relation("ConversationsCreated")
-  conversationParticipants ConversationParticipant[]
-  messages                Message[]
-  messageReactions        MessageReaction[]
-  pinnedMessages          Message[]                 @relation("PinnedMessages")
-  documents               Document[]
-  documentVersions        DocumentVersion[]
-  documentComments        DocumentComment[]
-  documentAttachments     DocumentAttachment[]
-  meetingMinutesCreated   MeetingMinutes[]
-  momSuggestionPreferences MomSuggestionPreference[]
-  timeEntries              TimeEntry[]
-  timeEntryLabels          TimeEntryLabel[]
-  scheduledMessages        ScheduledMessage[]
-  conversationActivitiesAsActor   ConversationActivity[] @relation("ConversationActivityActor")
-  conversationActivitiesAsTarget  ConversationActivity[] @relation("ConversationActivityTarget")
-  apiTokens                ApiToken[]
+  tasks                          Task[]                    @relation("TaskOwner")
+  taskAssignments                TaskAssignee[]
+  taskAssignmentsMade            TaskAssignee[]            @relation("TaskAssignmentsMade")
+  categories                     Category[]
+  boardColumns                   BoardColumn[]
+  tags                           Tag[]
+  comments                       Comment[]
+  notifications                  Notification[]
+  pushSubscriptions              PushSubscription[]
+  workspaceMembers               WorkspaceMember[]
+  projectMembers                 ProjectMember[]
+  invitationsReceived            WorkspaceInvitation[]     @relation("InvitationsReceived")
+  invitationsSent                WorkspaceInvitation[]     @relation("InvitationsSent")
+  passwordResetTokens            PasswordResetToken[]
+  emailVerificationTokens        EmailVerificationToken[]
+  accounts                       Account[]
+  conversationsCreated           Conversation[]            @relation("ConversationsCreated")
+  conversationParticipants       ConversationParticipant[]
+  messages                       Message[]
+  messageReactions               MessageReaction[]
+  pinnedMessages                 Message[]                 @relation("PinnedMessages")
+  documents                      Document[]
+  documentVersions               DocumentVersion[]
+  documentComments               DocumentComment[]
+  documentAttachments            DocumentAttachment[]
+  meetingMinutesCreated          MeetingMinutes[]
+  momSuggestionPreferences       MomSuggestionPreference[]
+  timeEntries                    TimeEntry[]
+  timeEntryLabels                TimeEntryLabel[]
+  scheduledMessages              ScheduledMessage[]
+  conversationActivitiesAsActor  ConversationActivity[]    @relation("ConversationActivityActor")
+  conversationActivitiesAsTarget ConversationActivity[]    @relation("ConversationActivityTarget")
+  apiTokens                      ApiToken[]
+  oauthGrants                    OAuthGrant[]
 }
 
 model Account {
@@ -174,42 +175,42 @@ model TaskTag {
 }
 
 model Task {
-  id             String     @id @default(cuid())
-  title          String
-  description    String?    @db.Text
-  priority       Priority   @default(MEDIUM)
-  status         TaskStatus @default(PENDING)
-  dueDate        DateTime?
-  completedAt    DateTime?
-  archived       Boolean    @default(false)
-  deletedAt      DateTime?
-  position       Int        @default(0)
+  id               String     @id @default(cuid())
+  title            String
+  description      String?    @db.Text
+  priority         Priority   @default(MEDIUM)
+  status           TaskStatus @default(PENDING)
+  dueDate          DateTime?
+  completedAt      DateTime?
+  archived         Boolean    @default(false)
+  deletedAt        DateTime?
+  position         Int        @default(0)
   recurrenceRule   String?
   estimatedMinutes Int?
   userId           String
-  categoryId     String?
-  boardColumnId  String?
-  workspaceId    String?
-  projectId      String?
-  sectionId      String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  categoryId       String?
+  boardColumnId    String?
+  workspaceId      String?
+  projectId        String?
+  sectionId        String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  user        User            @relation("TaskOwner", fields: [userId], references: [id], onDelete: Cascade)
-  category    Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  boardColumn BoardColumn?    @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
-  workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  project     Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  section     ProjectSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  assignees   TaskAssignee[]
-  subtasks    Subtask[]
-  tags        TaskTag[]
-  attachments Attachment[]
-  comments    Comment[]
-  activities  TaskActivity[]
-  reminders   Reminder[]
+  user          User            @relation("TaskOwner", fields: [userId], references: [id], onDelete: Cascade)
+  category      Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  boardColumn   BoardColumn?    @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
+  workspace     Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  section       ProjectSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  assignees     TaskAssignee[]
+  subtasks      Subtask[]
+  tags          TaskTag[]
+  attachments   Attachment[]
+  comments      Comment[]
+  activities    TaskActivity[]
+  reminders     Reminder[]
   documentLinks DocumentTask[]
-  timeEntries TimeEntry[]
+  timeEntries   TimeEntry[]
 
   @@index([userId])
   @@index([status])
@@ -241,8 +242,8 @@ model BoardColumn {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  user      User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   tasks     Task[]
 
   @@index([userId])
@@ -428,15 +429,15 @@ model WorkspaceMember {
 }
 
 model Project {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
-  description String?  @db.Text
-  color       String   @default("#6366f1")
-  archived    Boolean  @default(false)
+  description String?   @db.Text
+  color       String    @default("#6366f1")
+  archived    Boolean   @default(false)
   deletedAt   DateTime?
   workspaceId String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members   ProjectMember[]
@@ -497,29 +498,29 @@ model EmailVerificationToken {
 }
 
 model Conversation {
-  id          String           @id @default(cuid())
-  type        ConversationType
-  name        String?
-  workspaceId String?          @unique
-  createdById String
+  id           String           @id @default(cuid())
+  type         ConversationType
+  name         String?
+  workspaceId  String?          @unique
+  createdById  String
   /// Secret token for the public inbound webhook URL (/api/inbound/{token}).
-  inboundToken String?         @unique
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  inboundToken String?          @unique
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  workspace    Workspace?                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy    User                      @relation("ConversationsCreated", fields: [createdById], references: [id], onDelete: Cascade)
-  participants ConversationParticipant[]
-  messages     Message[]
+  workspace         Workspace?                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy         User                      @relation("ConversationsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  participants      ConversationParticipant[]
+  messages          Message[]
   scheduledMessages ScheduledMessage[]
-  activities   ConversationActivity[]
+  activities        ConversationActivity[]
 
   @@index([createdById])
   @@index([type])
 }
 
 model ConversationParticipant {
-  id             String    @id @default(cuid())
+  id             String           @id @default(cuid())
   conversationId String
   userId         String
   lastReadAt     DateTime?
@@ -538,33 +539,33 @@ model ConversationParticipant {
 }
 
 model Message {
-  id             String    @id @default(cuid())
-  conversationId String
-  userId         String
-  body           String    @default("") @db.Text
-  bodyJson       Json?
-  parentId       String?
+  id              String    @id @default(cuid())
+  conversationId  String
+  userId          String
+  body            String    @default("") @db.Text
+  bodyJson        Json?
+  parentId        String?
   forwardedFromId String?
-  pinnedAt       DateTime?
-  pinnedById     String?
-  editedAt       DateTime?
-  deletedAt      DateTime?
-  systemKind     String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  pinnedAt        DateTime?
+  pinnedById      String?
+  editedAt        DateTime?
+  deletedAt       DateTime?
+  systemKind      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent       Message?            @relation("MessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies      Message[]           @relation("MessageReplies")
-  forwardedFrom Message?           @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
-  forwards     Message[]           @relation("MessageForwards")
-  pinnedBy     User?               @relation("PinnedMessages", fields: [pinnedById], references: [id], onDelete: SetNull)
-  attachments  MessageAttachment[]
-  reactions    MessageReaction[]
-  documentLinks DocumentMessage[]
-  scheduledReplies     ScheduledMessage[] @relation("ScheduledMessageReply")
-  scheduledDeliveries  ScheduledMessage[] @relation("ScheduledMessageDelivered")
+  conversation        Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent              Message?            @relation("MessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies             Message[]           @relation("MessageReplies")
+  forwardedFrom       Message?            @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
+  forwards            Message[]           @relation("MessageForwards")
+  pinnedBy            User?               @relation("PinnedMessages", fields: [pinnedById], references: [id], onDelete: SetNull)
+  attachments         MessageAttachment[]
+  reactions           MessageReaction[]
+  documentLinks       DocumentMessage[]
+  scheduledReplies    ScheduledMessage[]  @relation("ScheduledMessageReply")
+  scheduledDeliveries ScheduledMessage[]  @relation("ScheduledMessageDelivered")
 
   @@index([conversationId, createdAt])
   @@index([conversationId, deletedAt, createdAt])
@@ -584,8 +585,8 @@ model ConversationActivity {
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  actor        User?          @relation("ConversationActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
-  target       User?          @relation("ConversationActivityTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  actor        User?        @relation("ConversationActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  target       User?        @relation("ConversationActivityTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
 }
@@ -633,15 +634,15 @@ model Document {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace     Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  parent        Document?           @relation("DocumentTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children      Document[]          @relation("DocumentTree")
-  versions      DocumentVersion[]
-  comments      DocumentComment[]
-  taskLinks     DocumentTask[]
-  messageLinks  DocumentMessage[]
-  attachments   DocumentAttachment[]
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace      Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent         Document?            @relation("DocumentTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Document[]           @relation("DocumentTree")
+  versions       DocumentVersion[]
+  comments       DocumentComment[]
+  taskLinks      DocumentTask[]
+  messageLinks   DocumentMessage[]
+  attachments    DocumentAttachment[]
   meetingMinutes MeetingMinutes?
 
   @@index([userId])
@@ -682,10 +683,10 @@ model DocumentComment {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  document Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  version  DocumentVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
-  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent   DocumentComment? @relation("DocumentCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  document Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version  DocumentVersion?  @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   DocumentComment?  @relation("DocumentCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies  DocumentComment[] @relation("DocumentCommentReplies")
 
   @@index([documentId])
@@ -778,7 +779,7 @@ model TimeEntry {
   isRunning            Boolean   @default(false)
   isPaused             Boolean   @default(false)
   lastReminderAt       DateTime?
-  reminderSnoozedUntil   DateTime?
+  reminderSnoozedUntil DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -796,11 +797,11 @@ model TimeEntry {
 }
 
 model TimeEntryLabel {
-  id     String  @id @default(cuid())
-  name   String
-  color  String?
-  userId String
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id      String         @id @default(cuid())
+  name    String
+  color   String?
+  userId  String
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   entries TimeEntryTag[]
 
   @@unique([userId, name])
@@ -810,7 +811,7 @@ model TimeEntryLabel {
 model TimeEntryTag {
   timeEntryId String
   labelId     String
-  timeEntry   TimeEntry     @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  timeEntry   TimeEntry      @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
   label       TimeEntryLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
   @@id([timeEntryId, labelId])
@@ -831,10 +832,10 @@ model ScheduledMessage {
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  parent       Message?     @relation("ScheduledMessageReply", fields: [parentId], references: [id], onDelete: SetNull)
-  message      Message?     @relation("ScheduledMessageDelivered", fields: [messageId], references: [id], onDelete: SetNull)
+  user         User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation                 @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent       Message?                     @relation("ScheduledMessageReply", fields: [parentId], references: [id], onDelete: SetNull)
+  message      Message?                     @relation("ScheduledMessageDelivered", fields: [messageId], references: [id], onDelete: SetNull)
   attachments  ScheduledMessageAttachment[]
 
   @@index([scheduledFor, status])
@@ -869,4 +870,35 @@ model ApiToken {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model OAuthClient {
+  id           String       @id @default(cuid())
+  clientId     String       @unique
+  name         String
+  redirectUris Json
+  createdAt    DateTime     @default(now())
+  grants       OAuthGrant[]
+}
+
+/// Authorization codes, access tokens and refresh tokens (hashed). kind: CODE | ACCESS | REFRESH
+model OAuthGrant {
+  id            String      @id @default(cuid())
+  kind          String
+  tokenHash     String      @unique
+  clientId      String
+  userId        String
+  redirectUri   String?     @db.VarChar(1000)
+  codeChallenge String?
+  scope         String?
+  resource      String?     @db.VarChar(1000)
+  expiresAt     DateTime
+  usedAt        DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  client        OAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([clientId])
 }

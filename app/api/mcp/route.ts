@@ -1,5 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { authenticateApiToken } from "@/lib/api-tokens";
+import { authenticateOAuthToken, CORS_HEADERS, getOrigin, preflight } from "@/lib/mcp/oauth";
 import { rateLimit } from "@/lib/rate-limit";
 import { createTaskflowMcpServer } from "@/lib/mcp/server";
 import { logger } from "@/lib/logger";
@@ -17,10 +18,13 @@ function jsonRpcError(status: number, message: string, extraHeaders: Record<stri
 }
 
 async function handle(request: Request) {
-  const auth = await authenticateApiToken(request.headers.get("authorization"));
+  const header = request.headers.get("authorization");
+  const auth = (await authenticateApiToken(header)) ?? (await authenticateOAuthToken(header));
   if (!auth) {
-    return jsonRpcError(401, "Missing or invalid taskflow API token", {
-      "WWW-Authenticate": 'Bearer realm="taskflow"',
+    const origin = getOrigin(request);
+    return jsonRpcError(401, "Missing or invalid taskflow token", {
+      ...CORS_HEADERS,
+      "WWW-Authenticate": `Bearer realm="taskflow", resource_metadata="${origin}/.well-known/oauth-protected-resource/api/mcp"${header ? ', error="invalid_token"' : ""}`,
     });
   }
   if (!rateLimit(`mcp:${auth.tokenId}`, RATE_LIMIT_PER_MINUTE, 60_000)) {
@@ -42,4 +46,4 @@ async function handle(request: Request) {
   }
 }
 
-export { handle as GET, handle as POST, handle as DELETE };
+export { handle as GET, handle as POST, handle as DELETE, preflight as OPTIONS };
