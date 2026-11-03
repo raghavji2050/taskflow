@@ -7,33 +7,79 @@ Taskflow exposes a [Model Context Protocol](https://modelcontextprotocol.io) ser
 - **Scope:** the token acts as you. It sees only what you can see in the app and obeys workspace/project roles (viewers can't edit or comment).
 - **Rate limit:** 60 requests / minute per token.
 
-## Tools
+## Tools (69)
 
 | Tool | What it does |
-| --- | --- |
-| `list_projects` | Projects you can see, per workspace (optional `workspaceId`) |
-| `list_tasks` | Filters: `projectId`, `workspaceId`, `status`, `priority`, `assignedToMe`, `search`, `dueBefore`, `includeCompleted`, `limit` (≤100). Completed tasks hidden by default |
-| `get_task` | One task with description, subtasks and the last 20 comments |
-| `create_task` | `title` + optional `description`, `projectId`/`workspaceId`, `priority`, `status`, `dueDate`, `assigneeId` |
-| `update_task` | `taskId` + any of `title`, `status`, `priority`, `dueDate`, `assigneeId` (`null` clears due date / assignee) |
-| `add_comment` | `taskId`, `body` |
-
-| `list_workspaces` / `list_workspace_members` | Your workspaces + roles; members (ids for assigning) |
-| `assign_task` | Replace assignees (`assigneeIds`, empty = unassign) |
-| `create_project` / `update_project` | Create; rename/recolor/describe or `archived: true/false` (needs manage rights) |
-| `list_sections` / `create_section` | Project sections (board columns) |
-| `move_task` | Move to another `sectionId` and/or `projectId` |
-| `delete_task` / `list_trash` / `restore_from_trash` | Soft delete to trash and restore (task or project) |
-| `list_subtasks` / `create_subtask` / `update_subtask` | Subtasks (rename / complete) |
-| `list_comments` | All comments on a task |
-| `search_tasks` | Search title + description across everything you can see |
-| `list_tags` / `set_task_tags` | Your personal labels (by name, auto-created) |
-| `set_recurrence` | `DAILY` / `WEEKLY` / `MONTHLY` / `null` |
-| `list_notifications` / `mark_notifications_read` | Inbox + unread count; mark by ids or `all` |
-
-All tools use the same RBAC as the app (viewers are read-only, private projects stay hidden). Task dependencies don't exist in the data model yet, so there is no tool for them.
-
-Status: `PENDING`, `IN_PROGRESS`, `COMPLETED`. Priority: `LOW`, `MEDIUM`, `HIGH`. Dates: ISO (`2026-11-10` or full datetime).
+|---|---|
+| `list_projects` | List the taskflow projects you can see, grouped by workspace. |
+| `list_tasks` | List tasks. Without projectId/workspaceId returns your personal tasks, tasks you created and tasks assigned to you. Completed tasks are hidden unless status=COMPLETED or includeCompleted=true. |
+| `get_task` | Get one task with description, subtasks and recent comments. |
+| `create_task` | Create a task. Pass projectId to add it to a project; omit both projectId and workspaceId for a personal task. |
+| `update_task` | Update a task's title, status, priority, due date or assignee. dueDate/assigneeId = null clears it. |
+| `add_comment` | Add a comment to a task as you. |
+| `whoami` | Show which taskflow account this connection is signed in as, with counts of workspaces, tasks and notifications. |
+| `list_workspaces` | List workspaces you belong to and your role. Archived workspaces are hidden unless includeArchived=true. |
+| `list_workspace_members` | List members of a workspace (use their ids to assign tasks). |
+| `assign_task` | Set the assignees of a workspace task (replaces existing). Empty list unassigns. |
+| `create_project` | Create a project in a workspace (not allowed for viewers). |
+| `update_project` | Rename / recolor / describe a project, or archive it (archived=true) / unarchive. Needs project manage rights. |
+| `list_sections` | List the sections (board columns) of a project. |
+| `create_section` | Add a section to a project. |
+| `move_task` | Move a workspace task to another section and/or project. |
+| `delete_task` | Move a task to trash (restorable). |
+| `list_trash` | List trashed items. Without workspaceId lists your personal trash. |
+| `restore_from_trash` | Restore a trashed task or project. Pass workspaceId for workspace items. |
+| `list_subtasks` | List subtasks of a task. |
+| `create_subtask` | Add a subtask to a task. |
+| `update_subtask` | Rename or complete/uncomplete a subtask. |
+| `list_comments` | List comments on a task (newest first). |
+| `search_tasks` | Full-text search across all tasks you can see (title + description). |
+| `list_tags` | List your labels/tags. |
+| `set_task_tags` | Set your labels on a task by name (creates missing labels). Empty list clears. |
+| `set_recurrence` | Make a task repeat DAILY/WEEKLY/MONTHLY, or null to stop. |
+| `list_notifications` | List your notifications (full body, plus the short stored preview) and unread count. |
+| `get_notification` | Read one notification with its full body (chat notifications resolve the full message). |
+| `mark_notifications_read` | Mark notifications read by ids, or all=true. |
+| `get_project` | Get a project with its sections, members and your access. |
+| `delete_project` | Move a project to trash (restorable). Needs manage rights. |
+| `rename_section` | Rename a project section. |
+| `delete_section` | Delete a section (its tasks move to another section). |
+| `reorder_sections` | Reorder sections: pass all section ids in the new order. |
+| `list_project_members` | List members of a project and their roles. |
+| `add_project_member` | Add a workspace member to a project. |
+| `update_project_member` | Change a project member's role (memberId from list_project_members). |
+| `remove_project_member` | Remove a member from a project. |
+| `delete_subtask` | Delete a subtask. |
+| `update_comment` | Edit one of your own task comments. |
+| `delete_comment` | Delete one of your own task comments. |
+| `list_task_activity` | Show a task's activity history (newest first). |
+| `list_reminders` | List reminders on a task. |
+| `add_reminder` | Add a reminder to a task at an ISO datetime. |
+| `delete_reminder` | Delete a task reminder. |
+| `get_active_timer` | Show your running/paused timer, if any. |
+| `start_timer` | Start a timer on a task (stops any other running timer). |
+| `stop_timer` | Stop your running timer. |
+| `pause_timer` | Pause your running timer. |
+| `resume_timer` | Resume your paused timer. |
+| `log_time` | Log time manually on a task for a date (YYYY-MM-DD). |
+| `list_time_entries` | List time entries: for a task (taskId) or your own (optionally per workspace), with a report. |
+| `update_time_entry` | Edit a time entry's description or duration (minutes). |
+| `delete_time_entry` | Delete a time entry. |
+| `list_documents` | List docs you can see (personal + workspaces), optionally by workspace or title search. |
+| `get_document` | Read a document with its full body. |
+| `create_document` | Create a document (personal, or in a workspace). |
+| `update_document` | Edit a document's title/body, pin it, or archive it (archived=true). Saves a version. |
+| `list_conversations` | List your chats (direct, group, workspace channels) with unread counts. |
+| `list_messages` | Read messages in a conversation (newest page; pass cursor for older). |
+| `send_message` | Send a chat message as you (optionally as a thread reply via parentId). |
+| `edit_message` | Edit one of your chat messages. |
+| `delete_message` | Delete one of your chat messages. |
+| `react_to_message` | Toggle an emoji reaction on a chat message. |
+| `pin_message` | Pin or unpin a chat message. |
+| `mark_conversation_read` | Mark a conversation as read. |
+| `search_messages` | Search your chat messages. |
+| `start_direct_chat` | Open (or find) a direct chat with a user; returns conversationId. |
+| `invite_member` | Invite someone to a workspace by email (owner/admin only). |
 
 ## 0. Claude mobile / claude.ai (OAuth — easiest)
 

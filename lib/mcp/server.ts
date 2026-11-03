@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ProjectError } from "@/lib/project-sections";
 import * as tools from "@/lib/mcp/tools";
 import * as extra from "@/lib/mcp/tools-extra";
+import * as more from "@/lib/mcp/tools-more";
 import { TrashError } from "@/lib/trash";
 
 const status = z.enum(tools.STATUSES);
@@ -144,6 +145,56 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   add("list_notifications", "List your notifications (full body, plus the short stored preview) and unread count.", { unreadOnly: z.boolean().optional(), limit: z.number().int().min(1).max(100).optional() }, (a: { unreadOnly?: boolean; limit?: number }) => extra.listNotifications(user, a), true);
   add("get_notification", "Read one notification with its full body (chat notifications resolve the full message).", { id }, (a: { id: string }) => extra.getNotification(user, a), true);
   add("mark_notifications_read", "Mark notifications read by ids, or all=true.", { ids: z.array(id).max(100).optional(), all: z.boolean().optional() }, (a: { ids?: string[]; all?: boolean }) => extra.markNotificationsRead(user, a));
+
+  const role = z.enum(["ADMIN", "MEMBER", "VIEWER"]);
+  const range = z.enum(["today", "week", "month", "all"]);
+  const P = <K extends keyof typeof more>(k: K) => ((a: never) => (more[k] as (u: tools.McpUser, a: never) => Promise<unknown>)(user, a)) as (a: never) => Promise<unknown>;
+  // projects & sections
+  add("get_project", "Get a project with its sections, members and your access.", { projectId: id }, P("getProject"), true);
+  add("delete_project", "Move a project to trash (restorable). Needs manage rights.", { projectId: id }, P("deleteProject"));
+  add("rename_section", "Rename a project section.", { projectId: id, sectionId: id, name: z.string().trim().min(1).max(80) }, P("renameSection"));
+  add("delete_section", "Delete a section (its tasks move to another section).", { projectId: id, sectionId: id }, P("deleteSection"));
+  add("reorder_sections", "Reorder sections: pass all section ids in the new order.", { projectId: id, sectionIds: z.array(id).min(1).max(100) }, P("reorderSections"));
+  add("list_project_members", "List members of a project and their roles.", { projectId: id }, P("listProjectMembers"), true);
+  add("add_project_member", "Add a workspace member to a project.", { projectId: id, userId: id, role }, P("addProjectMember"));
+  add("update_project_member", "Change a project member's role (memberId from list_project_members).", { projectId: id, memberId: id, role }, P("updateProjectMember"));
+  add("remove_project_member", "Remove a member from a project.", { projectId: id, memberId: id }, P("removeProjectMember"));
+  // task extras
+  add("delete_subtask", "Delete a subtask.", { subtaskId: id }, P("deleteSubtask"));
+  add("update_comment", "Edit one of your own task comments.", { commentId: id, body: z.string().trim().min(1).max(5000) }, P("updateComment"));
+  add("delete_comment", "Delete one of your own task comments.", { commentId: id }, P("deleteComment"));
+  add("list_task_activity", "Show a task's activity history (newest first).", { taskId: id, limit: z.number().int().min(1).max(100).optional() }, P("listTaskActivity"), true);
+  add("list_reminders", "List reminders on a task.", { taskId: id }, P("listReminders"), true);
+  add("add_reminder", "Add a reminder to a task at an ISO datetime.", { taskId: id, remindAt: z.string() }, P("addReminder"));
+  add("delete_reminder", "Delete a task reminder.", { reminderId: id }, P("deleteReminder"));
+  // time tracking
+  add("get_active_timer", "Show your running/paused timer, if any.", {}, P("getActiveTimer"), true);
+  add("start_timer", "Start a timer on a task (stops any other running timer).", { taskId: id, description: z.string().max(500).optional() }, P("startTimer"));
+  add("stop_timer", "Stop your running timer.", { timeEntryId: id.optional() }, P("stopTimer"));
+  add("pause_timer", "Pause your running timer.", { timeEntryId: id.optional() }, P("pauseTimer"));
+  add("resume_timer", "Resume your paused timer.", { timeEntryId: id.optional() }, P("resumeTimer"));
+  add("log_time", "Log time manually on a task for a date (YYYY-MM-DD).", { taskId: id, date: z.string(), minutes: z.number().positive().max(1440), description: z.string().max(500).optional() }, P("logTime"));
+  add("list_time_entries", "List time entries: for a task (taskId) or your own (optionally per workspace), with a report.", { taskId: id.optional(), workspaceId: id.optional(), range: range.optional(), limit: z.number().int().min(1).max(100).optional() }, P("listTimeEntries"), true);
+  add("update_time_entry", "Edit a time entry's description or duration (minutes).", { entryId: id, description: z.string().max(500).nullable().optional(), minutes: z.number().positive().max(1440).optional() }, P("updateTimeEntry"));
+  add("delete_time_entry", "Delete a time entry.", { entryId: id }, P("deleteTimeEntry"));
+  // documents
+  add("list_documents", "List docs you can see (personal + workspaces), optionally by workspace or title search.", { workspaceId: id.optional(), includeArchived: z.boolean().optional(), search: z.string().max(200).optional(), limit: z.number().int().min(1).max(100).optional() }, P("listDocuments"), true);
+  add("get_document", "Read a document with its full body.", { documentId: id }, P("getDocument"), true);
+  add("create_document", "Create a document (personal, or in a workspace).", { title: z.string().trim().min(1).max(200), body: z.string().max(200000).optional(), workspaceId: id.optional(), parentId: id.optional() }, P("createDocument"));
+  add("update_document", "Edit a document's title/body, pin it, or archive it (archived=true). Saves a version.", { documentId: id, title: z.string().trim().min(1).max(200).optional(), body: z.string().max(200000).optional(), pinned: z.boolean().optional(), archived: z.boolean().optional() }, P("updateDocument"));
+  // chat
+  add("list_conversations", "List your chats (direct, group, workspace channels) with unread counts.", {}, P("listConversations"), true);
+  add("list_messages", "Read messages in a conversation (newest page; pass cursor for older).", { conversationId: id, limit: z.number().int().min(1).max(100).optional(), cursor: z.string().optional() }, P("listMessages"), true);
+  add("send_message", "Send a chat message as you (optionally as a thread reply via parentId).", { conversationId: id, body: z.string().trim().min(1).max(10000), parentId: id.optional() }, P("sendChatMessage"));
+  add("edit_message", "Edit one of your chat messages.", { conversationId: id, messageId: id, body: z.string().trim().min(1).max(10000) }, P("editChatMessage"));
+  add("delete_message", "Delete one of your chat messages.", { conversationId: id, messageId: id }, P("deleteChatMessage"));
+  add("react_to_message", "Toggle an emoji reaction on a chat message.", { conversationId: id, messageId: id, emoji: z.string().min(1).max(16) }, P("reactToMessage"));
+  add("pin_message", "Pin or unpin a chat message.", { conversationId: id, messageId: id, pinned: z.boolean() }, P("pinMessage"));
+  add("mark_conversation_read", "Mark a conversation as read.", { conversationId: id }, P("markConversationRead"));
+  add("search_messages", "Search your chat messages.", { query: z.string().trim().min(1).max(200), limit: z.number().int().min(1).max(50).optional() }, P("searchMessages"), true);
+  add("start_direct_chat", "Open (or find) a direct chat with a user; returns conversationId.", { userId: id }, P("startDirectChat"));
+  // workspace
+  add("invite_member", "Invite someone to a workspace by email (owner/admin only).", { workspaceId: id, email: z.string().email() }, P("inviteMember"));
 
   return server;
 }
