@@ -4,6 +4,7 @@ import { ProjectError } from "@/lib/project-sections";
 import * as tools from "@/lib/mcp/tools";
 import * as extra from "@/lib/mcp/tools-extra";
 import * as more from "@/lib/mcp/tools-more";
+import * as smart from "@/lib/mcp/tools-smart";
 import { TrashError } from "@/lib/trash";
 
 const status = z.enum(tools.STATUSES);
@@ -196,5 +197,9 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   // workspace
   add("invite_member", "Invite someone to a workspace by email (owner/admin only).", { workspaceId: id, email: z.string().email() }, P("inviteMember"));
 
+  // smart
+  add("plan_my_day", "Your prioritized plan for today: overdue first, then due today, then high-priority / in-progress, plus your active timer. tzOffsetMinutes defaults to IST (330).", { tzOffsetMinutes: z.number().int().min(-720).max(840).optional(), limit: z.number().int().min(1).max(50).optional() }, (a: { tzOffsetMinutes?: number; limit?: number }) => smart.planMyDay(user, a), true);
+  add("find_blockers", "Find stuck work: overdue tasks, in-progress tasks with open subtasks, and tasks with no activity for staleDays (default 7), counted per assignee. Scope by workspaceId/projectId or all you can see.", { workspaceId: id.optional(), projectId: id.optional(), staleDays: z.number().int().min(1).max(90).optional() }, (a: { workspaceId?: string; projectId?: string; staleDays?: number }) => smart.findBlockers(user, a), true);
+  add("weekly_report", "Summary for the last `days` (default 7): completed, created, overdue now, hours logged, and per-member breakdown. Scope by workspaceId/projectId or all you can see.", { workspaceId: id.optional(), projectId: id.optional(), days: z.number().int().min(1).max(31).optional() }, (a: { workspaceId?: string; projectId?: string; days?: number }) => smart.weeklyReport(user, a), true);
   return server;
 }

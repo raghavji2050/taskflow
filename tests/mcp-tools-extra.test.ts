@@ -145,6 +145,6 @@ describe("tools", () => {
   });
   it("server registers all tools", () => {
     const s = createTaskflowMcpServer(user) as unknown as { _registeredTools: Record<string, unknown> };
-    expect(Object.keys(s._registeredTools).length).toBe(69);
+    expect(Object.keys(s._registeredTools).length).toBe(72);
   });
 });
