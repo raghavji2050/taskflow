@@ -88,7 +88,17 @@ export function CalendarView({
         </div>
       )}
 
-      <Card className="overflow-hidden p-4 sm:p-5">
+      <MobileAgenda
+        days={calendarDays.filter((d) => isSameMonth(d, month))}
+        tasks={scheduled}
+        timeBlocks={showTimeBlocks ? timeBlocks : []}
+        month={month}
+        onEdit={onEdit}
+        onDayClick={onDayClick}
+        allTasks={tasks}
+      />
+
+      <Card className="overflow-hidden p-4 max-sm:hidden sm:p-5">
         <h2 className="mb-4 text-center text-lg font-semibold text-[var(--foreground)]">
           {format(month, "MMMM yyyy")}
         </h2>
@@ -245,6 +255,94 @@ export function CalendarView({
           </div>
         </Card>
       )}
+    </div>
+  );
+}
+
+function MobileAgenda({
+  days, tasks, timeBlocks, month, onEdit, onDayClick, allTasks,
+}: {
+  days: Date[];
+  tasks: Task[];
+  timeBlocks: CalendarTimeBlock[];
+  month: Date;
+  onEdit: (task: Task) => void;
+  onDayClick?: (day: Date) => void;
+  allTasks: Task[];
+}) {
+  const rows = days
+    .map((day) => ({
+      day,
+      dayTasks: tasks.filter((t) => isSameCalendarDay(t.dueDate, day)),
+      dayBlocks: timeBlocks.filter((b) => isSameCalendarDay(b.startTime, day)),
+    }))
+    .filter((r) => r.dayTasks.length > 0 || r.dayBlocks.length > 0 || isToday(r.day));
+
+  return (
+    <div className="sm:hidden" data-testid="calendar-mobile">
+    <Card className="p-3">
+      <h2 className="mb-2 px-1 text-base font-semibold text-[var(--foreground)]">{format(month, "MMMM yyyy")}</h2>
+      {rows.length === 0 && (
+        <p className="px-1 py-6 text-center text-sm text-[var(--muted)]">No tasks due this month</p>
+      )}
+      <ol className="space-y-3">
+        {rows.map(({ day, dayTasks, dayBlocks }) => (
+          <li key={day.toISOString()} data-testid="agenda-day">
+            <div className="flex items-center justify-between px-1">
+              <span className={cn("text-xs font-semibold uppercase tracking-wide", isToday(day) ? "text-[var(--accent)]" : "text-[var(--muted)]")}>
+                {isToday(day) ? "Today · " : ""}{format(day, "EEE, d MMM")}
+              </span>
+              {onDayClick && (
+                <button
+                  type="button"
+                  onClick={() => onDayClick(day)}
+                  className="min-h-11 rounded-lg px-3 text-xs font-medium text-[var(--accent)]"
+                  aria-label={`Add task on ${format(day, "d MMMM")}`}
+                >
+                  + Add
+                </button>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              {dayTasks.map((task) => (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => onEdit(task)}
+                  className={cn(
+                    "agenda-task flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium",
+                    getPriorityColor(task.priority),
+                    task.status === "COMPLETED" && "line-through opacity-70"
+                  )}
+                >
+                  <span className="min-w-0 flex-1 break-words">{task.title}</span>
+                  {task.dueDate && (
+                    <span className="shrink-0 text-[11px] opacity-75">{format(new Date(task.dueDate), "h:mm a")}</span>
+                  )}
+                </button>
+              ))}
+              {dayBlocks.map((block) => (
+                <button
+                  key={block.id}
+                  type="button"
+                  onClick={() => {
+                    const task = allTasks.find((t) => t.id === block.taskId);
+                    if (task) onEdit(task);
+                  }}
+                  className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-teal-100 px-3 py-2 text-left text-sm text-teal-900 dark:bg-teal-950/50 dark:text-teal-200"
+                >
+                  <span className="min-w-0 flex-1 truncate">{block.taskTitle}</span>
+                  <span className="shrink-0 text-[11px] opacity-75">{formatDurationShort(block.duration)}</span>
+                </button>
+              ))}
+              {dayTasks.length === 0 && dayBlocks.length === 0 && (
+                <p className="px-1 text-xs text-[var(--muted)]">Nothing due</p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </Card>
     </div>
   );
 }
