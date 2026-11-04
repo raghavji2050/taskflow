@@ -1,6 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // Mobile layouts for List and Calendar. Runs against the throwaway CI MySQL only.
+// Own client IP per worker so these signups do not share the register rate-limit bucket with other specs.
+test.use({ extraHTTPHeaders: { "x-forwarded-for": `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` } });
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
 const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
