@@ -1,5 +1,7 @@
 "use client";
 
+import { shouldOpenFromClick } from "@/lib/open-on-click";
+
 import { Calendar, Clock, Pencil, Trash2, Archive, ArchiveRestore, MessageSquare, Eye } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
@@ -72,7 +74,7 @@ export function TaskCard({
   );
 
   return (
-    <div className={cn("task-row group flex gap-0 overflow-hidden rounded-2xl elevate-hover", getPriorityClass(task.priority), isCompleted && "opacity-70", selected && "ring-2 ring-[var(--accent)] shadow-md")}>
+    <div data-testid="task-row" onClick={(e) => { if (!bulkMode && shouldOpenFromClick(e)) onEdit(task); }} className={cn("task-row group flex cursor-pointer gap-0 overflow-hidden rounded-2xl elevate-hover", getPriorityClass(task.priority), isCompleted && "opacity-70", selected && "ring-2 ring-[var(--accent)] shadow-md")}>
       <div className="task-priority-bar my-3 ml-3" />
 
       <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-2 p-3 pl-2 sm:flex-nowrap sm:items-center sm:p-4 sm:pl-3">

@@ -1,5 +1,8 @@
 "use client";
 
+import { shouldOpenFromClick } from "@/lib/open-on-click";
+import { QuickAddTask } from "@/components/QuickAddTask";
+
 import { useState } from "react";
 import {
   DndContext,
@@ -34,6 +37,7 @@ type ProjectBoardProps = {
   onDelete: (task: Task) => void;
   onToggleComplete: (task: Task) => void;
   onAddTask: (sectionId: string) => void;
+  onQuickAdd?: (sectionId: string, text: string) => Promise<void>;
   onRenameSection: (sectionId: string, name: string) => Promise<void>;
   onDeleteSection: (sectionId: string) => void;
   onReorderSection: (sectionId: string, direction: -1 | 1) => void;
@@ -89,8 +93,10 @@ function ProjectTaskCard({
         setDropRef(node);
       }}
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
+      data-testid="project-task-card"
+      onClick={(e) => { if (shouldOpenFromClick(e)) onEdit(task); }}
       className={cn(
-        "flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-3 transition-shadow",
+        "flex cursor-pointer items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-3 transition-shadow",
         isOver && "ring-2 ring-[var(--accent)]",
         isDragging && "z-20 opacity-60 shadow-lg"
       )}
@@ -172,6 +178,7 @@ function SectionColumn({
   onDelete,
   onToggleComplete,
   onAddTask,
+  onQuickAdd,
   onRenameSection,
   onDeleteSection,
   onReorderSection,
@@ -186,6 +193,7 @@ function SectionColumn({
   onDelete: (task: Task) => void;
   onToggleComplete: (task: Task) => void;
   onAddTask: (sectionId: string) => void;
+  onQuickAdd?: (sectionId: string, text: string) => Promise<void>;
   onRenameSection: (sectionId: string, name: string) => Promise<void>;
   onDeleteSection: (sectionId: string) => void;
   onReorderSection: (sectionId: string, direction: -1 | 1) => void;
@@ -263,6 +271,14 @@ function SectionColumn({
           isOver && "bg-[var(--accent-soft)] ring-2 ring-[var(--accent)] ring-inset"
         )}
       >
+        {!readOnly && onQuickAdd && (
+          <QuickAddTask
+            compact
+            testId={`section-quick-add-${section.id}`}
+            placeholder="+ Add task"
+            onAdd={(text) => onQuickAdd(section.id, text)}
+          />
+        )}
         {tasks.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-[var(--muted)]">Drop tasks here</p>
         )}
@@ -292,6 +308,7 @@ export function ProjectBoard({
   onDelete,
   onToggleComplete,
   onAddTask,
+  onQuickAdd,
   onRenameSection,
   onDeleteSection,
   onReorderSection,
@@ -366,6 +383,7 @@ export function ProjectBoard({
             onDelete={onDelete}
             onToggleComplete={onToggleComplete}
             onAddTask={onAddTask}
+            onQuickAdd={onQuickAdd}
             onRenameSection={onRenameSection}
             onDeleteSection={onDeleteSection}
             onReorderSection={onReorderSection}

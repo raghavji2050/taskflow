@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { WorkspaceSetupCard } from "@/components/WorkspaceSetupCard";
+import { PROJECTS_CHANGED_EVENT } from "@/components/SidebarSections";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -66,6 +68,16 @@ export function ProjectsListClient() {
     if (status === "authenticated") void load();
   }, [status, load]);
 
+  // Sidebar "+" links here with ?new=1 to open the create dialog directly.
+  useEffect(() => {
+    if (isPersonal || !canEditTasks) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      setIsOpen(true);
+      router.replace("/dashboard/projects");
+    }
+  }, [isPersonal, canEditTasks, router]);
+
   const createProject = async () => {
     if (!selectedWorkspaceId || !name.trim()) return;
     setSaving(true);
@@ -81,6 +93,7 @@ export function ProjectsListClient() {
       setName("");
       setDescription("");
       setColor(PROJECT_COLORS[0]);
+      window.dispatchEvent(new Event(PROJECTS_CHANGED_EVENT));
       router.push(`/dashboard/projects/${data.project.id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create project");
@@ -99,7 +112,7 @@ export function ProjectsListClient() {
         eyebrow={isPersonal ? "Personal" : selectedWorkspace?.name}
         title="Projects"
         subtitle={isPersonal
-          ? "Choose a workspace to organize its tasks into projects."
+          ? "Projects need a workspace."
           : "Group work into projects, then arrange tasks by section."}
         actions={!isPersonal && canEditTasks ? (
           <Button onClick={() => setIsOpen(true)}>
@@ -121,12 +134,16 @@ export function ProjectsListClient() {
       )}
 
       {isPersonal || !selectedWorkspaceId ? (
-        <div className="rounded-xl border border-dashed border-[var(--card-border)] py-16 text-center text-sm text-[var(--muted)]">
-          Switch to a workspace from the sidebar to see its projects.
-        </div>
+        <WorkspaceSetupCard reason="Projects live inside a workspace. Open one or create it here — it only takes a name." />
       ) : projects.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--card-border)] py-16 text-center text-sm text-[var(--muted)]">
-          No projects yet.
+          <p>No projects yet.</p>
+          {canEditTasks && (
+            <Button className="mt-3" onClick={() => setIsOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Create your first project
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

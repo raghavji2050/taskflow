@@ -25,6 +25,7 @@ import {
 import { useOpenTaskListener } from "@/lib/open-task-event";
 import { dispatchTasksRefresh } from "@/lib/tasks-refresh-event";
 import { saveTaskWithOptionalTimer } from "@/lib/client-task-submit";
+import { quickAddToTaskInput } from "@/lib/quick-add-input";
 import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { useActiveTimer } from "@/lib/useActiveTimer";
@@ -185,6 +186,21 @@ export default function BoardPage() {
           activeEntry={activeTimer}
           activeTimerElapsed={activeTimerElapsed}
           onTimerRefresh={onTimerRefresh}
+          onQuickAdd={canEditTasks ? async (column, text) => {
+            const input = quickAddToTaskInput(text);
+            if (!input) return;
+            try {
+              await saveTaskWithOptionalTimer(
+                withWorkspace({ ...input, boardColumnId: column.id, status: column.status ?? input.status }),
+                null
+              );
+              toast.success(`Added to ${column.name}`);
+              void refresh();
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Failed to add task");
+              throw error;
+            }
+          } : undefined}
         />
       ) : (
         <div className="rounded-xl border border-dashed border-[var(--card-border)] py-16 text-center text-sm text-[var(--muted)]">

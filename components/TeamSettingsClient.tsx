@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { WorkspacePanel } from "@/components/WorkspacePanel";
 import { PageHeader } from "@/components/PageHeader";
+import { WorkspaceSetupCard } from "@/components/WorkspaceSetupCard";
+import { PageLoader } from "@/components/ui/PageLoader";
 
 export function TeamSettingsClient() {
-  const router = useRouter();
-  const { isPersonal, selectedWorkspace, members } = useWorkspace();
+  const { isPersonal, isLoading, selectedWorkspace, members } = useWorkspace();
 
-  useEffect(() => {
-    if (isPersonal) router.replace("/dashboard");
-  }, [isPersonal, router]);
+  if (isLoading) return <PageLoader />;
 
-  if (isPersonal) return null;
+  if (isPersonal) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Team" subtitle="Members, workload & automations" />
+        <WorkspaceSetupCard reason="Teams live in a workspace. Open one or create it here, then invite people." />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

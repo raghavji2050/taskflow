@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { ProjectBoard } from "@/components/projects/ProjectBoard";
 import { ProjectMembersDialog, type ProjectMemberRow } from "@/components/projects/ProjectMembersDialog";
 import { TaskEditModal } from "@/components/TaskEditModal";
+import { quickAddToTaskInput } from "@/lib/quick-add-input";
+import { hasDuplicateSectionName } from "@/lib/section-names";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { PageHeader } from "@/components/PageHeader";
 import type { Task } from "@/components/TaskCard";
@@ -115,6 +117,12 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
   };
 
   const renameSection = async (sectionId: string, name: string) => {
+    if (hasDuplicateSectionName(project?.sections ?? [], name, sectionId)) {
+      if (!window.confirm(`A section named “${name.trim()}” already exists in this project. Use this name anyway?`)) {
+        refresh();
+        return;
+      }
+    }
     const res = await fetch(`/api/projects/${projectId}/sections/${sectionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -152,6 +160,9 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
   const addSection = async () => {
     const name = sectionName.trim();
     if (!name) return;
+    if (hasDuplicateSectionName(project?.sections ?? [], name)) {
+      if (!window.confirm(`A section named “${name}” already exists in this project. Add another one anyway?`)) return;
+    }
     const res = await fetch(`/api/projects/${projectId}/sections`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -209,6 +220,23 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
     }
     toast.success("Moved to Trash");
     router.push("/dashboard/projects");
+  };
+
+  const quickAddToSection = async (sectionId: string, text: string) => {
+    if (!project || !access?.canEdit) return;
+    const input = quickAddToTaskInput(text);
+    if (!input) return;
+    try {
+      await saveTaskWithOptionalTimer(
+        { ...input, workspaceId: project.workspaceId, projectId: project.id, sectionId },
+        null
+      );
+      toast.success("Task added");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not add task");
+      throw err;
+    }
   };
 
   const handleSubmit = async (data: TaskInput, options?: TaskFormSubmitOptions) => {
@@ -369,6 +397,7 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
         }}
         onDelete={(task) => { void deleteTask(task); }}
         onToggleComplete={(task) => { void toggleComplete(task); }}
+        onQuickAdd={readOnly ? undefined : quickAddToSection}
         onAddTask={(sectionId) => {
           setEditingTask(null);
           setCreateSectionId(sectionId);
