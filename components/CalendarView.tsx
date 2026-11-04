@@ -125,6 +125,7 @@ export function CalendarView({
               <button
                 key={day.toISOString()}
                 type="button"
+                data-today={today || undefined}
                 onClick={() => onDayClick?.(day)}
                 className={cn(
                   "min-h-[5.5rem] bg-[var(--surface-1)] p-1.5 text-left transition-colors",

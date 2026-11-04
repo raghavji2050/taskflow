@@ -1,3 +1,4 @@
+import { dueDayParts, isDateOnlyDue } from "@/lib/day";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, formatDistanceToNow, isPast, isToday, isTomorrow } from "date-fns";
@@ -37,16 +38,8 @@ export function getTimeGreeting(date = new Date()): string {
 
 /** Parse API/task dates as local calendar days (avoids UTC off-by-one). */
 export function toCalendarDate(value: string | Date | null | undefined): Date | null {
-  if (!value) return null;
-  if (typeof value === "string") {
-    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-    }
-  }
-  const parsed = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(parsed.getTime())) return null;
-  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const p = dueDayParts(value);
+  return p ? new Date(p.y, p.m, p.d) : null;
 }
 
 export function toDateInputValue(date: string | Date | null | undefined): string {
@@ -135,8 +128,10 @@ export function getStatusColor(status: string): string {
 export function formatDueDateTime(date: Date | string | null | undefined): string {
   if (!date) return "No due date";
   const parsed = typeof date === "string" ? new Date(date) : date;
-  const hasTime = parsed.getHours() !== 0 || parsed.getMinutes() !== 0;
-  if (isToday(parsed)) {
+  const hasTime = !isDateOnlyDue(parsed) && (parsed.getHours() !== 0 || parsed.getMinutes() !== 0);
+  const day = toCalendarDate(parsed) ?? parsed;
+  if (!hasTime) return isToday(day) ? "Today" : format(day, "MMM d, yyyy");
+  if (isToday(day)) {
     return hasTime ? `Today at ${format(parsed, "h:mm a")}` : "Today";
   }
   return hasTime ? format(parsed, "MMM d, yyyy h:mm a") : format(parsed, "MMM d, yyyy");

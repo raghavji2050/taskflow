@@ -48,3 +48,17 @@ describe("smart tools", () => {
     expect(r.members.R).toEqual({ completed: 1, minutesLogged: 90 });
   });
 });
+
+describe("plan_my_day day boundary (IST)", () => {
+  it("treats 23:56 UTC as today in IST and a date-only due as its own day", async () => {
+    const at = new Date("2026-11-04T00:10:00Z"); // 05:40 IST, 4 Nov
+    db.task.findMany.mockResolvedValue([
+      t({ id: "late", dueDate: new Date("2026-11-03T23:56:00Z") }),
+      t({ id: "dateonly", dueDate: new Date("2026-11-04T00:00:00Z") }),
+      t({ id: "yday", dueDate: new Date("2026-11-03T00:00:00Z") }),
+    ]);
+    const r = await planMyDay(user, {}, at);
+    const reason = Object.fromEntries(r.focus.map((f) => [f.id, f.reason]));
+    expect(reason).toEqual({ yday: "overdue", late: "due today", dateonly: "due today" });
+  });
+});

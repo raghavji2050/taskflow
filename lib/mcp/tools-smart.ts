@@ -4,6 +4,7 @@ import { getUserWorkspaceIds, getWorkspaceMembership } from "@/lib/workspace";
 import { requireProjectAccess } from "@/lib/projects";
 import { getActiveTimer } from "@/lib/time-tracking";
 import { visibleTaskWhere } from "@/lib/visible-records";
+import { dayKey, dueDayParts } from "@/lib/day";
 import { McpToolError, type McpUser } from "@/lib/mcp/tools";
 
 const DAY = 86_400_000;
@@ -41,11 +42,15 @@ export async function planMyDay(user: McpUser, a: { tzOffsetMinutes?: number; li
   const ws = await getUserWorkspaceIds(user.id);
   const mine: Prisma.TaskWhereInput = { OR: [{ userId: user.id, workspaceId: null }, { assignees: { some: { userId: user.id } } }, { workspaceId: { in: ws }, userId: user.id, assignees: { none: {} } }] };
   const rows = await prisma.task.findMany({
-    where: visibleTaskWhere({ AND: [mine, { archived: false, status: { not: "COMPLETED" } }, { OR: [{ dueDate: { lt: end } }, { priority: "HIGH" }, { status: "IN_PROGRESS" }] }] }),
+    where: visibleTaskWhere({ AND: [mine, { archived: false, status: { not: "COMPLETED" } }, { OR: [{ dueDate: { lt: new Date(Math.max(end.getTime(), Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1))) } }, { priority: "HIGH" }, { status: "IN_PROGRESS" }] }] }),
     select: sel, take: 200,
   });
-  const overdue = rows.filter((t) => t.dueDate && t.dueDate < start);
-  const dueToday = rows.filter((t) => t.dueDate && t.dueDate >= start && t.dueDate < end);
+  const tz = a.tzOffsetMinutes ?? 330;
+  const nowLocal = new Date(now.getTime() + tz * 60_000);
+  const todayKey = dayKey({ y: nowLocal.getUTCFullYear(), m: nowLocal.getUTCMonth(), d: nowLocal.getUTCDate() });
+  const keyOf = (t: Row) => (t.dueDate ? dayKey(dueDayParts(t.dueDate, tz)!) : null);
+  const overdue = rows.filter((t) => { const k = keyOf(t); return k !== null && k < todayKey; });
+  const dueToday = rows.filter((t) => keyOf(t) === todayKey);
   const rest = rows.filter((t) => !overdue.includes(t) && !dueToday.includes(t));
   const sort = (x: Row[]) => x.sort((p, q) => PR[p.priority] - PR[q.priority] || (p.dueDate?.getTime() ?? 9e15) - (q.dueDate?.getTime() ?? 9e15));
   const lim = a.limit ?? 20;
