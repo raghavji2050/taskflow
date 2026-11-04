@@ -3,8 +3,8 @@ import { test, expect, type Page } from "@playwright/test";
 // A due time early in the IST morning is the previous day in UTC. List, desktop
 // calendar grid and mobile agenda must all put it on the same (IST) day.
 test.use({ timezoneId: "Asia/Kolkata" });
-// Own client IP per worker so these signups do not share the register rate-limit bucket with other specs.
-test.use({ extraHTTPHeaders: { "x-forwarded-for": `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` } });
+// Own client IP per worker (needs TRUST_TEST_IP_HEADER=1) so these signups do not share the register rate-limit bucket with other specs.
+test.use({ extraHTTPHeaders: { "x-test-client-ip": `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` } });
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
 const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -56,7 +56,7 @@ test("list says Today and desktop grid shows it on today's cell", async ({ page 
 });
 
 test("mobile agenda lists it under Today", async ({ browser }) => {
-  const ctx = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": "10.251.1.1" }, timezoneId: "Asia/Kolkata", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const ctx = await browser.newContext({ extraHTTPHeaders: { "x-test-client-ip": "10.251.1.1" }, timezoneId: "Asia/Kolkata", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
   await login(page);
   await page.goto("/dashboard/calendar");

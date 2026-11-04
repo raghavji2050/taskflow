@@ -46,6 +46,8 @@ jobs:
       AUTH_SECRET: ci-test-secret
       NEXTAUTH_URL: http://localhost:3000
       AUTH_TRUST_HOST: "true"
+      # Lets e2e pin per-worker client IPs via x-test-client-ip; ignored on Vercel.
+      TRUST_TEST_IP_HEADER: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
