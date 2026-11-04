@@ -465,7 +465,7 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "flex w-max min-w-0 max-w-[min(92%,calc(100vw-1rem))] sm:max-w-[88%] md:max-w-[85%]",
+          "flex w-max min-w-0 max-w-[min(85%,calc(100vw-1.5rem))] sm:max-w-[88%] md:max-w-[85%]",
           hideAvatars ? "gap-0" : "gap-2",
           isOwn ? "flex-row-reverse" : "flex-row"
         )}
@@ -515,7 +515,7 @@ export function MessageBubble({
           {hasBubbleContent && (
           <div
             className={cn(
-              "max-w-full break-words rounded-2xl text-sm leading-relaxed [overflow-wrap:anywhere]",
+              "max-w-full break-words rounded-2xl text-[15px] leading-relaxed [overflow-wrap:anywhere] sm:text-sm",
               isStickerStyle
                 ? "border-0 bg-transparent px-0.5 py-0.5 shadow-none"
                 : "px-3 py-2",
