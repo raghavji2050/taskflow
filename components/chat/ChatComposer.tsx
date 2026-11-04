@@ -357,7 +357,7 @@ export function ChatComposer({
             disabled={composerDisabled}
             onClick={() => setExtrasOpen((v) => !v)}
             className={cn(
-              "flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8",
+              "flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8 sm:rounded-lg",
               extrasOpen && "bg-[var(--surface-hover)] text-[var(--foreground)]"
             )}
             aria-label="More options"
@@ -453,7 +453,7 @@ export function ChatComposer({
           allowTagAll={showMentions && allowTagAll}
           placeholder={isEditing ? "Edit message" : "Type a message"}
           showToolbar={false}
-          className="min-h-[2rem] min-w-0 flex-1 basis-0 self-center overflow-hidden rounded-2xl border-0 bg-transparent px-1.5 py-1 text-sm sm:min-h-[2.25rem] sm:px-2.5 sm:py-1.5 md:min-h-[2.5rem] md:px-3 md:py-2"
+          className="min-h-[2.75rem] min-w-0 flex-1 basis-0 self-center overflow-hidden rounded-2xl border-0 bg-transparent px-1.5 py-2.5 text-base sm:text-sm sm:min-h-[2.25rem] sm:px-2.5 sm:py-1.5 md:min-h-[2.5rem] md:px-3 md:py-2"
         />
 
         <button
@@ -461,7 +461,7 @@ export function ChatComposer({
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleSend}
           disabled={!canSend}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] p-0 text-white shadow-sm transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9 md:h-10 md:w-10"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] p-0 text-white shadow-sm transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9 md:h-10 md:w-10"
           aria-label={isEditing ? "Save changes" : "Send message"}
         >
           {isEditing ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}

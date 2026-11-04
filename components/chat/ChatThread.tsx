@@ -1455,8 +1455,9 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
 
   const composerBar = (
     <div
+      data-testid="chat-composer"
       className={cn(
-        "w-full min-w-0 max-w-full shrink-0 border-t border-[var(--border)] bg-[var(--chat-thread-bg)] px-1.5 pt-2 sm:px-2 md:px-4 md:pt-3",
+        "sticky bottom-0 z-10 w-full min-w-0 max-w-full shrink-0 border-t border-[var(--border)] bg-[var(--chat-thread-bg)] px-1.5 pt-2 sm:px-2 md:px-4 md:pt-3",
         keyboardOpen ? "pb-2.5" : "pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-4"
       )}
     >
@@ -1606,18 +1607,18 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
       )}
     >
       <div className="min-h-0 shrink-0">
-      <div className="surface-panel relative z-20 flex w-full shrink-0 items-center gap-1.5 rounded-none border-b border-[var(--border)] px-2 py-2 sm:gap-2 sm:px-3 md:px-4 md:py-3">
+      <div data-testid="chat-thread-header" className="surface-panel relative z-20 flex w-full shrink-0 items-center gap-1.5 rounded-none border-b border-[var(--border)] px-1 py-1 max-sm:min-h-[52px] sm:gap-2 sm:py-2 sm:px-3 md:px-4 md:py-3">
         {onBack ? (
           <button
             type="button"
             onClick={onBack}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] md:hidden"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] max-sm:h-11 max-sm:w-11 max-sm:rounded-full md:hidden"
             aria-label="Back to conversations"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
         ) : null}
-        <div className="flex min-w-0 flex-1 items-center gap-2 pr-10 sm:pr-12">
+        <div className="flex min-w-0 flex-1 items-center gap-2 pr-[5.75rem] sm:pr-12">
           {isDirect && directPeer ? (
             <PresenceAvatar
               name={directPeer.name}
@@ -1648,7 +1649,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
             </p>
           </div>
         </div>
-        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 sm:right-3 md:right-4">
+        <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0 sm:right-3 sm:gap-0.5 md:right-4">
           <button
             type="button"
             onClick={() => {
@@ -1656,7 +1657,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
               setHeaderMenuOpen(false);
             }}
             className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[var(--surface-hover)]",
+              "flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[var(--surface-hover)] max-sm:h-11 max-sm:w-11 max-sm:rounded-full",
               searchOpen ? "text-[var(--accent)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
             )}
             aria-label="Search messages"
@@ -1667,7 +1668,7 @@ export function ChatThread({ conversation, readOnly = false, onRead, onDeleted, 
             ref={menuButtonRef}
             type="button"
             onClick={() => setHeaderMenuOpen((v) => !v)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] max-sm:h-11 max-sm:w-11 max-sm:rounded-full"
             aria-label="Chat options"
             aria-expanded={headerMenuOpen}
           >

@@ -167,7 +167,7 @@ function ConversationRow({
         type="button"
         onClick={() => onSelect(conv.id)}
         className={cn(
-          "flex min-w-0 flex-1 items-start gap-2.5 px-2 py-2 text-left transition-colors",
+          "flex min-w-0 flex-1 items-start gap-2.5 px-2 py-2 text-left transition-colors max-sm:min-h-[56px] max-sm:items-center max-sm:py-2.5",
           selectedId === conv.id
             ? "text-[var(--accent)]"
             : "text-[var(--foreground)]"
@@ -455,28 +455,28 @@ export function ConversationList({
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface-1)] md:border-r md:border-[var(--border)]">
-      <div className="shrink-0 border-b border-[var(--border)] px-4 py-3 md:hidden">
+      <div className="shrink-0 border-b border-[var(--border)] py-1 pl-4 pr-1 md:hidden">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-[var(--foreground)]">Messages</h2>
-          <div className="flex items-center gap-1">
+          <h2 className="text-base font-semibold text-[var(--foreground)]">Messages</h2>
+          <div className="flex items-center gap-0">
             <PushSubscribe variant="toolbar" iconOnly />
             {onSearch && (
               <button
                 type="button"
                 onClick={onSearch}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] md:hidden"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] md:hidden"
                 aria-label="Search messages"
               >
                 <Search className="h-4 w-4" />
               </button>
             )}
             {(onNewGroup || onNewDm) && (
-              <div className="flex items-center gap-0.5 md:hidden">
+              <div className="flex items-center gap-0 md:hidden">
                 {onNewGroup && (
                   <button
                     type="button"
                     onClick={onNewGroup}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
                     aria-label="New group"
                   >
                     <Users className="h-4 w-4" />
@@ -486,7 +486,7 @@ export function ConversationList({
                   <button
                     type="button"
                     onClick={onNewDm}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--accent)] hover:bg-[var(--accent)]/10"
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--accent)] hover:bg-[var(--accent)]/10"
                     aria-label="New message"
                   >
                     <MessageSquarePlus className="h-4 w-4" />

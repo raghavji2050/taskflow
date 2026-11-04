@@ -434,6 +434,7 @@ export function MessagesClient() {
         )}
       >
         <div
+          data-testid="messages-list-pane"
           className={cn(
             "flex h-full min-h-0 w-full min-w-0 flex-col border-[var(--border)] md:w-auto md:max-w-[20rem] md:border-r",
             showMobileThread && "max-md:hidden"
@@ -453,6 +454,7 @@ export function MessagesClient() {
         </div>
 
         <div
+          data-testid="messages-thread-pane"
           className={cn(
             "flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
             !showMobileThread && "max-md:hidden"
