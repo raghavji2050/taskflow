@@ -12,6 +12,7 @@ import { runAutomationsForTrigger } from "@/lib/automations";
 import { taskDetailInclude } from "@/lib/tasks";
 import { nextSectionPosition, projectFieldsForTaskUpdate } from "@/lib/projects";
 import { visibleTaskWhere } from "@/lib/visible-records";
+import { notifyTaskFollowers, statusLabel } from "@/lib/task-followers";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -114,6 +115,17 @@ export async function PUT(request: Request, context: RouteContext) {
     });
 
     await logTaskActivity(id, "updated", `Status: ${taskData.status}`);
+
+    if (statusChanged) {
+      await notifyTaskFollowers({
+        taskId: id,
+        workspaceId: workspaceId ?? null,
+        actorId: user.id,
+        title: "Task status changed",
+        body: `${user.name} changed "${taskData.title}" to ${statusLabel(taskData.status)}`,
+        type: "task_status",
+      });
+    }
 
     if (statusChanged && workspaceId) {
       await runAutomationsForTrigger(workspaceId, "status_changed", {

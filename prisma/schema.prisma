@@ -92,6 +92,7 @@ model User {
   tags                           Tag[]
   comments                       Comment[]
   notifications                  Notification[]
+  taskFollows                    TaskFollower[]
   pushSubscriptions              PushSubscription[]
   workspaceMembers               WorkspaceMember[]
   projectMembers                 ProjectMember[]
@@ -203,6 +204,7 @@ model Task {
   project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
   section       ProjectSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   assignees     TaskAssignee[]
+  followers     TaskFollower[]
   subtasks      Subtask[]
   tags          TaskTag[]
   attachments   Attachment[]
@@ -286,6 +288,17 @@ model TaskAssignee {
   task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignedBy   User?    @relation("TaskAssignmentsMade", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+model TaskFollower {
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([taskId, userId])
   @@index([userId])

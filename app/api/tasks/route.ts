@@ -12,6 +12,7 @@ import { runAutomationsForTrigger } from "@/lib/automations";
 import { taskListInclude } from "@/lib/tasks";
 import { placementForNewTask, requireProjectAccess } from "@/lib/projects";
 import { visibleTaskWhere } from "@/lib/visible-records";
+import { followTask } from "@/lib/task-followers";
 
 function applyAssigneeFilter(
   where: Prisma.TaskWhereInput,
@@ -213,6 +214,8 @@ export async function POST(request: Request) {
         tags: tagIds?.length ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,
       },
     });
+
+    if (taskData.workspaceId) await followTask(task.id, [user.id]);
 
     if (taskData.workspaceId && assigneeIds?.length) {
       const workspace = await prisma.workspace.findUnique({

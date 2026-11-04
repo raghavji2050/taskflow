@@ -7,6 +7,7 @@ import { logTaskActivity } from "@/lib/activity";
 import { createNotification } from "@/lib/notifications";
 import { matchMentionedUsers, parseMentionNames } from "@/lib/mentions";
 import { broadcastTaskEvent } from "@/lib/realtime";
+import { followTask, notifyTaskFollowers } from "@/lib/task-followers";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -63,12 +64,16 @@ export async function POST(request: Request, context: RouteContext) {
 
     await logTaskActivity(id, "commented", `${user.name} commented`);
 
+    await followTask(id, [user.id]);
+    let mentionedIds: string[] = [];
+
     if (task.workspaceId) {
       const members = await getWorkspaceMembers(task.workspaceId);
       const mentioned = matchMentionedUsers(
         parseMentionNames(data.body),
         members.map((m) => m.user)
       );
+      mentionedIds = mentioned.map((m) => m.id);
       for (const m of mentioned) {
         if (m.id === user.id) continue;
         await createNotification({
@@ -79,6 +84,16 @@ export async function POST(request: Request, context: RouteContext) {
         });
       }
     }
+
+    await notifyTaskFollowers({
+      taskId: id,
+      workspaceId: task.workspaceId,
+      actorId: user.id,
+      title: "New comment",
+      body: `${user.name} commented on "${task.title}"`,
+      type: "task_comment",
+      exclude: mentionedIds,
+    });
 
     broadcastTaskEvent({
       type: "comment:created",

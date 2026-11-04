@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { createNotification } from "@/lib/notifications";
 import { logTaskActivity } from "@/lib/activity";
 import { taskListInclude } from "@/lib/tasks";
+import { followTask } from "@/lib/task-followers";
 
 export async function validateWorkspaceAssignees(
   workspaceId: string,
@@ -68,6 +69,9 @@ export async function syncTaskAssignees(params: {
         ]
       : []),
   ]);
+
+  // Assignees follow the task so they hear about comments and status changes.
+  if (newIds.length) await followTask(taskId, newIds);
 
   if (newIds.length && params.taskTitle) {
     const title = params.taskTitle;
