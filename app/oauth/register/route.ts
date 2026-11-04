@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/client-ip";
 import { json, oauthError, OAuthRequestError, preflight, registerClient } from "@/lib/mcp/oauth";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -5,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getClientIp(request);
   if (!rateLimit(`oauth-register:${ip}`, 20, 60 * 60_000)) return oauthError("too_many_requests", "Slow down", 429);
   let body: Record<string, unknown>;
   try {

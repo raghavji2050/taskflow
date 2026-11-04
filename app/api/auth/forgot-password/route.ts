@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/client-ip";
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
@@ -8,7 +9,7 @@ import { sendEmail, passwordResetEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
-    const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(request);
     if (!rateLimit(`forgot:${ip}`, 5, 300_000)) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }

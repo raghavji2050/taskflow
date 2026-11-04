@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/client-ip";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +8,7 @@ import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+    const ip = getClientIp(request);
     if (!rateLimit(`login:${ip}`, 10, 60_000)) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }

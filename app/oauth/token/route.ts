@@ -1,3 +1,4 @@
+import { getClientIp } from "@/lib/client-ip";
 import { exchangeToken, json, oauthError, OAuthRequestError, preflight } from "@/lib/mcp/oauth";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -14,7 +15,7 @@ async function readForm(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = getClientIp(request);
   if (!rateLimit(`oauth-token:${ip}`, 60, 60_000)) return oauthError("too_many_requests", "Slow down", 429);
   try {
     return json(await exchangeToken(await readForm(request)));
