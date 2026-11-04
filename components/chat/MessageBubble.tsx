@@ -2,10 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Forward, MoreHorizontal, Pencil, Pin, Reply, Smile, Trash2 } from "lucide-react";
+import { Copy, Forward, MoreHorizontal, Pencil, Pin, Reply, Smile, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn, getAvatarColorClasses, getInitials } from "@/lib/utils";
-import { ReactionPicker } from "@/components/chat/EmojiPicker";
+import { QUICK_EMOJIS, ReactionPicker } from "@/components/chat/EmojiPicker";
 import { RichMessageRenderer } from "@/components/chat/RichMessageRenderer";
 import { PresenceAvatar } from "@/components/chat/PresenceAvatar";
 import type { MessageReceiptStatus } from "@/lib/chat-receipts";
@@ -122,7 +122,9 @@ function MessageActionMenuItems({
   message,
   isDeleted,
   closeMenu,
+  variant = "menu",
 }: {
+  variant?: "menu" | "sheet";
   canCopy: boolean;
   onCopy: () => void;
   onReply?: (message: ChatMessage) => void;
@@ -137,14 +139,18 @@ function MessageActionMenuItems({
   isDeleted: boolean;
   closeMenu: () => void;
 }) {
-  const itemClass =
-    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]";
+  const sheet = variant === "sheet";
+  const itemClass = sheet
+    ? "flex min-h-[48px] w-full items-center gap-3.5 px-4 text-left text-[15px] font-medium active:bg-[var(--surface-hover)] hover:bg-[var(--surface-hover)]"
+    : "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)]";
+  const ic = sheet ? "h-5 w-5 shrink-0 text-[var(--muted)]" : "h-3.5 w-3.5";
+  const role = sheet ? "menuitem" : undefined;
 
   return (
     <>
       {canCopy && (
-        <button type="button" onClick={onCopy} className={itemClass}>
-          <Copy className="h-3.5 w-3.5" /> Copy
+        <button type="button" onClick={onCopy} role={role} className={itemClass}>
+          <Copy className={ic} /> Copy
         </button>
       )}
       {onReply && (
@@ -154,9 +160,10 @@ function MessageActionMenuItems({
             onReply(message);
             closeMenu();
           }}
+          role={role}
           className={itemClass}
         >
-          <Reply className="h-3.5 w-3.5" /> Reply
+          <Reply className={ic} /> Reply
         </button>
       )}
       {onForward && !isDeleted && (
@@ -166,9 +173,10 @@ function MessageActionMenuItems({
             onForward(message);
             closeMenu();
           }}
+          role={role}
           className={itemClass}
         >
-          <Forward className="h-3.5 w-3.5" /> Forward
+          <Forward className={ic} /> Forward
         </button>
       )}
       {canEdit && onStartEdit && (
@@ -178,9 +186,10 @@ function MessageActionMenuItems({
             onStartEdit(message);
             closeMenu();
           }}
+          role={role}
           className={itemClass}
         >
-          <Pencil className="h-3.5 w-3.5" /> Edit
+          <Pencil className={ic} /> Edit
         </button>
       )}
       {onPin && (
@@ -190,18 +199,20 @@ function MessageActionMenuItems({
             onPin(message.id, !isPinned);
             closeMenu();
           }}
+          role={role}
           className={itemClass}
         >
-          <Pin className="h-3.5 w-3.5" /> {isPinned ? "Unpin" : "Pin"}
+          <Pin className={ic} /> {isPinned ? "Unpin" : "Pin"}
         </button>
       )}
       {canModify && onDelete && (
         <button
           type="button"
           onClick={() => void onDelete()}
+          role={role}
           className={cn(itemClass, "text-red-500 hover:bg-red-500/10")}
         >
-          <Trash2 className="h-3.5 w-3.5" /> Delete
+          <Trash2 className={sheet ? "h-5 w-5 shrink-0" : "h-3.5 w-3.5"} /> Delete
         </button>
       )}
     </>
@@ -229,6 +240,8 @@ export function MessageBubble({
   compactSystemActivity = false,
 }: MessageBubbleProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sheetDrag, setSheetDrag] = useState(0);
+  const sheetTouchStart = useRef<number | null>(null);
   const [reactOpen, setReactOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
   const [desktopMenuStyle, setDesktopMenuStyle] = useState<{
@@ -422,21 +435,118 @@ export function MessageBubble({
         )
       : null;
 
+  const sheetMenuItems = (
+    <MessageActionMenuItems
+      variant="sheet"
+      canCopy={canCopy}
+      onCopy={() => void handleCopy()}
+      onReply={onReply}
+      onForward={onForward}
+      canModify={canModify}
+      canEdit={canEdit}
+      onStartEdit={onStartEdit}
+      onPin={onPin}
+      isPinned={isPinned}
+      onDelete={handleDelete}
+      message={message}
+      isDeleted={isDeleted}
+      closeMenu={closeMenu}
+    />
+  );
+  const previewText = (copyText || (message.attachments?.length ? "Attachment" : "")).replace(/\s+/g, " ").trim();
+  const senderLabel = isOwn ? "You" : message.user?.name ?? "Message";
+
   const mobileMenu =
     menuOpen && menuMounted && isMobile
       ? createPortal(
           <div className="fixed inset-0 z-[250] flex flex-col justify-end" role="presentation">
             <div
-              className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+              className="sheet-backdrop-in absolute inset-0 bg-black/35"
               onClick={closeMenu}
               aria-hidden="true"
+              data-testid="message-actions-backdrop"
             />
             <div
-              className="relative z-10 rounded-t-2xl border-t border-[var(--border)] bg-[var(--card)] py-1 shadow-lg safe-bottom"
+              data-testid="message-actions-sheet"
+              className="sheet-up-in relative z-10 mx-auto w-full max-w-lg overflow-hidden rounded-t-3xl border-t border-[var(--border)] bg-[var(--card)] shadow-[0_-8px_30px_rgba(0,0,0,0.25)]"
+              style={{
+                paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+                transform: sheetDrag > 0 ? `translateY(${sheetDrag}px)` : undefined,
+                transition: sheetDrag > 0 ? "none" : undefined,
+              }}
               role="menu"
+              aria-label="Message actions"
+              onTouchStart={(e) => {
+                sheetTouchStart.current = e.touches[0].clientY;
+              }}
+              onTouchMove={(e) => {
+                if (sheetTouchStart.current == null) return;
+                const dy = e.touches[0].clientY - sheetTouchStart.current;
+                setSheetDrag(dy > 0 ? dy : 0);
+              }}
+              onTouchEnd={() => {
+                const shouldClose = sheetDrag > 80;
+                sheetTouchStart.current = null;
+                setSheetDrag(0);
+                if (shouldClose) closeMenu();
+              }}
             >
-              <div className="mx-auto mb-2 mt-2 h-1 w-10 rounded-full bg-[var(--border)]" />
-              {menuItems}
+              <div className="flex justify-center pb-1 pt-2.5">
+                <div className="h-1.5 w-10 rounded-full bg-[var(--border)]" />
+              </div>
+              {previewText && (
+                <div
+                  data-testid="message-actions-preview"
+                  className="mx-4 mb-2 mt-1 rounded-xl border-l-4 border-[var(--accent,#6366f1)] bg-[var(--surface-hover)] px-3 py-2"
+                >
+                  <div className="text-xs font-semibold text-[var(--muted)]">{senderLabel}</div>
+                  <div className="line-clamp-2 break-words text-sm text-[var(--foreground)] [overflow-wrap:anywhere]">
+                    {previewText}
+                  </div>
+                </div>
+              )}
+              {onReact && !readOnly && !isDeleted && (
+                <div className="mx-4 mb-2 flex items-center justify-between gap-1 rounded-2xl bg-[var(--surface-hover)] px-1.5 py-1">
+                  {QUICK_EMOJIS.slice(0, 6).map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      aria-label={`React ${emoji}`}
+                      onClick={() => {
+                        onReact(message.id, emoji);
+                        closeMenu();
+                      }}
+                      className="flex h-11 w-11 items-center justify-center rounded-full text-[22px] transition-transform active:scale-90 hover:bg-[var(--card)]"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    aria-label="More reactions"
+                    onClick={() => {
+                      closeMenu();
+                      setReactOpen(true);
+                    }}
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--card)]"
+                  >
+                    <Smile className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+              <div className="mx-3 overflow-hidden rounded-2xl border border-[var(--card-border)]  divide-y divide-[var(--card-border)] [&>button]:rounded-none">
+                {sheetMenuItems}
+              </div>
+              <div className="mx-3 mt-2 overflow-hidden rounded-2xl border border-[var(--card-border)]">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={closeMenu}
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2 text-[15px] font-semibold hover:bg-[var(--surface-hover)] active:bg-[var(--surface-hover)]"
+                >
+                  <X className="h-5 w-5 text-[var(--muted)]" /> Cancel
+                </button>
+              </div>
             </div>
           </div>,
           document.body
