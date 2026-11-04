@@ -106,3 +106,46 @@ test("messages: list -> thread -> back, composer visible, no horizontal scroll",
   await expect(thread).toBeHidden();
   await noHorizontalScroll(page);
 });
+
+test("messages: action sheet opens, actions visible in viewport, no overflow, closes", async ({ page }, info) => {
+  await login(page);
+  await page.goto("/dashboard/messages");
+  const thread = page.getByTestId("messages-thread-pane");
+  await page.getByTestId("messages-list-pane").getByText(peer.name).first().click();
+  const msg = thread.getByText("A long message to check wrapping").first();
+  await expect(msg).toBeVisible();
+  await thread.getByRole("button", { name: "More actions" }).first().click();
+
+  const shot = process.env.MSGSHEET_SHOT;
+  if (shot) {
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${shot}-${info.project.name}.png` });
+  }
+
+  const sheet = page.getByTestId("message-actions-sheet");
+  await expect(sheet).toBeVisible();
+  await page.waitForTimeout(350);
+  const vp = page.viewportSize()!;
+  for (const name of ["Copy", "Reply", "Forward", "Pin", "Edit", "Delete", "Cancel"]) {
+    const b = sheet.getByRole("menuitem", { name, exact: true });
+    await expect(b, name).toBeVisible();
+    const box = (await b.boundingBox())!;
+    expect(box.height, name).toBeGreaterThanOrEqual(48);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(vp.width + 1);
+    expect(box.y + box.height).toBeLessThanOrEqual(vp.height + 1);
+  }
+  await expect(sheet.getByRole("button", { name: "React 👍" })).toBeVisible();
+  await expect(sheet.getByTestId("message-actions-preview")).toContainText("A long message");
+  const { sw, sh, cw, ch } = await sheet.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, sh: el.scrollHeight, ch: el.clientHeight }));
+  expect(sw).toBeLessThanOrEqual(cw);
+  expect(sh).toBeLessThanOrEqual(ch + 1);
+  await noHorizontalScroll(page);
+
+  await sheet.getByRole("menuitem", { name: "Cancel" }).click();
+  await expect(sheet).toBeHidden();
+  await thread.getByRole("button", { name: "More actions" }).first().click();
+  await expect(sheet).toBeVisible();
+  await page.mouse.click(vp.width / 2, 20);
+  await expect(sheet).toBeHidden();
+});
