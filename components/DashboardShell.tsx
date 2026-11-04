@@ -12,6 +12,7 @@ import { IdleTimerProvider } from "@/components/IdleTimerProvider";
 import { TimerReminderWatcher } from "@/components/TimerReminderWatcher";
 import { AmbientBackground } from "@/components/ui/AmbientBackground";
 import { MobileSidebarProvider } from "@/components/MobileSidebarProvider";
+import { TaskViewTabs } from "@/components/TaskViewTabs";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
@@ -32,6 +33,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <TimerReminderWatcher />
               <main className="flex min-h-0 flex-1 flex-col overflow-hidden max-lg:touch-pan-y">
                 <div className="dashboard-main flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-6">
+                  <TaskViewTabs />
                   {children}
                 </div>
               </main>

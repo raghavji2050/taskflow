@@ -62,8 +62,28 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export const WORKSPACE_STORAGE_KEY = "taskflow-workspace";
 
+/** Per-user memory of the last workspace, so signing back in reopens it. */
+export const LAST_WORKSPACE_KEY_PREFIX = "taskflow-last-workspace:";
+
+export function lastWorkspaceKey(userId: string) {
+  return `${LAST_WORKSPACE_KEY_PREFIX}${userId}`;
+}
+
+/**
+ * Called on sign-out / session end. Clears the active (device-wide) selection so the
+ * next account doesn't inherit it; each user's own last workspace is kept per user id
+ * and is only ever applied if that user is still a member.
+ */
 export function clearWorkspaceSelection() {
-  localStorage.setItem(WORKSPACE_STORAGE_KEY, "personal");
+  try {
+    localStorage.removeItem(WORKSPACE_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function pickSavedWorkspace(active: string | null, lastForUser: string | null): string | null {
+  return active ?? lastForUser;
 }
 
 function resolveWorkspaceSelection(
@@ -82,6 +102,18 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const selectedWorkspaceIdRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = session?.user?.id ?? null;
+
+  const persistSelection = useCallback((id: string | null) => {
+    const value = id ?? "personal";
+    try {
+      localStorage.setItem(WORKSPACE_STORAGE_KEY, value);
+      if (userIdRef.current) localStorage.setItem(lastWorkspaceKey(userIdRef.current), value);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const refreshWorkspaces = useCallback(async () => {
     const res = await fetch("/api/workspaces");
@@ -91,7 +123,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const workspaceList = data.workspaces as Workspace[];
     setWorkspaces(workspaceList);
 
-    const saved = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+    const saved = pickSavedWorkspace(
+      localStorage.getItem(WORKSPACE_STORAGE_KEY),
+      userIdRef.current ? localStorage.getItem(lastWorkspaceKey(userIdRef.current)) : null
+    );
     const nextId = resolveWorkspaceSelection(workspaceList, saved);
     const previousId = selectedWorkspaceIdRef.current;
 
@@ -104,10 +139,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     selectedWorkspaceIdRef.current = nextId;
     setSelectedWorkspaceId(nextId);
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, nextId ?? "personal");
+    persistSelection(nextId);
 
     return workspaceList;
-  }, []);
+  }, [persistSelection]);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -134,8 +169,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const selectWorkspace = useCallback((id: string | null) => {
     selectedWorkspaceIdRef.current = id;
     setSelectedWorkspaceId(id);
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, id ?? "personal");
-  }, []);
+    persistSelection(id);
+  }, [persistSelection]);
 
   const createWorkspace = useCallback(async (name: string) => {
     const res = await fetch("/api/workspaces", {

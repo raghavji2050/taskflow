@@ -10,10 +10,6 @@ import { motion } from "motion/react";
 import {
   CheckSquare,
   LayoutList,
-  Columns3,
-  Calendar,
-  UserCircle,
-  GanttChart,
   Clock,
   LogOut,
   Moon,
@@ -28,10 +24,10 @@ import {
   MessageSquare,
   BookOpen,
   Users,
-  FolderKanban,
   Trash2,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import { SidebarLink, SidebarMore, SidebarProjects, type NavItem } from "@/components/SidebarSections";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useRealtime } from "@/components/RealtimeProvider";
 import { clearWorkspaceSelection, useWorkspace } from "@/components/WorkspaceProvider";
@@ -41,54 +37,22 @@ import {
   MOBILE_SIDEBAR_OVERLAY_ID,
   useMobileSidebarSwipe,
 } from "@/lib/use-mobile-sidebar-swipe";
-import { GlowBadge } from "@/components/ui/GlowBadge";
 import { useMobileSidebar } from "@/components/MobileSidebarProvider";
 import { cn, getInitials } from "@/lib/utils";
 
 export const SIDEBAR_COLLAPSED_KEY = "taskflow-sidebar-collapsed";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: typeof LayoutList;
-  match: (pathname: string) => boolean;
-};
 
-const taskNavItems: NavItem[] = [
-  { href: "/dashboard", label: "List", icon: LayoutList, match: (p) => p === "/dashboard" },
-  {
-    href: "/dashboard/board",
-    label: "Board",
-    icon: Columns3,
-    match: (p) => p.startsWith("/dashboard/board"),
-  },
-  {
-    href: "/dashboard/calendar",
-    label: "Calendar",
-    icon: Calendar,
-    match: (p) => p.startsWith("/dashboard/calendar"),
-  },
-  {
-    href: "/dashboard/my-work",
-    label: "My Work",
-    icon: UserCircle,
-    match: (p) => p.startsWith("/dashboard/my-work"),
-  },
-  {
-    href: "/dashboard/timeline",
-    label: "Timeline",
-    icon: GanttChart,
-    match: (p) => p.startsWith("/dashboard/timeline"),
-  },
-  {
-    href: "/dashboard/reports/time",
-    label: "Time Reports",
-    icon: Clock,
-    match: (p) => p.startsWith("/dashboard/reports/time"),
-  },
-];
+const TASK_VIEW_PREFIXES = ["/dashboard/board", "/dashboard/calendar", "/dashboard/timeline", "/dashboard/my-work"];
 
-const collaborateNavItems: NavItem[] = [
+/** Primary nav: the few places people go every day. Views (Board/Calendar/…) live in tabs on My Tasks. */
+const primaryNavItems: NavItem[] = [
+  {
+    href: "/dashboard",
+    label: "My Tasks",
+    icon: LayoutList,
+    match: (p) => p === "/dashboard" || TASK_VIEW_PREFIXES.some((x) => p.startsWith(x)),
+  },
   {
     href: "/dashboard/messages",
     label: "Messages",
@@ -103,6 +67,20 @@ const collaborateNavItems: NavItem[] = [
   },
 ];
 
+const timeReportsNavItem: NavItem = {
+  href: "/dashboard/reports/time",
+  label: "Time Reports",
+  icon: Clock,
+  match: (p) => p.startsWith("/dashboard/reports/time"),
+};
+
+const teamNavItem: NavItem = {
+  href: "/dashboard/team",
+  label: "Team",
+  icon: Users,
+  match: (p) => p.startsWith("/dashboard/team"),
+};
+
 const trashNavItem: NavItem = {
   href: "/dashboard/trash",
   label: "Trash",
@@ -110,21 +88,6 @@ const trashNavItem: NavItem = {
   match: (p) => p.startsWith("/dashboard/trash"),
 };
 
-const workspaceNavItems: NavItem[] = [
-  {
-    href: "/dashboard/projects",
-    label: "Projects",
-    icon: FolderKanban,
-    match: (p) => p.startsWith("/dashboard/projects"),
-  },
-  {
-    href: "/dashboard/team",
-    label: "Team",
-    icon: Users,
-    match: (p) => p.startsWith("/dashboard/team"),
-  },
-  trashNavItem,
-];
 
 function SidebarUserMenu({ collapsed }: { collapsed?: boolean }) {
   const { data: session } = useSession();
@@ -250,12 +213,7 @@ function SidebarContent({
   const { connected } = useRealtime();
   const { totalUnread } = useChatUnread();
   const { isPersonal } = useWorkspace();
-
-  const sections = [
-    { label: "Tasks", items: isPersonal ? [...taskNavItems, trashNavItem] : taskNavItems },
-    ...(isPersonal ? [] : [{ label: "Workspace", items: workspaceNavItems }]),
-    { label: "Collaboration", items: collaborateNavItems },
-  ];
+  const moreItems = isPersonal ? [timeReportsNavItem, trashNavItem] : [timeReportsNavItem, teamNavItem, trashNavItem];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -303,50 +261,23 @@ function SidebarContent({
         <WorkspaceSwitcher layout="sidebar" collapsed={collapsed} />
       </div>
 
-      <nav className={cn("flex-1 overflow-y-auto pb-2", collapsed ? "px-2" : "px-3")}>
-        {sections.map((section, sectionIndex) => (
-          <div key={section.label} className={cn(sectionIndex > 0 && "mt-4")}>
-            {!collapsed && <p className="sidebar-section-label mb-2">{section.label}</p>}
-            <div className="space-y-0.5">
-              {section.items.map(({ href, label, icon: Icon, match }) => {
-                const active = match(pathname);
-                const unreadBadge = href === "/dashboard/messages" ? totalUnread : 0;
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={onNavigate}
-                    title={collapsed ? label : undefined}
-                    className={cn(
-                      "sidebar-nav-item",
-                      active && "active",
-                      collapsed && "justify-center px-2"
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "sidebar-nav-icon h-[18px] w-[18px] shrink-0",
-                        active ? "text-[var(--accent)]" : "text-[var(--muted)]"
-                      )}
-                      strokeWidth={active ? 2.25 : 2}
-                    />
-                    {!collapsed && (
-                      <>
-                        <span className="min-w-0 flex-1 truncate">{label}</span>
-                        {unreadBadge > 0 && (
-                          <GlowBadge size="md">{unreadBadge > 99 ? "99+" : unreadBadge}</GlowBadge>
-                        )}
-                      </>
-                    )}
-                    {collapsed && unreadBadge > 0 && (
-                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--accent)]" />
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <nav className={cn("flex-1 overflow-y-auto pb-2", collapsed ? "px-2" : "px-3")} aria-label="Main">
+        <div className="space-y-0.5">
+          {primaryNavItems.map((item) => (
+            <SidebarLink
+              key={item.href}
+              item={item}
+              active={item.match(pathname)}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              badge={item.href === "/dashboard/messages" ? totalUnread : 0}
+            />
+          ))}
+        </div>
+
+        <SidebarProjects collapsed={collapsed} onNavigate={onNavigate} />
+
+        <SidebarMore items={moreItems} collapsed={collapsed} onNavigate={onNavigate} />
       </nav>
 
       <div className={cn("shrink-0 border-t border-[var(--sidebar-border)]", collapsed ? "p-2" : "p-3")}>

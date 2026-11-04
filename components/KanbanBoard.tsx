@@ -1,5 +1,8 @@
 "use client";
 
+import { QuickAddTask } from "@/components/QuickAddTask";
+import { shouldOpenFromClick } from "@/lib/open-on-click";
+
 import {
   DndContext,
   DragEndEvent,
@@ -44,7 +47,8 @@ function DraggableTask({
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined}
       {...(!readOnly ? listeners : {})}
       {...(!readOnly ? attributes : {})}
-      onClick={() => onEdit(task)}
+      data-testid="board-task-card"
+      onClick={(e) => { if (shouldOpenFromClick(e)) onEdit(task); }}
       className={cn(
         "surface-panel rounded-2xl border border-[var(--border)] p-3 transition-all hover:shadow-md",
         readOnly ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
@@ -94,6 +98,7 @@ interface KanbanBoardProps {
   activeEntry?: ActiveTimerEntry | null;
   activeTimerElapsed?: number;
   onTimerRefresh?: () => void;
+  onQuickAdd?: (column: BoardColumn, text: string) => Promise<void>;
 }
 
 export function KanbanBoard({
@@ -105,6 +110,7 @@ export function KanbanBoard({
   activeEntry = null,
   activeTimerElapsed = 0,
   onTimerRefresh = () => {},
+  onQuickAdd,
 }: KanbanBoardProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: readOnly ? 99999 : 8 } })
@@ -149,6 +155,15 @@ export function KanbanBoard({
                   {colTasks.length}
                 </span>
               </h3>
+              {!readOnly && onQuickAdd && (
+                <QuickAddTask
+                  compact
+                  className="mb-2"
+                  testId={`column-quick-add-${col.id}`}
+                  placeholder="+ Add task"
+                  onAdd={(text) => onQuickAdd(col, text)}
+                />
+              )}
               <DroppableColumn id={col.id}>
                 {colTasks.map((task) => (
                   <DraggableTask

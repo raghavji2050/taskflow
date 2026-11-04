@@ -11,6 +11,8 @@ import { TaskCard, type Task } from "@/components/TaskCard";
 import { TaskFilters, type TaskFiltersState } from "@/components/TaskFilters";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { RecentTasks } from "@/components/RecentTasks";
+import { QuickAddTask } from "@/components/QuickAddTask";
+import { quickAddToTaskInput } from "@/lib/quick-add-input";
 import { DailyUpdateCard } from "@/components/DailyUpdateCard";
 import { TimeDashboardWidgets } from "@/components/TimeDashboardWidgets";
 import type { DailyUpdateGroup } from "@/lib/daily-update-format";
@@ -440,6 +442,16 @@ export function DashboardClient({ userName }: DashboardClientProps) {
             />
           </div>
           <div className="p-3 sm:p-4">
+            {canEditTasks && (
+              <QuickAddTask
+                className="mb-3"
+                onAdd={async (text) => {
+                  const input = quickAddToTaskInput(text);
+                  if (!input) return;
+                  await handleCreateOrUpdate({ ...input, categoryId: categoryId ?? null });
+                }}
+              />
+            )}
             {isLoading ? (
               <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-16 animate-pulse rounded-xl bg-[var(--surface-hover)]" />
@@ -452,8 +464,8 @@ export function DashboardClient({ userName }: DashboardClientProps) {
                 <p className="text-base font-semibold text-[var(--foreground)]">No tasks in this workspace</p>
                 <p className="mt-1 max-w-xs text-sm text-[var(--muted)]">
                   {isPersonal
-                    ? "Press N or use New Task above to get started"
-                    : "Create a team task or open Team in the sidebar to invite members"}
+                    ? "Type a task in the box above and press Enter (try “kal 5 baje call !high”)"
+                    : "Type a task in the box above, or invite teammates from Team settings"}
                 </p>
               </div>
             ) : (
