@@ -200,14 +200,14 @@ export default function CalendarPage() {
         subtitle={format(month, "MMMM yyyy")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setMonth(new Date())}>
+            <Button variant="secondary" size="sm" onClick={() => setMonth(new Date())} className="max-sm:h-11">
               Today
             </Button>
             <div className="flex gap-1">
-              <Button variant="secondary" size="sm" onClick={() => setMonth((m) => subMonths(m, 1))} className="h-8 w-8 p-0" aria-label="Previous month">
+              <Button variant="secondary" size="sm" onClick={() => setMonth((m) => subMonths(m, 1))} className="h-8 w-8 p-0 max-sm:h-11 max-sm:w-11" aria-label="Previous month">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setMonth((m) => addMonths(m, 1))} className="h-8 w-8 p-0" aria-label="Next month">
+              <Button variant="secondary" size="sm" onClick={() => setMonth((m) => addMonths(m, 1))} className="h-8 w-8 p-0 max-sm:h-11 max-sm:w-11" aria-label="Next month">
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
