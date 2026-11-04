@@ -26,6 +26,7 @@ import { LinkDocumentPicker } from "@/components/docs/LinkDocumentPicker";
 import { DocumentQuickModal } from "@/components/docs/DocumentQuickModal";
 import { TimeTracker } from "@/components/tasks/TimeTracker";
 import { TimeEntryHistory } from "@/components/tasks/TimeEntryHistory";
+import { FollowTaskButton } from "@/components/tasks/FollowTaskButton";
 import { cn } from "@/lib/utils";
 
 interface Subtask { id: string; title: string; completed: boolean }
@@ -323,6 +324,7 @@ export function TaskDetail({
 
   const commentsPanel = (
     <>
+      <FollowTaskButton taskId={taskId} />
       <div className={cn("space-y-2 overflow-y-auto pr-1", layout === "sidebar" ? "min-h-[200px]" : "max-h-40")}>
         {comments.length === 0 && (
           <p className="text-xs text-[var(--muted)]">No comments yet</p>
