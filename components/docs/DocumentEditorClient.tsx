@@ -656,6 +656,7 @@ export function DocumentEditorClient({ documentId }: { documentId: string }) {
       </div>
 
       <TaskEditModal
+        onSaved={() => { void load(); }}
         isOpen={isTaskModalOpen}
         onClose={() => {
           setIsTaskModalOpen(false);

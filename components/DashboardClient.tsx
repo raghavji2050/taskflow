@@ -510,6 +510,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       </div>
 
       <TaskEditModal
+        onSaved={() => { void refreshTasks(); }}
         isOpen={isFormOpen}
         onClose={() => { setIsFormOpen(false); setEditingTask(null); }}
         title={editingTask ? (canEditTasks ? "Edit Task" : "View Task") : isPersonal ? "New Personal Task" : `New Task in ${selectedWorkspace?.name}`}

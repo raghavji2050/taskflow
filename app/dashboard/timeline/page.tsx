@@ -109,6 +109,7 @@ export default function TimelinePage() {
         onEdit={(t) => { setEditingTask(t); setIsFormOpen(true); }}
       />
       <TaskEditModal
+        onSaved={() => { void fetchTasks(filters); }}
         isOpen={isFormOpen}
         onClose={() => { setIsFormOpen(false); setEditingTask(null); }}
         title={canEditTasks ? "Edit Task" : "View Task"}

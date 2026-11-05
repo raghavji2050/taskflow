@@ -41,7 +41,7 @@ interface TaskDetailProps {
   taskId: string;
   readOnly?: boolean;
   members?: { id: string; name: string }[];
-  layout?: "grid" | "sidebar";
+  layout?: "grid" | "sidebar" | "stack";
 }
 
 function Section({
@@ -289,6 +289,7 @@ export function TaskDetail({
           <Input
             hideLabel
             placeholder="Add subtask..."
+            aria-label="Add subtask"
             value={newSubtask}
             onChange={(e) => setNewSubtask(e.target.value)}
             onKeyDown={(e) => {
@@ -325,7 +326,7 @@ export function TaskDetail({
   const commentsPanel = (
     <>
       <FollowTaskButton taskId={taskId} />
-      <div className={cn("space-y-2 overflow-y-auto pr-1", layout === "sidebar" ? "min-h-[200px]" : "max-h-40")}>
+      <div className={cn("space-y-2 overflow-y-auto pr-1", layout === "sidebar" ? "min-h-[200px]" : layout === "stack" ? "" : "max-h-40")}>
         {comments.length === 0 && (
           <p className="text-xs text-[var(--muted)]">No comments yet</p>
         )}
@@ -460,7 +461,7 @@ export function TaskDetail({
     <div className="space-y-6">
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Activity</p>
-        <div className={cn("space-y-2 overflow-y-auto text-xs text-[var(--muted)]", layout === "sidebar" ? "" : "max-h-32")}>
+        <div className={cn("space-y-2 overflow-y-auto text-xs text-[var(--muted)]", layout !== "grid" ? "" : "max-h-32")}>
           {activities.length === 0 && (
             <p className="text-[var(--muted)]">No activity yet — changes will appear here.</p>
           )}
@@ -513,9 +514,30 @@ export function TaskDetail({
     more: { title: "More", description: "Activity log and reminders." },
   };
 
+  const stackSections: { id: CollabPanel; title: string; icon: React.ComponentType<{ className?: string }>; badge: number; body: React.ReactNode }[] = [
+    { id: "work", title: subtasks.length ? `Subtasks ${subtasks.filter((x) => x.completed).length}/${subtasks.length}` : "Subtasks", icon: ListChecks, badge: subtasks.length, body: subtasksPanel },
+    { id: "comments", title: "Comments", icon: MessageSquare, badge: comments.length, body: commentsPanel },
+    { id: "files", title: "Files & docs", icon: Paperclip, badge: attachments.length + linkedDocs.length, body: filesPanel },
+    { id: "time", title: "Time", icon: Clock, badge: timeEntryCount, body: timePanel },
+    { id: "more", title: "Activity & reminder", icon: Activity, badge: activities.length, body: morePanel },
+  ];
+
   return (
     <>
-      {layout === "sidebar" ? (
+      {layout === "stack" ? (
+        <div className="space-y-5" data-testid="task-panel-stack">
+          {stackSections.map((item) => (
+            <section key={item.id} aria-label={item.title} data-testid={`task-panel-${item.id}`} className="border-t border-[var(--border)] pt-4">
+              <div className="mb-3 flex items-center gap-2">
+                <item.icon className="h-4 w-4 text-[var(--accent)]" />
+                <h3 className="text-sm font-semibold text-[var(--foreground)]">{item.title}</h3>
+                <NavBadge count={item.badge} />
+              </div>
+              {item.body}
+            </section>
+          ))}
+        </div>
+      ) : layout === "sidebar" ? (
         <div className="flex min-h-[min(60vh,520px)] flex-col gap-4 sm:flex-row">
           <nav className="flex shrink-0 gap-1 overflow-x-auto sm:w-36 sm:flex-col sm:overflow-visible">
             {sidebarNav.map((item) => (

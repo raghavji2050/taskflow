@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CreateTaskTimerOptions } from "@/components/tasks/CreateTaskTimerOptions";
 import { FileText, MessageSquare } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -12,6 +12,7 @@ import type { Task } from "@/components/TaskCard";
 import type { TaskInput } from "@/lib/validations";
 import type { TaskFormSubmitOptions } from "@/lib/client-task-submit";
 import { cn } from "@/lib/utils";
+import { saveTaskWithOptionalTimer } from "@/lib/client-task-submit";
 
 interface Member {
   id: string;
@@ -34,6 +35,8 @@ interface TaskEditModalProps {
   defaultDueDate?: string;
   defaultCategoryId?: string | null;
   readOnly?: boolean;
+  /** Called after an autosave so the page behind the side panel can refresh. */
+  onSaved?: () => void;
 }
 
 export function TaskEditModal({
@@ -51,7 +54,16 @@ export function TaskEditModal({
   defaultDueDate,
   defaultCategoryId,
   readOnly: readOnlyProp,
+  onSaved,
 }: TaskEditModalProps) {
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const savedSinceOpenRef = useRef(false);
+  useEffect(() => {
+    if (isOpen) {
+      setSaveState("idle");
+      savedSinceOpenRef.current = false;
+    }
+  }, [isOpen, editingTask?.id]);
   const [tab, setTab] = useState<"details" | "more">("details");
   const [startTimerAfterCreate, setStartTimerAfterCreate] = useState(false);
   const [promoteStatusOnStart, setPromoteStatusOnStart] = useState(true);
@@ -72,16 +84,61 @@ export function TaskEditModal({
 
   const handleClose = () => {
     setTab("details");
+    if (savedSinceOpenRef.current) onSaved?.();
     onClose();
   };
 
-  const showTabs = !!editingTask;
+  const isPanel = !!editingTask;
+  const autoSave = async (data: TaskInput) => {
+    if (!editingTask) return;
+    setSaveState("saving");
+    try {
+      await saveTaskWithOptionalTimer({ ...data, workspaceId: editingTask.workspaceId ?? data.workspaceId }, editingTask.id);
+      savedSinceOpenRef.current = true;
+      setSaveState("saved");
+      onSaved?.();
+    } catch {
+      setSaveState("error");
+    }
+  };
+
+  // Editing uses the one-scroll side panel (details + subtasks + comments inline); no tabs.
+  const showTabs = false;
   const modalTitle = readOnly && editingTask ? "View Task" : title;
   const onDetailsTab = !showTabs || tab === "details";
 
   const showCreateTimerOptions = !editingTask && !readOnly && onDetailsTab;
 
-  const footer = onDetailsTab ? (
+  const saveBadge = isPanel && !readOnly ? (
+    <span
+      data-testid="autosave-status"
+      aria-live="polite"
+      className={cn(
+        "hidden text-xs sm:inline",
+        saveState === "error" ? "text-red-500" : "text-[var(--muted)]"
+      )}
+    >
+      {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Couldn’t save" : "Changes save automatically"}
+    </span>
+  ) : null;
+
+  const footer = isPanel ? (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs text-[var(--muted)] sm:hidden" aria-hidden="true">
+        {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
+      </span>
+      <div className="ml-auto flex gap-3">
+        {!readOnly && (
+          <Button type="submit" variant="secondary" form={TASK_FORM_ID} isLoading={isSubmitting}>
+            Update Task
+          </Button>
+        )}
+        <Button type="button" onClick={handleClose}>
+          {readOnly ? "Close" : "Done"}
+        </Button>
+      </div>
+    </div>
+  ) : onDetailsTab ? (
     <div className="flex flex-wrap items-center justify-between gap-3">
       {showCreateTimerOptions ? (
         <CreateTaskTimerOptions
@@ -117,13 +174,15 @@ export function TaskEditModal({
         readOnly && editingTask
           ? "You can view this task but cannot make changes in this workspace."
           : editingTask
-            ? "Update task fields or collaborate with your team."
+            ? "Edits save as you type. Subtasks, comments and files are below."
             : isPersonal
               ? "Add a task to your personal workspace."
               : `This task will be shared with everyone in ${workspaceName}.`
       }
       size={editingTask ? "full" : "lg"}
-      bodyClassName={editingTask && tab === "more" ? "min-h-[min(50vh,480px)]" : "py-3"}
+      variant={isPanel ? "panel" : "center"}
+      headerExtra={saveBadge}
+      bodyClassName="py-3"
       footer={footer}
     >
       {showTabs && (
@@ -179,7 +238,19 @@ export function TaskEditModal({
           startTimerAfterCreate={showCreateTimerOptions ? startTimerAfterCreate : undefined}
           promoteStatusOnStart={showCreateTimerOptions ? promoteStatusOnStart : undefined}
           onStatusChange={setTaskStatus}
+          onAutoSave={isPanel && !readOnly ? autoSave : undefined}
         />
+      )}
+
+      {isPanel && editingTask && (
+        <div className="mt-6">
+          <TaskDetail
+            taskId={editingTask.id}
+            readOnly={readOnly}
+            layout="stack"
+            members={members?.map((m) => ({ id: m.id, name: m.name })) ?? []}
+          />
+        </div>
       )}
 
       {showTabs && tab === "more" && editingTask && (

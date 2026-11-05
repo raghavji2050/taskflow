@@ -33,6 +33,10 @@ interface ModalProps {
   bodyClassName?: string;
   size?: keyof typeof sizeClasses;
   priority?: "normal" | "elevated";
+  /** "panel" slides in from the right on desktop (task side panel); phones keep the full-height sheet. */
+  variant?: "center" | "panel";
+  /** Extra content rendered in the header, before the close button. */
+  headerExtra?: React.ReactNode;
 }
 
 export function Modal({
@@ -46,7 +50,10 @@ export function Modal({
   bodyClassName,
   size = "md",
   priority = "normal",
+  variant = "center",
+  headerExtra,
 }: ModalProps) {
+  const isPanel = variant === "panel";
   const [mounted, setMounted] = useState(false);
   const isMobile = useMediaQuery("(max-width: 639px)");
   const visualViewport = useVisualViewport();
@@ -75,7 +82,14 @@ export function Modal({
 
   const dialogMotion = reducedMotion
     ? {}
-    : {
+    : isPanel && !isMobile
+      ? {
+          initial: { opacity: 0, x: 40 },
+          animate: { opacity: 1, x: 0 },
+          exit: { opacity: 0, x: 40 },
+          transition: { type: "spring" as const, stiffness: 400, damping: 36 },
+        }
+      : {
         initial: { opacity: 0, y: 12, scale: 0.98 },
         animate: { opacity: 1, y: 0, scale: 1 },
         exit: { opacity: 0, y: 8, scale: 0.98 },
@@ -88,6 +102,7 @@ export function Modal({
         <div
           className={cn(
             "fixed flex items-end justify-center sm:inset-0 sm:items-center",
+            isPanel && "sm:items-stretch sm:justify-end",
             !isMobile && "inset-0",
             priority === "elevated" ? "z-[60]" : "z-[60]"
           )}
@@ -115,8 +130,10 @@ export function Modal({
               "sm:m-4 sm:rounded-xl",
               "safe-bottom",
               sizeClasses[size],
+              isPanel && "sm:m-0 sm:h-dvh sm:max-h-none sm:max-w-2xl sm:rounded-none sm:border-y-0 sm:border-r-0",
               className
             )}
+            data-variant={variant}
             style={isMobile ? { maxHeight: mobileModalMaxHeight(visualViewport) } : undefined}
             {...dialogMotion}
           >
@@ -132,6 +149,8 @@ export function Modal({
                   <p className="mt-0.5 text-sm text-[var(--muted)]">{description}</p>
                 )}
               </div>
+              <div className="flex shrink-0 items-center gap-2">
+              {headerExtra}
               <Button
                 variant="ghost"
                 size="sm"
@@ -141,6 +160,7 @@ export function Modal({
               >
                 <X className="h-4 w-4" />
               </Button>
+              </div>
             </div>
 
             <div
