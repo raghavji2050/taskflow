@@ -1,5 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 
+// Own client IP per spec/context so the sign-up rate limit doesn't trip in CI.
+const ip = () => `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+test.use({ extraHTTPHeaders: { "x-test-client-ip": ip() } });
+
 // Runs against a throwaway MySQL database (CI service container). Never prod.
 const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
@@ -76,7 +80,7 @@ test("blocked-by links: add, refuse loops, warn on early completion, strangers d
   await expect(box).toContainText("Blocked: waiting on 1 open task");
 
   // Someone without access can't read or add links.
-  const other = await browser.newContext();
+  const other = await browser.newContext({ extraHTTPHeaders: { "x-test-client-ip": ip() } });
   const otherPage = await other.newPage();
   await register(otherPage, "Deps Stranger", `deps-stranger-${stamp}@example.com`);
   expect((await otherPage.request.get(`/api/tasks/${build.id}/dependencies`)).status()).toBe(404);
