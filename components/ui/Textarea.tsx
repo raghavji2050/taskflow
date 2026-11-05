@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { TextareaHTMLAttributes, forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
@@ -8,7 +9,8 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, error, id, ...props }, ref) => {
-    const textareaId = id || props.name;
+    const autoId = useId();
+    const textareaId = id || props.name || autoId;
 
     return (
       <div className="w-full space-y-2">

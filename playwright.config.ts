@@ -1,12 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = process.env.E2E_PORT ?? "3000";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: `http://localhost:${port}`,
     trace: "on-first-retry",
   },
   projects: [
@@ -19,7 +21,7 @@ export default defineConfig({
     // CI builds first, then serves the production build for stable timings.
     command: process.env.E2E_SERVER_COMMAND ?? (process.env.CI ? "npm run start:next" : "npm run dev:next"),
     timeout: 180_000,
-    url: "http://localhost:3000",
+    url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
   },
 });

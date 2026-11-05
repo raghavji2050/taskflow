@@ -3,7 +3,7 @@
 import { shouldOpenFromClick } from "@/lib/open-on-click";
 import { QuickAddTask } from "@/components/QuickAddTask";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -14,7 +14,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { Check, ChevronDown, ChevronUp, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { AssigneeChips } from "@/components/AssigneeChips";
 import type { Task } from "@/components/TaskCard";
 import { planTaskMove, type SectionTask } from "@/lib/project-sections";
@@ -41,6 +41,8 @@ type ProjectBoardProps = {
   onRenameSection: (sectionId: string, name: string) => Promise<void>;
   onDeleteSection: (sectionId: string) => void;
   onReorderSection: (sectionId: string, direction: -1 | 1) => void;
+  /** Used to remember collapsed sections per project. */
+  projectId?: string;
 };
 
 const sectionIconBtn =
@@ -70,12 +72,16 @@ function dropIndex(tasks: Task[], movingId: string, sectionId: string, overTaskI
 function ProjectTaskCard({
   task,
   readOnly,
+  sections,
+  onMoveTo,
   onEdit,
   onDelete,
   onToggleComplete,
 }: {
   task: Task;
   readOnly?: boolean;
+  sections: ProjectSectionItem[];
+  onMoveTo: (task: Task, sectionId: string) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onToggleComplete: (task: Task) => void;
@@ -141,6 +147,22 @@ function ProjectTaskCard({
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5">
+        {!readOnly && sections.length > 1 && (
+          <select
+            aria-label={`Move ${task.title} to section`}
+            title="Move to section"
+            value={task.sectionId ?? ""}
+            onChange={(event) => onMoveTo(task, event.target.value)}
+            className="h-7 w-7 cursor-pointer appearance-none rounded-md bg-transparent text-center text-[0px] text-[var(--muted)] hover:bg-[var(--surface-hover)]"
+            style={{ backgroundImage: "none" }}
+          >
+            {sections.map((item) => (
+              <option key={item.id} value={item.id} className="text-sm">
+                {item.name}
+              </option>
+            ))}
+          </select>
+        )}
         {!readOnly && (
           <button
             type="button"
@@ -174,6 +196,11 @@ function SectionColumn({
   readOnly,
   canMoveUp,
   canMoveDown,
+  canDelete,
+  collapsed,
+  onToggleCollapsed,
+  allSections,
+  onMoveTo,
   onEdit,
   onDelete,
   onToggleComplete,
@@ -184,6 +211,11 @@ function SectionColumn({
   onReorderSection,
 }: {
   section: ProjectSectionItem;
+  canDelete: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  allSections: ProjectSectionItem[];
+  onMoveTo: (task: Task, sectionId: string) => void;
   tasks: Task[];
   layout: "list" | "board";
   readOnly?: boolean;
@@ -214,12 +246,22 @@ function SectionColumn({
 
   return (
     <section
+      data-section-id={section.id}
       className={cn(
         "surface-panel rounded-2xl border border-[var(--border)] p-3",
-        layout === "board" ? "w-[290px] shrink-0" : "w-full"
+        layout === "board" ? "w-[290px] shrink-0 self-start" : "w-full"
       )}
     >
-      <div className="mb-3 flex items-center gap-1">
+      <div className={cn("flex items-center gap-1", !collapsed && "mb-3")}>
+        <button
+          type="button"
+          className={sectionIconBtn}
+          aria-label={collapsed ? "Expand section" : "Collapse section"}
+          aria-expanded={!collapsed}
+          onClick={onToggleCollapsed}
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
         {editing ? (
           <input
             value={name}
@@ -258,14 +300,16 @@ function SectionColumn({
             <button type="button" className={sectionIconBtn} aria-label="Add task to section" onClick={() => onAddTask(section.id)}>
               <Plus className="h-4 w-4" />
             </button>
-            <button type="button" className={cn(sectionIconBtn, "hover:text-red-500")} aria-label="Delete section" onClick={() => onDeleteSection(section.id)}>
+            <button type="button" className={cn(sectionIconBtn, "hover:text-red-500")} aria-label="Delete section" title={canDelete ? "Delete section" : "A project needs at least one section"} disabled={!canDelete} onClick={() => onDeleteSection(section.id)}>
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </>
         )}
       </div>
+      {!collapsed && (
       <div
         ref={setNodeRef}
+        data-section-drop
         className={cn(
           "min-h-[88px] space-y-2 rounded-xl p-1",
           isOver && "bg-[var(--accent-soft)] ring-2 ring-[var(--accent)] ring-inset"
@@ -290,9 +334,12 @@ function SectionColumn({
             onEdit={onEdit}
             onDelete={onDelete}
             onToggleComplete={onToggleComplete}
+            sections={allSections}
+            onMoveTo={onMoveTo}
           />
         ))}
       </div>
+      )}
     </section>
   );
 }
@@ -312,7 +359,26 @@ export function ProjectBoard({
   onRenameSection,
   onDeleteSection,
   onReorderSection,
+  projectId,
 }: ProjectBoardProps) {
+  const collapseKey = projectId ? `taskflow-collapsed-sections:${projectId}` : null;
+  const [collapsedIds, setCollapsedIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!collapseKey) return;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(collapseKey) ?? "[]");
+      if (Array.isArray(saved)) setCollapsedIds(saved.filter((v): v is string => typeof v === "string"));
+    } catch {
+      /* ignore bad storage */
+    }
+  }, [collapseKey]);
+  const toggleCollapsed = (id: string) => {
+    setCollapsedIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id];
+      if (collapseKey) window.localStorage.setItem(collapseKey, JSON.stringify(next));
+      return next;
+    });
+  };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: readOnly ? 9999 : 6 } })
   );
@@ -325,9 +391,6 @@ export function ProjectBoard({
     if (!overId || !activeId.startsWith("task:")) return;
 
     const taskId = activeId.slice("task:".length);
-    const moving = tasks.find((task) => task.id === taskId);
-    if (!moving) return;
-
     let toSectionId = "";
     let overTaskId: string | null = null;
     if (overId.startsWith("section:")) {
@@ -338,6 +401,12 @@ export function ProjectBoard({
       toSectionId = overTask.sectionId;
       overTaskId = overTask.id === taskId ? null : overTask.id;
     }
+    applyMove(taskId, toSectionId, overTaskId);
+  };
+
+  const applyMove = (taskId: string, toSectionId: string, overTaskId: string | null) => {
+    const moving = tasks.find((task) => task.id === taskId);
+    if (!moving) return;
     if (!toSectionId || !orderedSections.some((section) => section.id === toSectionId)) return;
 
     const toIndex = dropIndex(tasks, taskId, toSectionId, overTaskId);
@@ -387,6 +456,11 @@ export function ProjectBoard({
             onRenameSection={onRenameSection}
             onDeleteSection={onDeleteSection}
             onReorderSection={onReorderSection}
+            canDelete={orderedSections.length > 1}
+            collapsed={collapsedIds.includes(section.id)}
+            onToggleCollapsed={() => toggleCollapsed(section.id)}
+            allSections={orderedSections}
+            onMoveTo={(task, sectionId) => applyMove(task.id, sectionId, null)}
           />
         ))}
         {orderedSections.length === 0 && (

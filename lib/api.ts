@@ -14,6 +14,11 @@ export function handleApiError(error: unknown) {
     return jsonError(error.message, error.status);
   }
 
+  // Empty / malformed JSON bodies (e.g. a request aborted mid-navigation) are client errors, not 500s.
+  if (error instanceof SyntaxError) {
+    return jsonError("Invalid JSON body", 400);
+  }
+
   if (error instanceof ZodError) {
     return NextResponse.json(
       { error: error.issues[0]?.message ?? "Validation failed" },
