@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logTaskActivity } from "@/lib/activity";
 import { broadcastTaskEvent } from "@/lib/realtime";
 import { completedAtForStatusChange } from "@/lib/auto-archive";
+import { getOpenBlockers, notifyUnblocked } from "@/lib/task-dependencies";
 import { syncTaskAssignees } from "@/lib/task-assignees";
 import { canAccessTask, canEditTask, getUserWorkspaceIds, getWorkspaceMembership, canEditWorkspaceTasks } from "@/lib/workspace";
 import { listVisibleProjects, placementForNewTask, requireProjectAccess } from "@/lib/projects";
@@ -269,7 +270,15 @@ export async function updateTask(
   const changed = Object.keys(input).filter((k) => k !== "taskId" && input[k as keyof typeof input] !== undefined);
   await logTaskActivity(input.taskId, "updated", `Updated via MCP: ${changed.join(", ") || "nothing"}`);
   broadcastTaskEvent({ type: "task:updated", workspaceId: existing.workspaceId, ownerId: existing.userId, actorId: user.id, taskId: input.taskId });
-  return getTask(user, { taskId: input.taskId });
+  const result = await getTask(user, { taskId: input.taskId });
+  if (input.status === "COMPLETED" && existing.status !== "COMPLETED") {
+    const open = await getOpenBlockers(input.taskId);
+    await notifyUnblocked(input.taskId, user.id);
+    if (open.length) {
+      return { ...result, warning: `Completed while still blocked by: ${open.map((b) => b.title).join(", ")}` };
+    }
+  }
+  return result;
 }
 
 export async function addComment(user: McpUser, input: { taskId: string; body: string }) {

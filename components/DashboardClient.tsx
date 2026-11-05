@@ -282,6 +282,7 @@ export function DashboardClient({ userName }: DashboardClientProps) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Failed to update");
       if (data.task) commitBoard(confirmOptimisticSave(boardRef.current, task.id, data.task, filtersNow));
+      if (data.warning?.message) toast.warning(data.warning.message);
       toast.success(task.archived ? "Task restored" : "Task archived");
       void fetchTasks(filters, page, categoryId, selectedWorkspaceId, true, false);
     } catch (error) {

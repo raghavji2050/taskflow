@@ -205,6 +205,8 @@ model Task {
   section       ProjectSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   assignees     TaskAssignee[]
   followers     TaskFollower[]
+  blockedBy     TaskDependency[] @relation("DependencyBlocked")
+  blocking      TaskDependency[] @relation("DependencyBlocker")
   subtasks      Subtask[]
   tags          TaskTag[]
   attachments   Attachment[]
@@ -302,6 +304,19 @@ model TaskFollower {
 
   @@id([taskId, userId])
   @@index([userId])
+}
+
+/// "taskId is blocked by dependsOnId": taskId can't really be done until dependsOnId is.
+model TaskDependency {
+  taskId      String
+  dependsOnId String
+  createdById String?
+  createdAt   DateTime @default(now())
+  task        Task     @relation("DependencyBlocked", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn   Task     @relation("DependencyBlocker", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, dependsOnId])
+  @@index([dependsOnId])
 }
 
 model Comment {

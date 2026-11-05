@@ -161,6 +161,9 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   add("update_project_member", "Change a project member's role (memberId from list_project_members).", { projectId: id, memberId: id, role }, P("updateProjectMember"));
   add("remove_project_member", "Remove a member from a project.", { projectId: id, memberId: id }, P("removeProjectMember"));
   // task extras
+  add("list_task_dependencies", "Show what a task is blocked by and what it is blocking, with how many blockers are still open.", { taskId: id }, P("listTaskDependencies"), true);
+  add("add_task_dependency", "Mark taskId as blocked by blockedByTaskId (same workspace; loops are refused).", { taskId: id, blockedByTaskId: id }, P("addTaskDependency"));
+  add("remove_task_dependency", "Remove a 'blocked by' link between two tasks.", { taskId: id, blockedByTaskId: id }, P("removeTaskDependency"));
   add("delete_subtask", "Delete a subtask.", { subtaskId: id }, P("deleteSubtask"));
   add("update_comment", "Edit one of your own task comments.", { commentId: id, body: z.string().trim().min(1).max(5000) }, P("updateComment"));
   add("delete_comment", "Delete one of your own task comments.", { commentId: id }, P("deleteComment"));

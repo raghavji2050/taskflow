@@ -1,5 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 
+// Own client IP per spec/context so the sign-up rate limit doesn't trip in CI.
+const ip = () => `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+test.use({ extraHTTPHeaders: { "x-test-client-ip": ip() } });
+
 // Runs against a throwaway MySQL database (CI service container). Never prod.
 const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
@@ -29,12 +33,10 @@ test("follow and unfollow a task; strangers can't follow it", async ({ page, bro
   expect(afterComment.following).toBe(true);
   expect(afterComment.followers).toHaveLength(1);
 
-  // UI: the Comments panel shows the follower and toggles Unfollow/Follow.
+  // UI: the task side panel (one scroll) shows the follower and toggles Unfollow/Follow.
   await page.goto("/dashboard");
   const row = page.locator(".task-row", { hasText: `Follow me ${stamp}` }).first();
   await row.getByRole("button", { name: "Edit task" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: /^Collaboration/ }).click();
-  await page.getByRole("dialog").getByRole("button", { name: /^Comments/ }).click();
   const box = page.getByTestId("task-followers");
   await expect(box).toContainText("1 follower: Follow Owner");
   await box.getByRole("button", { name: "Unfollow", exact: true }).click();
@@ -43,7 +45,7 @@ test("follow and unfollow a task; strangers can't follow it", async ({ page, bro
   await expect(box).toContainText("1 follower");
 
   // Someone without access gets 404, not a follow.
-  const other = await browser.newContext();
+  const other = await browser.newContext({ extraHTTPHeaders: { "x-test-client-ip": ip() } });
   const otherPage = await other.newPage();
   await register(otherPage, "Stranger", `stranger-${stamp}@example.com`);
   const denied = await otherPage.request.post(`/api/tasks/${taskId}/followers`);
