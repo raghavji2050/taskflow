@@ -27,6 +27,7 @@ import { DocumentQuickModal } from "@/components/docs/DocumentQuickModal";
 import { TimeTracker } from "@/components/tasks/TimeTracker";
 import { TimeEntryHistory } from "@/components/tasks/TimeEntryHistory";
 import { FollowTaskButton } from "@/components/tasks/FollowTaskButton";
+import { TaskDependencies } from "@/components/tasks/TaskDependencies";
 import { cn } from "@/lib/utils";
 
 interface Subtask { id: string; title: string; completed: boolean }
@@ -305,6 +306,7 @@ export function TaskDetail({
           </Button>
         </div>
       )}
+      <TaskDependencies taskId={taskId} workspaceId={taskWorkspaceId} readOnly={readOnly} />
     </>
   );
 

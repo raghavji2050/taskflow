@@ -13,6 +13,7 @@ import { taskDetailInclude } from "@/lib/tasks";
 import { nextSectionPosition, projectFieldsForTaskUpdate } from "@/lib/projects";
 import { visibleTaskWhere } from "@/lib/visible-records";
 import { notifyTaskFollowers, statusLabel } from "@/lib/task-followers";
+import { getOpenBlockers, notifyUnblocked } from "@/lib/task-dependencies";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -161,6 +162,20 @@ export async function PUT(request: Request, context: RouteContext) {
       });
     }
 
+    // Dependencies: completing is allowed, but warn when blockers are still open,
+    // and tell people on tasks that just became fully unblocked.
+    let warning: { message: string; openBlockers: { id: string; title: string }[] } | undefined;
+    if (taskData.status === "COMPLETED" && existing.status !== "COMPLETED") {
+      const open = await getOpenBlockers(id);
+      if (open.length) {
+        warning = {
+          message: `Marked done while ${open.length} blocking task${open.length === 1 ? " is" : "s are"} still open`,
+          openBlockers: open.map((b) => ({ id: b.id, title: b.title })),
+        };
+      }
+      await notifyUnblocked(id, user.id);
+    }
+
     broadcastTaskEvent({
       type: "task:updated",
       workspaceId: existing.workspaceId,
@@ -168,7 +183,7 @@ export async function PUT(request: Request, context: RouteContext) {
       actorId: user.id,
       taskId: id,
     });
-    return NextResponse.json({ task });
+    return NextResponse.json(warning ? { task, warning } : { task });
   } catch (error) {
     return handleApiError(error);
   }

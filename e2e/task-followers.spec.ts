@@ -29,12 +29,10 @@ test("follow and unfollow a task; strangers can't follow it", async ({ page, bro
   expect(afterComment.following).toBe(true);
   expect(afterComment.followers).toHaveLength(1);
 
-  // UI: the Comments panel shows the follower and toggles Unfollow/Follow.
+  // UI: the task side panel (one scroll) shows the follower and toggles Unfollow/Follow.
   await page.goto("/dashboard");
   const row = page.locator(".task-row", { hasText: `Follow me ${stamp}` }).first();
   await row.getByRole("button", { name: "Edit task" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: /^Collaboration/ }).click();
-  await page.getByRole("dialog").getByRole("button", { name: /^Comments/ }).click();
   const box = page.getByTestId("task-followers");
   await expect(box).toContainText("1 follower: Follow Owner");
   await box.getByRole("button", { name: "Unfollow", exact: true }).click();

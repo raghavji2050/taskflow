@@ -140,8 +140,11 @@ export default function MyWorkPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...toTaskInput(task, { status: nextStatus }), workspaceId: task.workspaceId }),
     });
-    if (res.ok) await load();
-    else toast.error((await res.json()).error ?? "Could not update status");
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data.warning?.message) toast.warning(data.warning.message);
+      await load();
+    } else toast.error((await res.json()).error ?? "Could not update status");
     setUpdatingTaskId(null);
   };
 

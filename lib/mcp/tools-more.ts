@@ -12,6 +12,7 @@ import { sendWorkspaceInvite } from "@/lib/invitations";
 import { canInviteMembers } from "@/lib/workspace-permissions";
 import { getWorkspaceMembership as getInviteMembership } from "@/lib/workspace-membership";
 import { McpToolError, type McpUser } from "@/lib/mcp/tools";
+import * as deps from "@/lib/task-dependencies";
 
 async function taskFor(user: McpUser, taskId: string, edit: boolean) {
   const task = await canAccessTask(user.id, taskId);
@@ -188,3 +189,13 @@ export async function inviteMember(u: McpUser, a: { workspaceId: string; email: 
   if (r && r.error) throw new McpToolError(r.error);
   return { ok: true, invited: a.email };
 }
+
+// ---- task dependencies (blocked by / blocking)
+export async function listTaskDependencies(u: McpUser, a: { taskId: string }) {
+  await taskFor(u, a.taskId, false);
+  return deps.listDependencies(a.taskId);
+}
+export const addTaskDependency = (u: McpUser, a: { taskId: string; blockedByTaskId: string }) =>
+  wrap(deps.addDependency(u.id, a.taskId, a.blockedByTaskId));
+export const removeTaskDependency = (u: McpUser, a: { taskId: string; blockedByTaskId: string }) =>
+  wrap(deps.removeDependency(u.id, a.taskId, a.blockedByTaskId));
