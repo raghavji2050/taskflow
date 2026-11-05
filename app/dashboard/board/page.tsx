@@ -209,6 +209,7 @@ export default function BoardPage() {
       )}
 
       <TaskEditModal
+        onSaved={() => { void refresh(); }}
         isOpen={isFormOpen}
         onClose={() => { setIsFormOpen(false); setEditingTask(null); }}
         title={editingTask ? (canEditTasks ? "Edit Task" : "View Task") : "New Task"}

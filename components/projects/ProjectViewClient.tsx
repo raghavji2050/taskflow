@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Archive, ArchiveRestore, Columns3, LayoutList, Plus, Settings, Trash2, Users } from "lucide-react";
+import { Archive, ArchiveRestore, CalendarDays, Columns3, GanttChart, LayoutDashboard, LayoutList, Plus, Settings, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectBoard } from "@/components/projects/ProjectBoard";
+import { ProjectCalendar, ProjectOverview, ProjectTimeline } from "@/components/projects/ProjectExtraViews";
 import { ProjectMembersDialog, type ProjectMemberRow } from "@/components/projects/ProjectMembersDialog";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import { quickAddToTaskInput } from "@/lib/quick-add-input";
@@ -23,6 +24,9 @@ import { useRealtimeSync } from "@/lib/useRealtimeSync";
 import { PROJECT_COLORS, type ProjectRoleName } from "@/lib/project-sections";
 import { toTaskInput } from "@/lib/task-ui";
 import type { TaskInput } from "@/lib/validations";
+
+const PROJECT_VIEWS = ["overview", "list", "board", "calendar", "timeline"] as const;
+type ProjectView = (typeof PROJECT_VIEWS)[number];
 
 type SectionItem = { id: string; name: string; position: number };
 
@@ -55,12 +59,12 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const viewKey = `taskflow-project-view:${projectId}`;
-  const [view, setViewState] = useState<"list" | "board">("board");
+  const [view, setViewState] = useState<ProjectView>("board");
   useEffect(() => {
     const saved = window.localStorage.getItem(viewKey);
-    if (saved === "list" || saved === "board") setViewState(saved);
+    if (saved && (PROJECT_VIEWS as readonly string[]).includes(saved)) setViewState(saved as ProjectView);
   }, [viewKey]);
-  const setView = (next: "list" | "board") => {
+  const setView = (next: ProjectView) => {
     setViewState(next);
     window.localStorage.setItem(viewKey, next);
   };
@@ -322,8 +326,11 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <div role="tablist" aria-label="Project views" className="flex flex-wrap items-center gap-1">
               {([
+                ["overview", "Overview", LayoutDashboard],
                 ["list", "List", LayoutList],
                 ["board", "Board", Columns3],
+                ["calendar", "Calendar", CalendarDays],
+                ["timeline", "Timeline", GanttChart],
               ] as const).map(([key, label, Icon]) => (
                 <Button
                   key={key}
@@ -380,7 +387,7 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
         </p>
       )}
 
-      {!readOnly && (
+      {!readOnly && (view === "list" || view === "board") && (
         <form
           className="mb-4 flex flex-col gap-2 sm:flex-row"
           onSubmit={(event) => {
@@ -403,6 +410,13 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
 
       <div className="mb-3 h-1.5 w-16 rounded-full" style={{ backgroundColor: project.color }} />
 
+      {view === "overview" && (
+        <ProjectOverview tasks={tasks} sections={project.sections} color={project.color} onOpenSection={() => setView("list")} />
+      )}
+      {view === "calendar" && <ProjectCalendar tasks={tasks} onOpen={(task) => { setEditingTask(task); setFormOpen(true); }} />}
+      {view === "timeline" && <ProjectTimeline tasks={tasks} sections={project.sections} onOpen={(task) => { setEditingTask(task); setFormOpen(true); }} />}
+
+      {(view === "list" || view === "board") && (
       <ProjectBoard
         layout={view}
         sections={project.sections}
@@ -444,6 +458,7 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
         }}
         onReorderSection={(sectionId, direction) => { void reorderSection(sectionId, direction); }}
       />
+      )}
 
       <ProjectMembersDialog
         isOpen={membersOpen}
@@ -502,6 +517,7 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
       </Modal>
 
       <TaskEditModal
+        onSaved={refresh}
         isOpen={formOpen}
         onClose={() => { setFormOpen(false); setEditingTask(null); }}
         title={editingTask ? "Edit task" : "New task"}

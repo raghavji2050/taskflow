@@ -283,8 +283,12 @@ function SectionColumn({
             {section.name}
           </h3>
         )}
-        <span className="rounded-full bg-[var(--surface-hover)] px-2 py-0.5 text-[10px] tabular-nums text-[var(--muted)]">
-          {tasks.length}
+        <span
+          className="rounded-full bg-[var(--surface-hover)] px-2 py-0.5 text-[10px] tabular-nums text-[var(--muted)]"
+          data-testid="section-count"
+          title={`${tasks.filter((t) => t.status !== "COMPLETED").length} open · ${tasks.filter((t) => t.status === "COMPLETED").length} done`}
+        >
+          {tasks.filter((t) => t.status === "COMPLETED").length}/{tasks.length}
         </span>
         {!readOnly && (
           <>

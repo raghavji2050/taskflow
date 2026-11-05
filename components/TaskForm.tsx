@@ -54,6 +54,8 @@ interface TaskFormProps {
   startTimerAfterCreate?: boolean;
   promoteStatusOnStart?: boolean;
   onStatusChange?: (status: string) => void;
+  /** Editing only: called (debounced) with a valid payload whenever a field changes. */
+  onAutoSave?: (data: TaskInput) => Promise<void>;
 }
 
 function toTimeInputValue(date: string | null | undefined) {
@@ -77,6 +79,7 @@ export function TaskForm({
   startTimerAfterCreate: startTimerAfterCreateProp,
   promoteStatusOnStart: promoteStatusOnStartProp,
   onStatusChange,
+  onAutoSave,
 }: TaskFormProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -249,6 +252,42 @@ export function TaskForm({
     onStatusChange?.(selectedStatus);
   }, [selectedStatus, onStatusChange]);
 
+  const buildPayload = (data: TaskFormValues): TaskInput => ({
+    ...data,
+    dueDate: data.dueDate && dueTime ? `${data.dueDate}T${dueTime}:00` : data.dueDate,
+    estimatedMinutes: hoursMinutesToMinutes(Number(estimateHours) || 0, Number(estimateMinutes) || 0),
+    tagIds: selectedTags,
+    assigneeIds: workspaceId || members?.length ? assigneeIds : [],
+    primaryAssigneeId,
+  });
+
+  // Autosave (editing only): debounce field changes, skip the initial load/reset.
+  const watchedValues = watch();
+  const autoSnapshot = JSON.stringify([watchedValues, selectedTags, assigneeIds, primaryAssigneeId, dueTime, estimateHours, estimateMinutes]);
+  const autoBaselineRef = useRef<string | null>(null);
+  // Only save after the user actually touched the form (not on initial load/reset).
+  const userTouchedRef = useRef(false);
+  const onAutoSaveRef = useRef(onAutoSave);
+  onAutoSaveRef.current = onAutoSave;
+  const markTouched = () => { userTouchedRef.current = true; };
+  useEffect(() => {
+    if (!initialData || readOnly || !onAutoSaveRef.current) return;
+    if (!userTouchedRef.current) {
+      autoBaselineRef.current = autoSnapshot;
+      return;
+    }
+    if (autoSnapshot === autoBaselineRef.current) return;
+    const timer = setTimeout(() => {
+      void handleSubmit(async (data) => {
+
+        autoBaselineRef.current = autoSnapshot;
+        await onAutoSaveRef.current?.(buildPayload(data));
+      })();
+    }, 700);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSnapshot]);
+
   const handleFormSubmit = async (data: TaskFormValues) => {
     let finalDueDate = data.dueDate;
     if (data.dueDate && dueTime) {
@@ -306,6 +345,9 @@ export function TaskForm({
     <form
       id={TASK_FORM_ID}
       onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit(handleFormSubmit)}
+      onInputCapture={markTouched}
+      onChangeCapture={markTouched}
+      onClickCapture={markTouched}
       className="space-y-4"
     >
       <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-4 border-0 p-0">

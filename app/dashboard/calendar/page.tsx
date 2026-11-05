@@ -263,6 +263,7 @@ export default function CalendarPage() {
       )}
 
       <TaskEditModal
+        onSaved={() => { void fetchTasks(selectedWorkspaceId, filters); }}
         isOpen={isFormOpen}
         onClose={closeModal}
         title={

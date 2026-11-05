@@ -238,6 +238,7 @@ export default function MyWorkPage() {
       </section>
 
       <TaskEditModal
+        onSaved={() => { void load(); }}
         isOpen={isFormOpen}
         onClose={() => { setIsFormOpen(false); setEditingTask(null); }}
         title={editingTask && !canEditTask(editingTask) ? "View Task" : "Edit Task"}
