@@ -1,4 +1,5 @@
 "use client";
+import { useId } from "react";
 
 import { InputHTMLAttributes, forwardRef, useState, type ReactNode } from "react";
 import { Eye, EyeOff } from "lucide-react";
@@ -17,7 +18,8 @@ const inputBase =
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, id, hideLabel, type, startIcon, endIcon, ...props }, ref) => {
-    const inputId = id || props.name;
+    const autoId = useId();
+    const inputId = id || props.name || autoId;
     const isPassword = type === "password";
     const [showPassword, setShowPassword] = useState(false);
 

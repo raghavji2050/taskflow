@@ -54,7 +54,16 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
   const [access, setAccess] = useState<Access | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"list" | "board">("board");
+  const viewKey = `taskflow-project-view:${projectId}`;
+  const [view, setViewState] = useState<"list" | "board">("board");
+  useEffect(() => {
+    const saved = window.localStorage.getItem(viewKey);
+    if (saved === "list" || saved === "board") setViewState(saved);
+  }, [viewKey]);
+  const setView = (next: "list" | "board") => {
+    setViewState(next);
+    window.localStorage.setItem(viewKey, next);
+  };
   const [refreshKey, setRefreshKey] = useState(0);
   const [membersOpen, setMembersOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -311,14 +320,24 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
         subtitle={project.description || "Tasks grouped by section"}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant={view === "list" ? "primary" : "secondary"} size="sm" onClick={() => setView("list")}>
-              <LayoutList className="h-4 w-4" />
-              List
-            </Button>
-            <Button variant={view === "board" ? "primary" : "secondary"} size="sm" onClick={() => setView("board")}>
-              <Columns3 className="h-4 w-4" />
-              Board
-            </Button>
+            <div role="tablist" aria-label="Project views" className="flex flex-wrap items-center gap-1">
+              {([
+                ["list", "List", LayoutList],
+                ["board", "Board", Columns3],
+              ] as const).map(([key, label, Icon]) => (
+                <Button
+                  key={key}
+                  role="tab"
+                  aria-selected={view === key}
+                  variant={view === key ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => setView(key)}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Button>
+              ))}
+            </div>
             <Button variant="secondary" size="sm" onClick={() => setMembersOpen(true)}>
               <Users className="h-4 w-4" />
               Members
@@ -404,8 +423,16 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
           setFormOpen(true);
         }}
         onRenameSection={renameSection}
+        projectId={project.id}
         onDeleteSection={(sectionId) => {
-          if (!confirm("Delete this section? Its tasks move to another section.")) return;
+          const ordered = [...project.sections].sort((a, b) => a.position - b.position);
+          const target = ordered.find((item) => item.id !== sectionId);
+          const doomed = ordered.find((item) => item.id === sectionId);
+          const count = tasks.filter((task) => task.sectionId === sectionId).length;
+          const message = count > 0
+            ? `Delete “${doomed?.name ?? "this section"}”? Its ${count} task${count === 1 ? "" : "s"} will move to “${target?.name ?? "another section"}”.`
+            : `Delete “${doomed?.name ?? "this section"}”?`;
+          if (!confirm(message)) return;
           void fetch(`/api/projects/${projectId}/sections/${sectionId}`, { method: "DELETE" })
             .then(async (res) => {
               if (!res.ok) {
