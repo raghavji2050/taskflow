@@ -127,6 +127,42 @@ export async function removeDependency(userId: string, taskId: string, dependsOn
   return listDependencies(taskId);
 }
 
+
+/** Incomplete assigned (or any) task with no open blockers. */
+export function isReadyToStart(task: { status: string; openBlockerCount?: number }) {
+  return task.status !== "COMPLETED" && (task.openBlockerCount ?? 0) === 0;
+}
+
+export function countReadyTasks<T extends { status: string; openBlockerCount?: number }>(tasks: T[]) {
+  return tasks.filter(isReadyToStart).length;
+}
+
+/**
+ * Batch-attach openBlockerCount for a page of tasks (one query, not N+1).
+ * Soft-deleted blockers (dependsOn.deletedAt set) do not count as open.
+ */
+export async function attachOpenBlockerCounts<T extends { id: string }>(
+  tasks: T[]
+): Promise<(T & { openBlockerCount: number })[]> {
+  if (tasks.length === 0) return [];
+  const ids = tasks.map((t) => t.id);
+  const rows = await prisma.taskDependency.findMany({
+    where: {
+      taskId: { in: ids },
+      dependsOn: {
+        deletedAt: null,
+        status: { not: "COMPLETED" },
+      },
+    },
+    select: { taskId: true },
+  });
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.taskId, (counts.get(row.taskId) ?? 0) + 1);
+  }
+  return tasks.map((t) => ({ ...t, openBlockerCount: counts.get(t.id) ?? 0 }));
+}
+
 /**
  * After a task is completed, tell the people on each task it was blocking
  * that is now fully unblocked (owner + assignees, minus the actor).

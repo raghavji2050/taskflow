@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { AlertTriangle, Briefcase } from "lucide-react";
+import { AlertTriangle, Briefcase, Sparkles } from "lucide-react";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
@@ -32,7 +32,8 @@ export default function MyWorkPage() {
   const [overdue, setOverdue] = useState<MyWorkTask[]>([]);
   const [byWorkspace, setByWorkspace] = useState<Record<string, MyWorkTask[]>>({});
   const [workspaces, setWorkspaces] = useState<{ id: string; members: WorkspaceMember[] }[]>([]);
-  const [counts, setCounts] = useState({ total: 0, overdue: 0, inProgress: 0, pending: 0 });
+  const [counts, setCounts] = useState({ total: 0, overdue: 0, inProgress: 0, pending: 0, ready: 0 });
+  const [readyOnly, setReadyOnly] = useState(false);
   const [editingTask, setEditingTask] = useState<MyWorkTask | null>(null);
   const [deletingTask, setDeletingTask] = useState<MyWorkTask | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -77,6 +78,13 @@ export default function MyWorkPage() {
   });
 
   const canEditTask = (task: MyWorkTask) => task.canEdit !== false;
+
+  const isReadyTask = (task: MyWorkTask) =>
+    task.status !== "COMPLETED" && (task.openBlockerCount ?? 0) === 0;
+
+  const filterReady = <T extends MyWorkTask>(tasks: T[]) =>
+    readyOnly ? tasks.filter(isReadyTask) : tasks;
+
 
   const membersForTask = (task: MyWorkTask | null) => {
     if (!task?.workspaceId) return undefined;
@@ -213,12 +221,32 @@ export default function MyWorkPage() {
         <Card className="p-4"><p className="text-xs text-zinc-500">Overdue</p><p className="text-2xl font-bold text-red-500">{counts.overdue}</p></Card>
       </div>
 
-      {overdue.length > 0 && (
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid="ready-to-start-filter"
+          aria-pressed={readyOnly}
+          onClick={() => setReadyOnly((v) => !v)}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+            readyOnly
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+              : "border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--foreground)]"
+          }`}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Ready to start
+          <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums dark:bg-white/10">
+            {counts.ready}
+          </span>
+        </button>
+      </div>
+
+      {filterReady(overdue).length > 0 && (
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-red-600">
-            <AlertTriangle className="h-4 w-4" /> Overdue ({overdue.length})
+            <AlertTriangle className="h-4 w-4" /> Overdue ({filterReady(overdue).length})
           </h2>
-          <div className="space-y-2">{overdue.map(renderTaskCard)}</div>
+          <div className="space-y-2">{filterReady(overdue).map(renderTaskCard)}</div>
         </section>
       )}
 
@@ -230,12 +258,19 @@ export default function MyWorkPage() {
           <p className="text-sm text-zinc-500">No tasks assigned to you yet.</p>
         ) : (
           <div className="space-y-6">
-            {workspaceGroups.map(([name, tasks]) => (
+            {workspaceGroups.map(([name, tasks]) => {
+              const visible = filterReady(tasks);
+              if (visible.length === 0) return null;
+              return (
               <div key={name}>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{name}</h3>
-                <div className="space-y-2">{tasks.map(renderTaskCard)}</div>
+                <div className="space-y-2">{visible.map(renderTaskCard)}</div>
               </div>
-            ))}
+              );
+            })}
+            {readyOnly && workspaceGroups.every(([, tasks]) => filterReady(tasks).length === 0) && (
+              <p className="text-sm text-zinc-500">No ready-to-start tasks right now.</p>
+            )}
           </div>
         )}
       </section>

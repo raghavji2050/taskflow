@@ -4,6 +4,7 @@ import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
 import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { taskListInclude } from "@/lib/tasks";
+import { attachOpenBlockerCounts } from "@/lib/task-dependencies";
 import { taskSchema } from "@/lib/validations";
 import { placementForNewTask } from "@/lib/projects";
 import { visibleTaskWhere } from "@/lib/visible-records";
@@ -30,11 +31,12 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
 
-    const tasks = await prisma.task.findMany({
+    const tasksRaw = await prisma.task.findMany({
       where: visibleTaskWhere({ workspaceId: id, archived: false }),
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
       include: taskListInclude,
     });
+    const tasks = await attachOpenBlockerCounts(tasksRaw);
 
     return NextResponse.json({ workspace, tasks });
   } catch (error) {

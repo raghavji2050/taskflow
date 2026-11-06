@@ -4,7 +4,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn() }));
 vi.mock("@/lib/workspace", () => ({ canAccessTask: vi.fn(), canEditTask: vi.fn() }));
 
-import { openBlockers, sameScope, wouldCreateCycle } from "@/lib/task-dependencies";
+import { countReadyTasks, isReadyToStart, openBlockers, sameScope, wouldCreateCycle } from "@/lib/task-dependencies";
 
 describe("wouldCreateCycle", () => {
   it("refuses a task blocking itself", () => {
@@ -68,5 +68,24 @@ describe("openBlockers", () => {
       { id: "3", status: "PENDING" },
     ];
     expect(openBlockers(list).map((b) => b.id)).toEqual(["2", "3"]);
+  });
+});
+
+describe("isReadyToStart / countReadyTasks", () => {
+  it("treats incomplete tasks with zero open blockers as ready", () => {
+    expect(isReadyToStart({ status: "PENDING", openBlockerCount: 0 })).toBe(true);
+    expect(isReadyToStart({ status: "IN_PROGRESS" })).toBe(true);
+    expect(isReadyToStart({ status: "PENDING", openBlockerCount: 2 })).toBe(false);
+    expect(isReadyToStart({ status: "COMPLETED", openBlockerCount: 0 })).toBe(false);
+  });
+
+  it("counts only ready tasks in a list", () => {
+    const tasks = [
+      { id: "a", status: "PENDING", openBlockerCount: 0 },
+      { id: "b", status: "PENDING", openBlockerCount: 1 },
+      { id: "c", status: "COMPLETED", openBlockerCount: 0 },
+      { id: "d", status: "IN_PROGRESS", openBlockerCount: 0 },
+    ];
+    expect(countReadyTasks(tasks)).toBe(2);
   });
 });
