@@ -2,7 +2,7 @@
 
 import { shouldOpenFromClick } from "@/lib/open-on-click";
 
-import { Calendar, Clock, Pencil, Trash2, Archive, ArchiveRestore, MessageSquare, Eye } from "lucide-react";
+import { Ban, Calendar, Clock, Pencil, Trash2, Archive, ArchiveRestore, MessageSquare, Eye } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AssigneeChips, type TaskAssigneeUser } from "@/components/AssigneeChips";
 import { TaskTimeControls } from "@/components/tasks/TaskTimeControls";
@@ -38,6 +38,7 @@ export interface Task {
   tags?: { tag: { id: string; name: string } }[];
   subtasks?: { id: string; title: string; completed: boolean }[];
   _count?: { comments: number; attachments: number };
+  openBlockerCount?: number;
 }
 
 interface TaskCardProps {
@@ -104,6 +105,16 @@ export function TaskCard({
             {showWorkspace && task.workspace && (
               <span className="rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400">
                 {task.workspace.name}
+              </span>
+            )}
+            {(task.openBlockerCount ?? 0) > 0 && !isCompleted && (
+              <span
+                data-testid="blocked-badge"
+                className="inline-flex items-center gap-0.5 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                title={`Waiting on ${task.openBlockerCount} open blocker${(task.openBlockerCount ?? 0) === 1 ? "" : "s"}`}
+              >
+                <Ban className="h-3 w-3" />
+                Blocked
               </span>
             )}
           </div>

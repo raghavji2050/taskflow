@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { taskListInclude } from "@/lib/tasks";
+import { attachOpenBlockerCounts, countReadyTasks } from "@/lib/task-dependencies";
 import { visibleTaskWhere } from "@/lib/visible-records";
 import { canEditWorkspaceTasks } from "@/lib/workspace-permissions";
 import type { WorkspaceRole } from "@prisma/client";
@@ -59,8 +60,12 @@ export async function GET() {
       }),
     ]);
 
-    const assigned = attachCanEdit(assignedRaw, roleByWorkspace);
-    const overdue = attachCanEdit(overdueRaw, roleByWorkspace);
+    const [assignedWithCounts, overdueWithCounts] = await Promise.all([
+      attachOpenBlockerCounts(assignedRaw),
+      attachOpenBlockerCounts(overdueRaw),
+    ]);
+    const assigned = attachCanEdit(assignedWithCounts, roleByWorkspace);
+    const overdue = attachCanEdit(overdueWithCounts, roleByWorkspace);
 
     const byWorkspace = assigned.reduce<Record<string, typeof assigned>>((acc, task) => {
       const key = task.workspace?.name ?? "Personal";
@@ -78,6 +83,7 @@ export async function GET() {
         overdue: overdue.length,
         inProgress: assigned.filter((t) => t.status === "IN_PROGRESS").length,
         pending: assigned.filter((t) => t.status === "PENDING").length,
+        ready: countReadyTasks(assigned),
       },
     });
   } catch (error) {
