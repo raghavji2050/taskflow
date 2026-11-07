@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { sendEmail, digestEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/push";
 import { archiveStaleCompletedTasks } from "@/lib/auto-archive";
 import { runOverdueAutomations, runDueDateApproachingAutomations } from "@/lib/automations";
 import { isCronAuthorized } from "@/lib/cron-auth";
-import { visibleTaskSql, visibleTaskWhere } from "@/lib/visible-records";
+import { visibleTaskWhere } from "@/lib/visible-records";
+import { sendDailyDigests } from "@/lib/email-digest";
 
 export const dynamic = "force-dynamic";
 
@@ -68,56 +67,7 @@ export async function GET(request: Request) {
       if (batch === REMINDER_MAX_BATCHES - 1) truncated = true;
     }
 
-    let digestsSent = 0;
-    const pendingGroups = await prisma.task.groupBy({
-      by: ["userId"],
-      where: visibleTaskWhere({ status: { not: "COMPLETED" }, archived: false }),
-      _count: { _all: true },
-    });
-
-    if (pendingGroups.length > 0) {
-      const userIds = pendingGroups.map((group) => group.userId);
-      const pendingByUser = new Map(pendingGroups.map((group) => [group.userId, group._count._all]));
-      const [users, overdueRows] = await Promise.all([
-        prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true, email: true },
-        }),
-        prisma.$queryRaw<{ userId: string; title: string }[]>`
-          SELECT userId, title FROM (
-            SELECT userId, title,
-              ROW_NUMBER() OVER (PARTITION BY userId ORDER BY id ASC) AS rn
-            FROM Task
-            WHERE archived = 0
-              AND status <> 'COMPLETED'
-              AND dueDate IS NOT NULL
-              AND dueDate < ${now}
-              AND userId IN (${Prisma.join(userIds)})
-              AND ${visibleTaskSql("Task")}
-          ) ranked
-          WHERE rn <= 5
-        `,
-      ]);
-
-      const overdueTitles = new Map<string, string[]>();
-      for (const row of overdueRows) {
-        const titles = overdueTitles.get(row.userId) ?? [];
-        if (titles.length < 5) titles.push(row.title);
-        overdueTitles.set(row.userId, titles);
-      }
-
-      for (const user of users) {
-        const pending = pendingByUser.get(user.id) ?? 0;
-        if (pending <= 0) continue;
-        const titles = overdueTitles.get(user.id) ?? [];
-        await sendEmail(
-          user.email,
-          "Your TaskFlow Daily Digest",
-          digestEmail(user.name, pending, titles.length, titles)
-        );
-        digestsSent += 1;
-      }
-    }
+    const digestsSent = await sendDailyDigests(now);
 
     const result = {
       processed,

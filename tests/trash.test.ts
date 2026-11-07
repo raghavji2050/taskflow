@@ -138,6 +138,7 @@ describe("trash migration and wiring", () => {
       "app/api/share/[token]/route.ts",
       "app/api/documents/[id]/links/route.ts",
       "app/api/cron/reminders/route.ts",
+      "lib/email-digest.ts",
       "app/api/cron/timer-reminders/route.ts",
       "lib/projects.ts",
       "lib/daily-update.ts",
@@ -152,7 +153,7 @@ describe("trash migration and wiring", () => {
     for (const file of files) {
       expect(readFileSync(file, "utf8"), file).toContain("visibleTaskWhere");
     }
-    expect(readFileSync("app/api/cron/reminders/route.ts", "utf8")).toContain("visibleTaskSql");
+    expect(readFileSync("lib/email-digest.ts", "utf8")).toContain("visibleTaskSql");
     expect(readFileSync("lib/time-analytics.ts", "utf8")).toContain("visibleTaskSql");
     expect(readFileSync("lib/projects.ts", "utf8")).toContain("visibleProjectWhere");
   });

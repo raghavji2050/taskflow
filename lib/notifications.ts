@@ -3,6 +3,9 @@ import { broadcastNotification } from "@/lib/realtime";
 import { sendPushToUser } from "@/lib/push";
 import { formatChatPushNotification } from "@/lib/chat-push-notification";
 import { plainMessagePreview } from "@/lib/markdown-plain";
+import { afterResponse } from "@/lib/after-response";
+import { appBaseUrl, mentionEmail } from "@/lib/email";
+import { maybeSendMentionEmail } from "@/lib/email-notification-prefs";
 
 function chatPushUrl(conversationId?: string, messageId?: string) {
   if (!conversationId) return "/dashboard/messages";
@@ -156,6 +159,38 @@ export async function createNotification(params: {
     }),
     persistPromise,
   ]);
+
+
+  // Chat @mentions only (task comments email from the comments route).
+  if (type === "mention" && params.conversationId) {
+    const conversationId = params.conversationId;
+    const messageId = params.messageId;
+    const mentionTitle = params.title;
+    const mentionBody = notificationBody;
+    await afterResponse(async () => {
+      const recipient = await prisma.user.findUnique({
+        where: { id: params.userId },
+        select: { name: true },
+      });
+      const actorName = mentionTitle.replace(/\s+mentioned you$/i, "").trim() || "Someone";
+      const link =
+        messageId
+          ? `${appBaseUrl()}/dashboard/messages?c=${conversationId}#msg-${messageId}`
+          : `${appBaseUrl()}/dashboard/messages?c=${conversationId}`;
+      await maybeSendMentionEmail({
+        userId: params.userId,
+        subject: `${actorName} mentioned you on TaskFlow`,
+        html: mentionEmail({
+          recipientName: recipient?.name ?? "there",
+          actorName,
+          preview: mentionBody,
+          contextLabel: "in chat",
+          actionUrl: link,
+          actionLabel: "Open conversation",
+        }),
+      });
+    });
+  }
 
   return notification;
 }

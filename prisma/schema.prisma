@@ -81,6 +81,10 @@ model User {
   sessionVersion Int       @default(0)
   image          String?
   lastSeenAt     DateTime?
+  /// Daily digest email (pending/overdue/ready). Default on; user can opt out in Settings.
+  emailDigestEnabled  Boolean   @default(true)
+  /// Email when @mentioned in a task comment or chat. Default on.
+  emailMentionEnabled Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
