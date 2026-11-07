@@ -8,6 +8,9 @@ import { createNotification } from "@/lib/notifications";
 import { matchMentionedUsers, parseMentionNames } from "@/lib/mentions";
 import { broadcastTaskEvent } from "@/lib/realtime";
 import { followTask, notifyTaskFollowers } from "@/lib/task-followers";
+import { afterResponse } from "@/lib/after-response";
+import { appBaseUrl, mentionEmail } from "@/lib/email";
+import { maybeSendMentionEmail } from "@/lib/email-notification-prefs";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -76,11 +79,28 @@ export async function POST(request: Request, context: RouteContext) {
       mentionedIds = mentioned.map((m) => m.id);
       for (const m of mentioned) {
         if (m.id === user.id) continue;
+        const body = `${user.name} mentioned you on "${task.title}"`;
         await createNotification({
           userId: m.id,
           title: "You were mentioned",
-          body: `${user.name} mentioned you on "${task.title}"`,
+          body,
           type: "mention",
+        });
+        const mentionedUserId = m.id;
+        const mentionedName = m.name;
+        await afterResponse(async () => {
+          await maybeSendMentionEmail({
+            userId: mentionedUserId,
+            subject: `${user.name} mentioned you on TaskFlow`,
+            html: mentionEmail({
+              recipientName: mentionedName,
+              actorName: user.name,
+              preview: data.body,
+              contextLabel: `on task "${task.title}"`,
+              actionUrl: `${appBaseUrl()}/dashboard/my-work`,
+              actionLabel: "Open My Work",
+            }),
+          });
         });
       }
     }

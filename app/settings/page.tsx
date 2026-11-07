@@ -16,6 +16,7 @@ import { PushSubscribe } from "@/components/PushSubscribe";
 import { TimeTrackingSettingsCard } from "@/components/TimeTrackingSettingsCard";
 import { ApiTokensCard } from "@/components/ApiTokensCard";
 import { ConnectedAppsCard } from "@/components/ConnectedAppsCard";
+import { EmailNotificationsCard } from "@/components/EmailNotificationsCard";
 import { z } from "zod";
 
 type ProfileInput = z.infer<typeof profileSchema>;
@@ -138,6 +139,8 @@ export default function SettingsPage() {
         </h2>
         <PushSubscribe />
       </Card>
+
+      <EmailNotificationsCard />
 
       <TimeTrackingSettingsCard />
 
