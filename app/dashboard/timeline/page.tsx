@@ -21,6 +21,7 @@ import {
   type TaskViewFiltersState,
 } from "@/lib/task-view-filters";
 import { useOpenTaskListener } from "@/lib/open-task-event";
+import { announceDependentShift } from "@/lib/client-dependency-shift";
 
 export default function TimelinePage() {
   const router = useRouter();
@@ -44,6 +45,12 @@ export default function TimelinePage() {
     if (status === "unauthenticated") router.push("/login");
   }, [status, selectedWorkspaceId, filters, fetchTasks, router]);
 
+  useEffect(() => {
+    const refresh = () => { void fetchTasks(filters); };
+    window.addEventListener("taskflow:tasks-shifted", refresh);
+    return () => window.removeEventListener("taskflow:tasks-shifted", refresh);
+  }, [fetchTasks, filters]);
+
   useRealtimeSync({
     workspaceId: selectedWorkspaceId,
     onRefresh: () => fetchTasks(filters),
@@ -63,6 +70,8 @@ export default function TimelinePage() {
       body: JSON.stringify({ ...data, workspaceId: selectedWorkspaceId }),
     });
     if (res.ok) {
+      const saved = await res.json().catch(() => ({}));
+      announceDependentShift(saved.shifted);
       setIsFormOpen(false);
       setEditingTask(null);
       await fetchTasks(filters);
@@ -96,7 +105,7 @@ export default function TimelinePage() {
     <div className="space-y-6">
       <PageHeader
         title={isPersonal ? "Timeline" : `${selectedWorkspace?.name ?? "Team"} Timeline`}
-        subtitle="Due dates across the next two weeks"
+        subtitle="Due dates across the next two weeks, with arrows for blocked-by links"
       />
       <TaskViewFilters
         filters={filters}

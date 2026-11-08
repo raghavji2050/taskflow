@@ -14,6 +14,7 @@ import { nextSectionPosition, projectFieldsForTaskUpdate } from "@/lib/projects"
 import { visibleTaskWhere } from "@/lib/visible-records";
 import { notifyTaskFollowers, statusLabel } from "@/lib/task-followers";
 import { getOpenBlockers, notifyUnblocked } from "@/lib/task-dependencies";
+import { shiftDependentsAfterDueChange, type ShiftedTask } from "@/lib/dependency-shift";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -117,6 +118,19 @@ export async function PUT(request: Request, context: RouteContext) {
 
     await logTaskActivity(id, "updated", `Status: ${taskData.status}`);
 
+    // Auto date-shift: blocker moved later -> push open dependents by the same amount.
+    // Clients can opt out with shiftDependents: false.
+    let shifted: ShiftedTask[] = [];
+    if (body?.shiftDependents !== false) {
+      shifted = await shiftDependentsAfterDueChange({
+        userId: user.id,
+        taskId: id,
+        scope: existing,
+        oldDue: existing.dueDate ?? null,
+        newDue: task?.dueDate ?? null,
+      });
+    }
+
     if (statusChanged) {
       await notifyTaskFollowers({
         taskId: id,
@@ -183,7 +197,11 @@ export async function PUT(request: Request, context: RouteContext) {
       actorId: user.id,
       taskId: id,
     });
-    return NextResponse.json(warning ? { task, warning } : { task });
+    return NextResponse.json({
+      task,
+      ...(warning ? { warning } : {}),
+      ...(shifted.length ? { shifted } : {}),
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -239,6 +257,28 @@ export async function PATCH(request: Request, context: RouteContext) {
         include: taskDetailInclude,
       });
       await logTaskActivity(id, body.archived ? "archived" : "unarchived");
+      broadcastTaskEvent({
+        type: "task:updated",
+        workspaceId: task.workspaceId,
+        ownerId: existing.userId,
+        actorId: user.id,
+        taskId: task.id,
+      });
+      return NextResponse.json({ task });
+    }
+
+    // Due-date-only patch (used by "Undo" after an auto date-shift). Never cascades.
+    if (Object.keys(body ?? {}).length === 1 && "dueDate" in body) {
+      const due = body.dueDate === null ? null : new Date(String(body.dueDate));
+      if (due && Number.isNaN(due.getTime())) {
+        return NextResponse.json({ error: "Invalid dueDate" }, { status: 400 });
+      }
+      const task = await prisma.task.update({
+        where: { id },
+        data: { dueDate: due },
+        include: taskDetailInclude,
+      });
+      await logTaskActivity(id, "updated", "Due date changed");
       broadcastTaskEvent({
         type: "task:updated",
         workspaceId: task.workspaceId,
