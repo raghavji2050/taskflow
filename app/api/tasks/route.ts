@@ -11,6 +11,7 @@ import { syncTaskAssignees, getTaskWithAssignees } from "@/lib/task-assignees";
 import { runAutomationsForTrigger } from "@/lib/automations";
 import { taskListInclude } from "@/lib/tasks";
 import { attachOpenBlockerCounts } from "@/lib/task-dependencies";
+import { attachBlockedByIds } from "@/lib/dependency-shift";
 import { placementForNewTask, requireProjectAccess } from "@/lib/projects";
 import { visibleTaskWhere } from "@/lib/visible-records";
 import { followTask } from "@/lib/task-followers";
@@ -129,7 +130,7 @@ export async function GET(request: Request) {
     );
     const total = completed + inProgress + pending;
 
-    const tasksWithCounts = await attachOpenBlockerCounts(tasks);
+    const tasksWithCounts = await attachBlockedByIds(await attachOpenBlockerCounts(tasks));
 
     return NextResponse.json({
       tasks: tasksWithCounts,

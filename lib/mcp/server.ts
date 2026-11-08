@@ -94,7 +94,7 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
     "update_task",
     {
       title: "Update task",
-      description: "Update a task's title, status, priority, due date or assignee. dueDate/assigneeId = null clears it.",
+      description: "Update a task's title, status, priority, due date or assignee. dueDate/assigneeId = null clears it. Moving a due date later also shifts open tasks it blocks by the same amount (set shiftDependents: false to skip).",
       inputSchema: {
         taskId: z.string(),
         title: z.string().trim().min(1).max(200).optional(),
@@ -102,6 +102,7 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
         priority: priority.optional(),
         dueDate: z.string().nullable().optional(),
         assigneeId: z.string().nullable().optional(),
+        shiftDependents: z.boolean().optional(),
       },
       annotations: { idempotentHint: true },
     },

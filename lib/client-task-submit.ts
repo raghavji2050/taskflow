@@ -1,5 +1,6 @@
 import type { Task } from "@/components/TaskCard";
 import type { TaskInput } from "@/lib/validations";
+import { announceDependentShift } from "@/lib/client-dependency-shift";
 
 export type TaskFormSubmitOptions = {
   startTimer?: boolean;
@@ -18,6 +19,7 @@ export async function saveTaskFromForm(
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Failed to save task");
+  announceDependentShift(result.shifted);
   return result.task as Task;
 }
 

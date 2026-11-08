@@ -39,6 +39,8 @@ export interface Task {
   subtasks?: { id: string; title: string; completed: boolean }[];
   _count?: { comments: number; attachments: number };
   openBlockerCount?: number;
+  /** Ids of tasks blocking this one (for timeline arrows). */
+  blockedByIds?: string[];
 }
 
 interface TaskCardProps {

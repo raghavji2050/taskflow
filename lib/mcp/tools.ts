@@ -4,6 +4,7 @@ import { logTaskActivity } from "@/lib/activity";
 import { broadcastTaskEvent } from "@/lib/realtime";
 import { completedAtForStatusChange } from "@/lib/auto-archive";
 import { getOpenBlockers, notifyUnblocked } from "@/lib/task-dependencies";
+import { shiftDependentsAfterDueChange } from "@/lib/dependency-shift";
 import { syncTaskAssignees } from "@/lib/task-assignees";
 import { canAccessTask, canEditTask, getUserWorkspaceIds, getWorkspaceMembership, canEditWorkspaceTasks } from "@/lib/workspace";
 import { listVisibleProjects, placementForNewTask, requireProjectAccess } from "@/lib/projects";
@@ -237,6 +238,7 @@ export async function updateTask(
     priority?: PriorityValue;
     dueDate?: string | null;
     assigneeId?: string | null;
+    shiftDependents?: boolean;
   }
 ) {
   const existing = await canAccessTask(user.id, input.taskId);
@@ -256,6 +258,16 @@ export async function updateTask(
   if (input.assigneeId) await assertAssignable(existing.workspaceId, input.assigneeId);
 
   await prisma.task.update({ where: { id: input.taskId }, data });
+  const shiftedDependents =
+    due !== undefined && input.shiftDependents !== false
+      ? await shiftDependentsAfterDueChange({
+          userId: user.id,
+          taskId: input.taskId,
+          scope: existing,
+          oldDue: existing.dueDate ?? null,
+          newDue: due,
+        })
+      : [];
   if (input.assigneeId !== undefined && existing.workspaceId) {
     await syncTaskAssignees({
       taskId: input.taskId,
@@ -270,7 +282,8 @@ export async function updateTask(
   const changed = Object.keys(input).filter((k) => k !== "taskId" && input[k as keyof typeof input] !== undefined);
   await logTaskActivity(input.taskId, "updated", `Updated via MCP: ${changed.join(", ") || "nothing"}`);
   broadcastTaskEvent({ type: "task:updated", workspaceId: existing.workspaceId, ownerId: existing.userId, actorId: user.id, taskId: input.taskId });
-  const result = await getTask(user, { taskId: input.taskId });
+  const base = await getTask(user, { taskId: input.taskId });
+  const result = shiftedDependents.length ? { ...base, shiftedDependents } : base;
   if (input.status === "COMPLETED" && existing.status !== "COMPLETED") {
     const open = await getOpenBlockers(input.taskId);
     await notifyUnblocked(input.taskId, user.id);
