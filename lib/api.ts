@@ -4,13 +4,14 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ProjectError } from "@/lib/project-sections";
 import { TrashError } from "@/lib/trash";
+import { CustomFieldError } from "@/lib/custom-field-rules";
 
 export function jsonError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
 export function handleApiError(error: unknown) {
-  if (error instanceof ProjectError || error instanceof TrashError) {
+  if (error instanceof ProjectError || error instanceof TrashError || error instanceof CustomFieldError) {
     return jsonError(error.message, error.status);
   }
 

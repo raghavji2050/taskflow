@@ -19,6 +19,7 @@ import { AssigneeChips } from "@/components/AssigneeChips";
 import type { Task } from "@/components/TaskCard";
 import { planTaskMove, type SectionTask } from "@/lib/project-sections";
 import { cn, getPriorityColor, getStatusColor } from "@/lib/utils";
+import { formatFieldValue, valueFor, type CustomFieldDef } from "@/lib/custom-field-rules";
 
 export type ProjectSectionItem = {
   id: string;
@@ -43,6 +44,8 @@ type ProjectBoardProps = {
   onReorderSection: (sectionId: string, direction: -1 | 1) => void;
   /** Used to remember collapsed sections per project. */
   projectId?: string;
+  /** Project custom fields; shown as chips on list rows. */
+  customFields?: CustomFieldDef[];
 };
 
 const sectionIconBtn =
@@ -77,9 +80,11 @@ function ProjectTaskCard({
   onEdit,
   onDelete,
   onToggleComplete,
+  customFields,
 }: {
   task: Task;
   readOnly?: boolean;
+  customFields?: CustomFieldDef[];
   sections: ProjectSectionItem[];
   onMoveTo: (task: Task, sectionId: string) => void;
   onEdit: (task: Task) => void;
@@ -143,6 +148,20 @@ function ProjectTaskCard({
           {task.assignees && task.assignees.length > 0 && (
             <AssigneeChips assignees={task.assignees} compact />
           )}
+          {customFields?.map((field) => {
+            const label = formatFieldValue(field.type, valueFor(task.customFieldValues, field.id));
+            if (!label) return null;
+            return (
+              <span
+                key={field.id}
+                data-testid="custom-field-chip"
+                title={`${field.name}: ${label}`}
+                className="max-w-[180px] truncate rounded-md border border-[var(--border)] bg-[var(--surface-hover)] px-1.5 py-0.5 text-[10px] text-[var(--foreground)]"
+              >
+                <span className="text-[var(--muted)]">{field.name}:</span> {label}
+              </span>
+            );
+          })}
         </div>
       </div>
 
@@ -209,7 +228,9 @@ function SectionColumn({
   onRenameSection,
   onDeleteSection,
   onReorderSection,
+  customFields,
 }: {
+  customFields?: CustomFieldDef[];
   section: ProjectSectionItem;
   canDelete: boolean;
   collapsed: boolean;
@@ -340,6 +361,7 @@ function SectionColumn({
             onToggleComplete={onToggleComplete}
             sections={allSections}
             onMoveTo={onMoveTo}
+            customFields={layout === "list" ? customFields : undefined}
           />
         ))}
       </div>
@@ -364,6 +386,7 @@ export function ProjectBoard({
   onDeleteSection,
   onReorderSection,
   projectId,
+  customFields,
 }: ProjectBoardProps) {
   const collapseKey = projectId ? `taskflow-collapsed-sections:${projectId}` : null;
   const [collapsedIds, setCollapsedIds] = useState<string[]>([]);
@@ -465,6 +488,7 @@ export function ProjectBoard({
             onToggleCollapsed={() => toggleCollapsed(section.id)}
             allSections={orderedSections}
             onMoveTo={(task, sectionId) => applyMove(task.id, sectionId, null)}
+            customFields={customFields}
           />
         ))}
         {orderedSections.length === 0 && (

@@ -41,6 +41,8 @@ export interface Task {
   openBlockerCount?: number;
   /** Ids of tasks blocking this one (for timeline arrows). */
   blockedByIds?: string[];
+  /** Project custom field values (project views only). */
+  customFieldValues?: { fieldId: string; value: string }[];
 }
 
 interface TaskCardProps {

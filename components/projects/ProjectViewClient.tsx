@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Archive, ArchiveRestore, CalendarDays, Columns3, GanttChart, LayoutDashboard, LayoutList, Plus, Settings, Trash2, Users } from "lucide-react";
+import { Archive, ArchiveRestore, CalendarDays, Columns3, GanttChart, LayoutDashboard, LayoutList, Plus, Settings, SlidersHorizontal, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectBoard } from "@/components/projects/ProjectBoard";
 import { ProjectCalendar, ProjectOverview, ProjectTimeline } from "@/components/projects/ProjectExtraViews";
 import { ProjectMembersDialog, type ProjectMemberRow } from "@/components/projects/ProjectMembersDialog";
+import { ProjectCustomFieldsDialog } from "@/components/projects/ProjectCustomFieldsDialog";
+import { CustomFieldFilterBar } from "@/components/projects/CustomFieldFilterBar";
+import { matchesCustomFieldFilter, type CustomFieldDef, type CustomFieldFilter } from "@/lib/custom-field-rules";
+import { CUSTOM_FIELDS_CHANGED_EVENT } from "@/lib/custom-field-events";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import { quickAddToTaskInput } from "@/lib/quick-add-input";
 import { hasDuplicateSectionName } from "@/lib/section-names";
@@ -40,6 +44,7 @@ type ProjectDetail = {
   workspace: { id: string; name: string };
   sections: SectionItem[];
   members: ProjectMemberRow[];
+  customFields?: CustomFieldDef[];
 };
 
 type Access = {
@@ -70,6 +75,8 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
   };
   const [refreshKey, setRefreshKey] = useState(0);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [fieldsOpen, setFieldsOpen] = useState(false);
+  const [fieldFilter, setFieldFilter] = useState<CustomFieldFilter | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sectionName, setSectionName] = useState("");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -105,6 +112,12 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
   }, [status, load, refreshKey]);
 
   const refresh = () => setRefreshKey((value) => value + 1);
+
+  useEffect(() => {
+    const onFieldsChanged = () => setRefreshKey((value) => value + 1);
+    window.addEventListener(CUSTOM_FIELDS_CHANGED_EVENT, onFieldsChanged);
+    return () => window.removeEventListener(CUSTOM_FIELDS_CHANGED_EVENT, onFieldsChanged);
+  }, []);
 
   useRealtimeSync({
     workspaceId: project?.workspaceId ?? null,
@@ -315,6 +328,12 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
   }
 
   const readOnly = !access.canEdit;
+  const customFields = project.customFields ?? [];
+  const activeFilter = fieldFilter && customFields.some((f) => f.id === fieldFilter.fieldId) ? fieldFilter : null;
+  const listTasks =
+    view === "list" && activeFilter
+      ? tasks.filter((task) => matchesCustomFieldFilter(customFields, task.customFieldValues, activeFilter))
+      : tasks;
 
   return (
     <div>
@@ -348,6 +367,10 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
             <Button variant="secondary" size="sm" onClick={() => setMembersOpen(true)}>
               <Users className="h-4 w-4" />
               Members
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setFieldsOpen(true)}>
+              <SlidersHorizontal className="h-4 w-4" />
+              Fields
             </Button>
             {access.canManage && (
               <Button
@@ -416,13 +439,28 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
       {view === "calendar" && <ProjectCalendar tasks={tasks} onOpen={(task) => { setEditingTask(task); setFormOpen(true); }} />}
       {view === "timeline" && <ProjectTimeline tasks={tasks} sections={project.sections} onOpen={(task) => { setEditingTask(task); setFormOpen(true); }} />}
 
+      {view === "list" && customFields.length > 0 && (
+        <CustomFieldFilterBar
+          fields={customFields}
+          filter={activeFilter}
+          onChange={setFieldFilter}
+          shown={listTasks.length}
+          total={tasks.length}
+        />
+      )}
+
       {(view === "list" || view === "board") && (
       <ProjectBoard
         layout={view}
         sections={project.sections}
-        tasks={tasks}
+        tasks={listTasks}
+        customFields={customFields}
         readOnly={readOnly}
-        onTasksChange={setTasks}
+        onTasksChange={(next) => {
+          // Filtered list passes back only the visible tasks; merge so hidden ones are kept.
+          const byId = new Map(next.map((task) => [task.id, task]));
+          setTasks((prev) => prev.map((task) => byId.get(task.id) ?? task));
+        }}
         onMove={moveTask}
         onEdit={(task) => {
           setEditingTask(task);
@@ -466,6 +504,15 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
         projectId={project.id}
         workspaceId={project.workspaceId}
         members={project.members}
+        canManage={access.canManage}
+        onChanged={refresh}
+      />
+
+      <ProjectCustomFieldsDialog
+        isOpen={fieldsOpen}
+        onClose={() => setFieldsOpen(false)}
+        projectId={project.id}
+        fields={customFields}
         canManage={access.canManage}
         onChanged={refresh}
       />

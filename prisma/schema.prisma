@@ -219,6 +219,7 @@ model Task {
   reminders     Reminder[]
   documentLinks DocumentTask[]
   timeEntries   TimeEntry[]
+  customFieldValues TaskCustomFieldValue[]
 
   @@index([userId])
   @@index([status])
@@ -475,6 +476,7 @@ model Project {
   members   ProjectMember[]
   sections  ProjectSection[]
   tasks     Task[]
+  customFields ProjectCustomField[]
 
   @@index([workspaceId])
   @@index([workspaceId, archived])
@@ -492,6 +494,45 @@ model ProjectMember {
 
   @@unique([userId, projectId])
   @@index([projectId])
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  DROPDOWN
+}
+
+/// A project-level field (e.g. "Budget", "Client", "Launch date") every task in the project can fill in.
+model ProjectCustomField {
+  id        String          @id @default(cuid())
+  projectId String
+  name      String          @db.VarChar(80)
+  type      CustomFieldType
+  /// Dropdown choices (JSON array of strings); null for other types.
+  options   Json?
+  position  Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  project Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  values  TaskCustomFieldValue[]
+
+  @@index([projectId, position])
+}
+
+/// One task's value for one custom field, stored normalized as text (number as decimal string, date as YYYY-MM-DD).
+model TaskCustomFieldValue {
+  taskId    String
+  fieldId   String
+  value     String   @db.VarChar(500)
+  updatedAt DateTime @updatedAt
+
+  task  Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  field ProjectCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, fieldId])
+  @@index([fieldId])
 }
 
 model ProjectSection {
