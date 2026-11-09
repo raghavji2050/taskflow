@@ -165,6 +165,12 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   add("list_task_dependencies", "Show what a task is blocked by and what it is blocking, with how many blockers are still open.", { taskId: id }, P("listTaskDependencies"), true);
   add("add_task_dependency", "Mark taskId as blocked by blockedByTaskId (same workspace; loops are refused).", { taskId: id, blockedByTaskId: id }, P("addTaskDependency"));
   add("remove_task_dependency", "Remove a 'blocked by' link between two tasks.", { taskId: id, blockedByTaskId: id }, P("removeTaskDependency"));
+  // custom fields
+  add("list_custom_fields", "List a project's custom fields (id, name, type TEXT/NUMBER/DATE/DROPDOWN, dropdown options).", { projectId: id }, P("listCustomFields"), true);
+  add("create_custom_field", "Add a custom field to a project (needs project manage rights). DROPDOWN needs options.", { projectId: id, name: z.string().trim().min(1).max(80), type: z.enum(["TEXT", "NUMBER", "DATE", "DROPDOWN"]), options: z.array(z.string().max(60)).max(30).optional() }, P("createCustomField"));
+  add("delete_custom_field", "Delete a project custom field and all task values for it (needs project manage rights).", { projectId: id, fieldId: id }, P("deleteCustomField"));
+  add("get_task_custom_fields", "Show the custom fields of a task's project and this task's values.", { taskId: id }, P("getTaskCustomFields"), true);
+  add("set_task_field_value", "Set a task's custom field value (number, YYYY-MM-DD date, dropdown option, or text). null or empty clears it.", { taskId: id, fieldId: id, value: z.union([z.string().max(500), z.number(), z.null()]) }, P("setTaskFieldValue"));
   add("delete_subtask", "Delete a subtask.", { subtaskId: id }, P("deleteSubtask"));
   add("update_comment", "Edit one of your own task comments.", { commentId: id, body: z.string().trim().min(1).max(5000) }, P("updateComment"));
   add("delete_comment", "Delete one of your own task comments.", { commentId: id }, P("deleteComment"));

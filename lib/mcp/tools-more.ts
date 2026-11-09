@@ -13,6 +13,8 @@ import { canInviteMembers } from "@/lib/workspace-permissions";
 import { getWorkspaceMembership as getInviteMembership } from "@/lib/workspace-membership";
 import { McpToolError, type McpUser } from "@/lib/mcp/tools";
 import * as deps from "@/lib/task-dependencies";
+import * as cf from "@/lib/custom-fields";
+import type { CustomFieldTypeName } from "@/lib/custom-field-rules";
 
 async function taskFor(user: McpUser, taskId: string, edit: boolean) {
   const task = await canAccessTask(user.id, taskId);
@@ -199,3 +201,20 @@ export const addTaskDependency = (u: McpUser, a: { taskId: string; blockedByTask
   wrap(deps.addDependency(u.id, a.taskId, a.blockedByTaskId));
 export const removeTaskDependency = (u: McpUser, a: { taskId: string; blockedByTaskId: string }) =>
   wrap(deps.removeDependency(u.id, a.taskId, a.blockedByTaskId));
+
+// ---- project custom fields (text / number / date / dropdown)
+export const listCustomFields = (u: McpUser, a: { projectId: string }) => wrap(cf.listProjectFields(u.id, a.projectId));
+export async function createCustomField(u: McpUser, a: { projectId: string; name: string; type: CustomFieldTypeName; options?: string[] }) {
+  const { field } = await wrap(cf.createProjectField(u.id, a.projectId, a));
+  return { field };
+}
+export async function deleteCustomField(u: McpUser, a: { projectId: string; fieldId: string }) {
+  await wrap(cf.deleteProjectField(u.id, a.projectId, a.fieldId));
+  return { ok: true, note: "Field and all its task values were removed." };
+}
+export const getTaskCustomFields = (u: McpUser, a: { taskId: string }) => wrap(cf.getTaskFieldValues(u.id, a.taskId));
+export async function setTaskFieldValue(u: McpUser, a: { taskId: string; fieldId: string; value: string | number | null }) {
+  const { task, field, value } = await wrap(cf.setTaskFieldValue(u.id, a.taskId, a.fieldId, a.value));
+  touched(u, task);
+  return { taskId: a.taskId, field: field.name, value };
+}

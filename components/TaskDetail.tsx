@@ -28,6 +28,7 @@ import { TimeTracker } from "@/components/tasks/TimeTracker";
 import { TimeEntryHistory } from "@/components/tasks/TimeEntryHistory";
 import { FollowTaskButton } from "@/components/tasks/FollowTaskButton";
 import { TaskDependencies } from "@/components/tasks/TaskDependencies";
+import { TaskCustomFields } from "@/components/tasks/TaskCustomFields";
 import { cn } from "@/lib/utils";
 
 interface Subtask { id: string; title: string; completed: boolean }
@@ -306,6 +307,7 @@ export function TaskDetail({
           </Button>
         </div>
       )}
+      <TaskCustomFields taskId={taskId} readOnly={readOnly} />
       <TaskDependencies taskId={taskId} workspaceId={taskWorkspaceId} readOnly={readOnly} />
     </>
   );

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { broadcastTaskEvent } from "@/lib/realtime";
 import { visibleProjectWhere, visibleTaskWhere } from "@/lib/visible-records";
 import { getWorkspaceMembership } from "@/lib/workspace";
+import { parseOptions } from "@/lib/custom-field-rules";
 import {
   DEFAULT_PROJECT_COLOR,
   DEFAULT_PROJECT_DESCRIPTION,
@@ -315,7 +316,7 @@ export async function createProject(input: {
 
 export async function getProjectDetail(userId: string, projectId: string) {
   const access = await requireProjectAccess(userId, projectId);
-  const [sections, members, tasks] = await Promise.all([
+  const [sections, members, tasks, customFieldRows] = await Promise.all([
     prisma.projectSection.findMany({
       where: { projectId },
       orderBy: { position: "asc" },
@@ -337,12 +338,24 @@ export async function getProjectDetail(userId: string, projectId: string) {
         subtasks: { orderBy: { position: "asc" } },
         user: { select: { id: true, name: true } },
         _count: { select: { comments: true, attachments: true } },
+        customFieldValues: { where: { field: { projectId } }, select: { fieldId: true, value: true } },
       },
     }),
+    prisma.projectCustomField.findMany({
+      where: { projectId },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    }),
   ]);
+  const customFields = customFieldRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    options: row.type === "DROPDOWN" ? parseOptions(row.options) ?? [] : null,
+    position: row.position,
+  }));
 
   return {
-    project: { ...access.project, sections, members },
+    project: { ...access.project, sections, members, customFields },
     tasks,
     access: {
       canEdit: access.canEdit,
