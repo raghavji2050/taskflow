@@ -8,7 +8,8 @@ import { loginSchema } from "@/lib/validations";
 import { getGitHubOAuthConfig, getGoogleOAuthConfig } from "@/lib/oauth";
 import { authConfig } from "@/lib/auth.config";
 import { isSessionRevoked } from "@/lib/session-version";
-import { newSessionId } from "@/lib/signout-marker";
+import { cookies } from "next/headers";
+import { isSignedOutSession, newSessionId, SIGNED_OUT_COOKIE } from "@/lib/signout-marker";
 import type { NextAuthConfig } from "next-auth";
 
 const providers: NextAuthConfig["providers"] = [
@@ -136,6 +137,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
 
+      // This browser already signed out of this sign-in: a late response re-set the cookie.
+      // Returning null makes Auth.js clear it (also on /api/auth/session, which middleware skips).
+      if (!freshSignIn && isSignedOutSession(token.sid, await readSignedOutMarker())) {
+        return null;
+      }
+
       const dbUser = await prisma.user.findUnique({
         where: { id: token.id as string },
         select: { id: true, name: true, email: true, role: true, sessionVersion: true },
@@ -163,3 +170,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+/** Marker cookie from POST /api/logout; undefined outside a request (e.g. scripts). */
+async function readSignedOutMarker(): Promise<string | undefined> {
+  try {
+    return (await cookies()).get(SIGNED_OUT_COOKIE)?.value;
+  } catch {
+    return undefined;
+  }
+}

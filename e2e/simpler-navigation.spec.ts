@@ -149,7 +149,10 @@ test("the last workspace is remembered after sign out and back in", async ({ pag
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
   await expect(page.getByLabel("Email")).toBeVisible();
-  expect((await context.cookies()).some((c) => /session-token/.test(c.name))).toBe(false);
+  // Nothing (middleware, /api/auth/session, API routes) may treat the old sign-in as live.
+  const session = await page.request.get("/api/auth/session");
+  expect((await session.json())?.user ?? null).toBeNull();
+  await expect.poll(async () => (await context.cookies()).some((c) => /session-token/.test(c.name))).toBe(false);
   await login(page);
   await expect(page.getByText(wsName).first()).toBeVisible({ timeout: 20_000 });
   await expect(sidebar(page).getByRole("link", { name: `Launch ${stamp}` })).toBeVisible();
