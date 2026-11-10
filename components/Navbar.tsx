@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutToLogin } from "@/lib/client-signout";
 import { CheckSquare, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { clearWorkspaceSelection } from "@/components/WorkspaceProvider";
 import { NotificationBell } from "@/components/NotificationBell";
 import { getInitials } from "@/lib/utils";
 
@@ -65,8 +65,7 @@ export function Navbar() {
                 variant="secondary"
                 size="sm"
                 onClick={() => {
-                  clearWorkspaceSelection();
-                  signOut({ callbackUrl: "/login" });
+                  void signOutToLogin();
                 }}
                 className="h-9"
               >

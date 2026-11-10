@@ -2,6 +2,8 @@ import { DefaultSession } from "next-auth";
 
 declare module "next-auth" {
   interface Session {
+    /** Per-sign-in id, used to make sign-out stick (see lib/signout-marker.ts). */
+    sid?: string;
     user: {
       id: string;
       role: string;
@@ -16,5 +18,6 @@ declare module "next-auth/jwt" {
     name?: string | null;
     email?: string | null;
     deleted?: boolean;
+    sid?: string;
   }
 }

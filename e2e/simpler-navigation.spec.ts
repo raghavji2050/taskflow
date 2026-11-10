@@ -132,15 +132,24 @@ test("list quick-add + click anywhere on the row opens it", async ({ page }) => 
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("the last workspace is remembered after sign out and back in", async ({ page }) => {
+test("the last workspace is remembered after sign out and back in", async ({ page, context }) => {
   await login(page);
   // Fresh browser context: pick the workspace once, then it should stick across sign-out/in.
   await page.getByRole("button", { name: /Personal/ }).first().click();
   await page.getByRole("button", { name: new RegExp(wsName) }).or(page.getByRole("menuitem", { name: new RegExp(wsName) })).first().click();
   await expect(page.getByRole("button", { name: new RegExp(wsName) }).first()).toBeVisible({ timeout: 20_000 });
   await page.locator(".sidebar-user-trigger:visible").click();
+  const before = (await context.cookies()).find((c) => /session-token/.test(c.name));
+  expect(before).toBeTruthy();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
+  // A request that was still in flight can re-set the old session cookie after sign-out
+  // (Auth.js re-signs it on every read). Simulate that: it must not sign us back in.
+  await context.addCookies([before!]);
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
+  await expect(page.getByLabel("Email")).toBeVisible();
+  expect((await context.cookies()).some((c) => /session-token/.test(c.name))).toBe(false);
   await login(page);
   await expect(page.getByText(wsName).first()).toBeVisible({ timeout: 20_000 });
   await expect(sidebar(page).getByRole("link", { name: `Launch ${stamp}` })).toBeVisible();

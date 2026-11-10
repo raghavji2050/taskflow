@@ -2,8 +2,17 @@ import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth.config";
 import { getOrCreateRequestId, REQUEST_ID_HEADER } from "@/lib/request-id";
+import {
+  isSessionCookieName,
+  isSignedOutSession,
+  SIGNED_OUT_COOKIE,
+  stripSessionSetCookies,
+} from "@/lib/signout-marker";
 
 const { auth } = NextAuth(authConfig);
+
+/** Internal flag from the auth handler to the outer wrapper; never sent to the browser. */
+const SIGNED_OUT_FLAG = "x-tf-signed-out";
 
 const protectedPages = ["/dashboard", "/settings", "/admin"];
 const protectedApiPrefixes = [
@@ -18,8 +27,17 @@ const protectedApiPrefixes = [
   "/api/link-preview",
 ];
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth?.user?.id;
+const authMiddleware = auth((req) => {
+  const signedOut = isSignedOutSession(req.auth?.sid, req.cookies.get(SIGNED_OUT_COOKIE)?.value);
+  const isLoggedIn = !!req.auth?.user?.id && !signedOut;
+  const response = route(req, isLoggedIn);
+  if (signedOut) response.headers.set(SIGNED_OUT_FLAG, "1");
+  return response;
+});
+
+type AuthedRequest = Parameters<Parameters<typeof auth>[0]>[0];
+
+function route(req: AuthedRequest, isLoggedIn: boolean): NextResponse {
   const { pathname } = req.nextUrl;
 
   const isAuthPage =
@@ -57,7 +75,25 @@ export default auth((req) => {
   const response = NextResponse.next({ request: { headers: forwarded } });
   response.headers.set(REQUEST_ID_HEADER, requestId);
   return response;
-});
+}
+
+export default async function middleware(...args: Parameters<typeof authMiddleware>) {
+  const res = await authMiddleware(...args);
+  if (!(res instanceof Response) || !res.headers.has(SIGNED_OUT_FLAG)) return res;
+  // A late response re-signed a session this browser already signed out of: drop it for good.
+  res.headers.delete(SIGNED_OUT_FLAG);
+  stripSessionSetCookies(res.headers);
+  const [req] = args;
+  for (const { name } of req.cookies.getAll()) {
+    if (isSessionCookieName(name)) {
+      res.headers.append(
+        "set-cookie",
+        `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${name.startsWith("__Secure-") ? "; Secure" : ""}`,
+      );
+    }
+  }
+  return res;
+}
 
 export const config = {
   matcher: [

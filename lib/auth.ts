@@ -8,6 +8,7 @@ import { loginSchema } from "@/lib/validations";
 import { getGitHubOAuthConfig, getGoogleOAuthConfig } from "@/lib/oauth";
 import { authConfig } from "@/lib/auth.config";
 import { isSessionRevoked } from "@/lib/session-version";
+import { newSessionId } from "@/lib/signout-marker";
 import type { NextAuthConfig } from "next-auth";
 
 const providers: NextAuthConfig["providers"] = [
@@ -126,6 +127,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.sub = user.id;
         token.name = user.name;
         token.email = user.email;
+        token.sid = newSessionId();
         delete token.deleted;
       }
 
