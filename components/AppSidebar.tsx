@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutToLogin } from "@/lib/client-signout";
 import { useTheme } from "next-themes";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -30,7 +31,7 @@ import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { SidebarLink, SidebarMore, SidebarProjects, type NavItem } from "@/components/SidebarSections";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useRealtime } from "@/components/RealtimeProvider";
-import { clearWorkspaceSelection, useWorkspace } from "@/components/WorkspaceProvider";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 import { useChatUnread } from "@/lib/useChatUnread";
 import {
   MOBILE_SIDEBAR_DRAWER_ID,
@@ -158,8 +159,7 @@ function SidebarUserMenu({ collapsed }: { collapsed?: boolean }) {
         <button
           type="button"
           onClick={() => {
-            clearWorkspaceSelection();
-            signOut({ callbackUrl: "/login" });
+            void signOutToLogin();
           }}
           className="sidebar-menu-item text-red-500 hover:bg-red-500/10"
         >

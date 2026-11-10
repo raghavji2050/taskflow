@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { newSessionId } from "@/lib/signout-marker";
 
 // Keep in sync with lib/session-version.ts (that file imports Prisma, so not edge-safe).
 const SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
@@ -21,6 +22,7 @@ export const authConfig = {
         token.sub = user.id;
         token.name = user.name;
         token.email = user.email;
+        token.sid = newSessionId();
         delete token.deleted;
       }
       return token;
@@ -32,6 +34,7 @@ export const authConfig = {
 
       if (session.user) {
         session.user.id = token.id as string;
+        if (token.sid) session.sid = token.sid as string;
         session.user.role = (token.role as string) ?? "USER";
         if (token.name) session.user.name = token.name as string;
         if (token.email) session.user.email = token.email as string;
