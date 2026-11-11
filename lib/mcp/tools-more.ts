@@ -14,6 +14,7 @@ import { getWorkspaceMembership as getInviteMembership } from "@/lib/workspace-m
 import { McpToolError, type McpUser } from "@/lib/mcp/tools";
 import * as deps from "@/lib/task-dependencies";
 import * as cf from "@/lib/custom-fields";
+import { loadInsights } from "@/lib/insights-data";
 import type { CustomFieldTypeName } from "@/lib/custom-field-rules";
 
 async function taskFor(user: McpUser, taskId: string, edit: boolean) {
@@ -218,3 +219,7 @@ export async function setTaskFieldValue(u: McpUser, a: { taskId: string; fieldId
   touched(u, task);
   return { taskId: a.taskId, field: field.name, value };
 }
+
+// ---- insights dashboard
+export const getInsights = (u: McpUser, a: { workspaceId?: string; projectId?: string; tzOffsetMinutes?: number; weeks?: number }) =>
+  wrap(loadInsights(u.id, a));
