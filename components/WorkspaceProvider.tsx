@@ -39,7 +39,7 @@ interface WorkspaceContextValue {
   selectWorkspace: (id: string | null) => void;
   refreshWorkspaces: () => Promise<Workspace[]>;
   createWorkspace: (name: string) => Promise<{ ok: boolean; workspace?: Workspace; error?: string }>;
-  inviteMember: (email: string) => Promise<{ ok: boolean; error?: string }>;
+  inviteMember: (email: string, role?: string) => Promise<{ ok: boolean; error?: string; pendingSignup?: boolean; emailSent?: boolean; inviteUrl?: string }>;
   updateWorkspaceSettings: (allowMemberInvites: boolean) => Promise<{ ok: boolean; error?: string }>;
   updateMemberPermissions: (
     memberId: string,
@@ -187,16 +187,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return { ok: false, error: data.error ?? "Could not create workspace" };
   }, [refreshWorkspaces, selectWorkspace]);
 
-  const inviteMember = useCallback(async (email: string) => {
+  const inviteMember = useCallback(async (email: string, role?: string) => {
     if (!selectedWorkspaceId) return { ok: false, error: "No workspace selected" };
     const res = await fetch(`/api/workspaces/${selectedWorkspaceId}/members`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(role ? { email, role } : { email }),
     });
     const data = await res.json();
     if (res.ok) {
-      return { ok: true };
+      return { ok: true, pendingSignup: Boolean(data.pendingSignup), emailSent: Boolean(data.emailSent), inviteUrl: data.inviteUrl as string | undefined };
     }
     return { ok: false, error: data.error ?? "Could not send invitation" };
   }, [selectedWorkspaceId]);

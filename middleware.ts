@@ -65,7 +65,7 @@ function route(req: AuthedRequest, isLoggedIn: boolean): NextResponse {
 
   if (isAuthPage && isLoggedIn) {
     const next = req.nextUrl.searchParams.get("next");
-    const target = next && next.startsWith("/oauth/") ? next : "/dashboard";
+    const target = next && (next.startsWith("/oauth/") || /^\/join\/[A-Za-z0-9_-]+$/.test(next)) ? next : "/dashboard";
     return NextResponse.redirect(new URL(target, req.url));
   }
 

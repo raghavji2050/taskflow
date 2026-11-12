@@ -224,7 +224,10 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   add("search_messages", "Search your chat messages.", { query: z.string().trim().min(1).max(200), limit: z.number().int().min(1).max(50).optional() }, P("searchMessages"), true);
   add("start_direct_chat", "Open (or find) a direct chat with a user; returns conversationId.", { userId: id }, P("startDirectChat"));
   // workspace
-  add("invite_member", "Invite someone to a workspace by email (owner/admin only).", { workspaceId: id, email: z.string().email() }, P("inviteMember"));
+  add("invite_member", "Invite someone to a workspace by email with a role (ADMIN/MEMBER/VIEWER, default MEMBER). If they have no account yet, a single-use join link is emailed and returned.", { workspaceId: id, email: z.string().email(), role: z.enum(["ADMIN", "MEMBER", "VIEWER"]).optional() }, P("inviteMember"));
+  add("create_invite_link", "Create a shareable workspace join link (anyone with it can sign up and join with the given role). Expires in 1-30 days (default 7).", { workspaceId: id, role: z.enum(["ADMIN", "MEMBER", "VIEWER"]).optional(), expiresInDays: z.number().int().min(1).max(30).optional(), maxUses: z.number().int().min(1).max(1000).optional() }, P("createInviteLink"));
+  add("list_invite_links", "List active workspace invite links (role, uses, expiry). The link URL itself is only shown once at creation.", { workspaceId: id }, P("listInviteLinks"), true);
+  add("revoke_invite_link", "Turn off a workspace invite link.", { workspaceId: id, linkId: id }, P("revokeInviteLink"));
 
   // smart
   add("plan_my_day", "Your prioritized plan for today: overdue first, then due today, then high-priority / in-progress, plus your active timer. tzOffsetMinutes defaults to IST (330).", { tzOffsetMinutes: z.number().int().min(-720).max(840).optional(), limit: z.number().int().min(1).max(50).optional() }, (a: { tzOffsetMinutes?: number; limit?: number }) => smart.planMyDay(user, a), true);

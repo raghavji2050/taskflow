@@ -14,6 +14,13 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { OAuthButtons } from "@/components/OAuthButtons";
 
+/** Only same-site paths (e.g. /join/<token>) so the next param can't redirect off-site. */
+function safeNext() {
+  if (typeof window === "undefined") return "/dashboard";
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/dashboard";
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -42,16 +49,16 @@ export default function RegisterPage() {
         email: data.email,
         password: data.password,
         redirect: false,
-        callbackUrl: "/dashboard",
+        callbackUrl: safeNext(),
       });
 
       if (signInResult?.error) {
         toast.success("Account created! Please sign in.");
-        router.push("/login");
+        router.push(`/login?next=${encodeURIComponent(safeNext())}`);
         return;
       }
 
-      window.location.href = "/dashboard";
+      window.location.href = safeNext();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Registration failed");
     } finally {
