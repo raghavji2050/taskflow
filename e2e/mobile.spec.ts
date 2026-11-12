@@ -54,16 +54,21 @@ test("list view: no horizontal scroll, create, open and complete a task", async 
   await noHorizontalScroll(page);
 
   // Title gets the full card width on phones (actions sit on their own row).
-  const titleBox = await row.locator("h3").boundingBox();
-  const actionsBox = await row.getByTestId("task-actions").boundingBox();
-  expect(titleBox && actionsBox && actionsBox.y >= titleBox.y + titleBox.height - 1).toBeTruthy();
+  // The list re-renders after create (refetch + realtime), so measure inside toPass: a detached
+  // node gives a null box for a moment and used to fail this test at random.
+  await expect(async () => {
+    const titleBox = await row.locator("h3").boundingBox();
+    const actionsBox = await row.getByTestId("task-actions").boundingBox();
+    expect(titleBox && actionsBox && actionsBox.y >= titleBox.y + titleBox.height - 1).toBeTruthy();
 
-  // Tap targets are at least 44px.
-  for (const name of ["Cycle status", "Edit task", "Archive", "Delete task"]) {
-    const box = await row.getByRole("button", { name }).boundingBox();
-    expect(box!.height).toBeGreaterThanOrEqual(44);
-    expect(box!.width).toBeGreaterThanOrEqual(44);
-  }
+    // Tap targets are at least 44px.
+    for (const name of ["Cycle status", "Edit task", "Archive", "Delete task"]) {
+      const box = await row.getByRole("button", { name }).boundingBox();
+      expect(box, `${name} button box`).not.toBeNull();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+    }
+  }).toPass({ timeout: 15_000 });
 
   // Open the task
   await row.getByRole("button", { name: "Edit task" }).click();
