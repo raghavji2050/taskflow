@@ -71,22 +71,22 @@ enum DocumentType {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  name           String
-  email          String    @unique
-  password       String?
-  role           UserRole  @default(USER)
-  emailVerified  DateTime?
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  password            String?
+  role                UserRole  @default(USER)
+  emailVerified       DateTime?
   /// Bumped to revoke every existing session (password change/reset, sign out everywhere).
-  sessionVersion Int       @default(0)
-  image          String?
-  lastSeenAt     DateTime?
+  sessionVersion      Int       @default(0)
+  image               String?
+  lastSeenAt          DateTime?
   /// Daily digest email (pending/overdue/ready). Default on; user can opt out in Settings.
   emailDigestEnabled  Boolean   @default(true)
   /// Email when @mentioned in a task comment or chat. Default on.
   emailMentionEnabled Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   tasks                          Task[]                    @relation("TaskOwner")
   taskAssignments                TaskAssignee[]
@@ -111,6 +111,7 @@ model User {
   messageReactions               MessageReaction[]
   pinnedMessages                 Message[]                 @relation("PinnedMessages")
   documents                      Document[]
+  goalsOwned                     Goal[]                    @relation("GoalOwner")
   documentVersions               DocumentVersion[]
   documentComments               DocumentComment[]
   documentAttachments            DocumentAttachment[]
@@ -201,25 +202,26 @@ model Task {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  user          User            @relation("TaskOwner", fields: [userId], references: [id], onDelete: Cascade)
-  category      Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  boardColumn   BoardColumn?    @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
-  workspace     Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  section       ProjectSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  assignees     TaskAssignee[]
-  followers     TaskFollower[]
-  blockedBy     TaskDependency[] @relation("DependencyBlocked")
-  blocking      TaskDependency[] @relation("DependencyBlocker")
-  subtasks      Subtask[]
-  tags          TaskTag[]
-  attachments   Attachment[]
-  comments      Comment[]
-  activities    TaskActivity[]
-  reminders     Reminder[]
-  documentLinks DocumentTask[]
-  timeEntries   TimeEntry[]
+  user              User                   @relation("TaskOwner", fields: [userId], references: [id], onDelete: Cascade)
+  category          Category?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  boardColumn       BoardColumn?           @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
+  workspace         Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  project           Project?               @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  section           ProjectSection?        @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  assignees         TaskAssignee[]
+  followers         TaskFollower[]
+  blockedBy         TaskDependency[]       @relation("DependencyBlocked")
+  blocking          TaskDependency[]       @relation("DependencyBlocker")
+  subtasks          Subtask[]
+  tags              TaskTag[]
+  attachments       Attachment[]
+  comments          Comment[]
+  activities        TaskActivity[]
+  reminders         Reminder[]
+  documentLinks     DocumentTask[]
+  timeEntries       TimeEntry[]
   customFieldValues TaskCustomFieldValue[]
+  goalLinks         GoalLink[]
 
   @@index([userId])
   @@index([status])
@@ -412,6 +414,7 @@ model Workspace {
   boardColumns       BoardColumn[]
   conversation       Conversation?
   documents          Document[]
+  goals              Goal[]
 
   @@index([archivedAt])
 }
@@ -472,11 +475,12 @@ model Project {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  members   ProjectMember[]
-  sections  ProjectSection[]
-  tasks     Task[]
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members      ProjectMember[]
+  sections     ProjectSection[]
+  tasks        Task[]
   customFields ProjectCustomField[]
+  goalLinks    GoalLink[]
 
   @@index([workspaceId])
   @@index([workspaceId, archived])
@@ -974,4 +978,54 @@ model OAuthGrant {
 
   @@index([userId])
   @@index([clientId])
+}
+
+enum GoalStatus {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  ACHIEVED
+}
+
+/// Workspace goal / OKR. Child goals act as key results; progress rolls up automatically.
+model Goal {
+  id             String      @id @default(cuid())
+  workspaceId    String
+  parentId       String?
+  title          String      @db.VarChar(200)
+  description    String?     @db.Text
+  ownerId        String?
+  createdById    String
+  startDate      DateTime    @default(now())
+  dueDate        DateTime?
+  statusOverride GoalStatus?
+  manualProgress Int?
+  closedAt       DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  workspace      Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent         Goal?       @relation("GoalTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Goal[]      @relation("GoalTree")
+  owner          User?       @relation("GoalOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  links          GoalLink[]
+
+  @@index([workspaceId, closedAt])
+  @@index([parentId])
+  @@index([ownerId])
+}
+
+model GoalLink {
+  id        String   @id @default(cuid())
+  goalId    String
+  projectId String?
+  taskId    String?
+  createdAt DateTime @default(now())
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, projectId])
+  @@unique([goalId, taskId])
+  @@index([projectId])
+  @@index([taskId])
 }

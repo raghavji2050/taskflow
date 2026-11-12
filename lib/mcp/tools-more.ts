@@ -19,6 +19,8 @@ import { globalSearch as runGlobalSearch } from "@/lib/global-search-data";
 import * as files from "@/lib/task-attachments-data";
 import { MAX_MCP_UPLOAD_BYTES } from "@/lib/task-attachment-rules";
 import { getAttachmentDownloadUrl } from "@/lib/blob-url";
+import * as goals from "@/lib/goals-data";
+import { ProjectError } from "@/lib/project-sections";
 import type { CustomFieldTypeName } from "@/lib/custom-field-rules";
 
 async function taskFor(user: McpUser, taskId: string, edit: boolean) {
@@ -254,3 +256,14 @@ export async function addTaskAttachment(u: McpUser, a: { taskId: string; filenam
   return { attachment: fileOut(await filesWrap(files.addTaskAttachment(u.id, a.taskId, { filename: a.filename, mimeType: a.mimeType ?? "application/octet-stream", data }, MAX_MCP_UPLOAD_BYTES))) };
 }
 export const deleteTaskAttachment = (u: McpUser, a: { taskId: string; attachmentId: string }) => filesWrap(files.deleteTaskAttachment(u.id, a.taskId, a.attachmentId));
+// ---- goals / OKRs
+function goalsWrap<T>(p: Promise<T>) {
+  return p.catch((e: unknown) => { if (e instanceof goals.GoalError || e instanceof ProjectError) throw new McpToolError(e.message); throw e; });
+}
+export const listGoals = (u: McpUser, a: { workspaceId: string; includeClosed?: boolean }) => goalsWrap(goals.listGoals(u.id, a.workspaceId, { includeClosed: a.includeClosed }));
+export const getGoal = (u: McpUser, a: { goalId: string }) => goalsWrap(goals.getGoal(u.id, a.goalId)).then((goal) => ({ goal }));
+export const createGoal = (u: McpUser, a: goals.GoalInput & { workspaceId: string; title: string }) => { const { workspaceId, ...rest } = a; return goalsWrap(goals.createGoal(u.id, workspaceId, rest)).then((goal) => ({ goal })); };
+export const updateGoal = (u: McpUser, a: goals.GoalInput & { goalId: string }) => { const { goalId, ...rest } = a; return goalsWrap(goals.updateGoal(u.id, goalId, rest)).then((goal) => ({ goal })); };
+export const deleteGoal = (u: McpUser, a: { goalId: string }) => goalsWrap(goals.deleteGoal(u.id, a.goalId));
+export const linkGoal = (u: McpUser, a: { goalId: string; projectId?: string; taskId?: string }) => goalsWrap(goals.addGoalLink(u.id, a.goalId, a)).then((goal) => ({ goal }));
+export const unlinkGoal = (u: McpUser, a: { goalId: string; linkId: string }) => goalsWrap(goals.removeGoalLink(u.id, a.goalId, a.linkId)).then((goal) => ({ goal }));
