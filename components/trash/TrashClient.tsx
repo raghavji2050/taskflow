@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -101,8 +102,8 @@ export function TrashClient() {
       />
 
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[var(--card-border)] py-16 text-center text-sm text-[var(--muted)]">
-          Trash is empty.
+        <div className="rounded-xl border border-dashed border-[var(--card-border)]">
+          <EmptyState icon={Trash2} title="Trash is empty." description={`Deleted tasks and projects wait here for ${TRASH_RETENTION_DAYS} days before they are removed for good.`} />
         </div>
       ) : (
         <div className="space-y-8">

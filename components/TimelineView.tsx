@@ -1,5 +1,7 @@
 "use client";
 
+import { EmptyState } from "@/components/ui/EmptyState";
+import { CalendarClock } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { format, addDays, startOfDay, differenceInDays } from "date-fns";
 import type { Task } from "@/components/TaskCard";
@@ -72,7 +74,7 @@ export function TimelineView({ tasks, onEdit }: TimelineViewProps) {
         <div ref={boxRef} data-testid="timeline-rows" className="relative min-w-[640px] space-y-2">
           <div className="absolute bottom-0 top-0 w-px bg-[var(--accent)]/40" style={{ left: `${dayPercent(today)}%` }} />
           {dated.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">No tasks with due dates in this range.</p>
+            <EmptyState compact icon={CalendarClock} title="No tasks with due dates in this range." description="Give tasks a due date (or type “kal” / “friday” in quick add) and they appear here with their dependencies." />
           ) : (
             dated.map((task) => {
               const due = new Date(task.dueDate!);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { DashboardStats, CompletionRing, type DashboardStatsData } from "@/components/DashboardStats";
 import { StatsBreakdown } from "@/components/StatsBreakdown";
@@ -24,6 +25,8 @@ import { Card } from "@/components/ui/Card";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import type { TaskInput } from "@/lib/validations";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { GettingStartedCard } from "@/components/onboarding/GettingStartedCard";
 import { cn, getTimeGreeting } from "@/lib/utils";
 import { dispatchTasksRefresh } from "@/lib/tasks-refresh-event";
 import { saveTaskWithOptionalTimer } from "@/lib/client-task-submit";
@@ -65,7 +68,9 @@ export function DashboardClient({ userName }: DashboardClientProps) {
   const [recentTasks, setRecentTasks] = useState<Task[]>([]);
   const [dailyUpdates, setDailyUpdates] = useState<DailyUpdateGroup[]>([]);
   const [filters, setFilters] = useState<TaskFiltersState>(defaultFilters);
+  const [onboardingKey, setOnboardingKey] = useState(0);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const hasActiveFilters = JSON.stringify(filters) !== JSON.stringify(defaultFilters) || Boolean(categoryId);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -401,6 +406,8 @@ export function DashboardClient({ userName }: DashboardClientProps) {
         }
       />
 
+      <GettingStartedCard refreshKey={onboardingKey} onTasksAdded={refreshTasks} />
+
       <Card className="p-3 sm:p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-3">
@@ -471,17 +478,22 @@ export function DashboardClient({ userName }: DashboardClientProps) {
                 <div key={i} className="h-16 animate-pulse rounded-xl bg-[var(--surface-hover)]" />
               ))}</div>
             ) : tasks.length === 0 ? (
-              <div className="flex flex-col items-center py-16 text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-soft)]">
-                  <Sparkles className="h-7 w-7 text-[var(--accent)]" />
-                </div>
-                <p className="text-base font-semibold text-[var(--foreground)]">No tasks in this workspace</p>
-                <p className="mt-1 max-w-xs text-sm text-[var(--muted)]">
-                  {isPersonal
-                    ? "Type a task in the box above and press Enter (try “kal 5 baje call !high”)"
-                    : "Type a task in the box above, or invite teammates from Team settings"}
-                </p>
-              </div>
+              <EmptyState
+                icon={Sparkles}
+                testId="tasks-empty"
+                title={isPersonal ? "No tasks yet" : "No tasks in this workspace"}
+                description={isPersonal
+                  ? "Type a task in the box above and press Enter (try “kal 5 baje call !high”)"
+                  : "Type a task in the box above, or invite teammates from Team settings"}
+                action={isPersonal && canEditTasks && !hasActiveFilters ? (
+                  <Button size="sm" variant="secondary" onClick={async () => {
+                    const res = await fetch("/api/onboarding/sample-tasks", { method: "POST" });
+                    if (res.ok) { toast.success("Added sample tasks"); refreshTasks(); setOnboardingKey((k) => k + 1); }
+                  }}>Add sample tasks</Button>
+                ) : !isPersonal ? (
+                  <Link href="/dashboard/team" className="inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)]">Invite teammates</Link>
+                ) : undefined}
+              />
             ) : (
               <div className="space-y-2">
                 {tasks.map((task) => (

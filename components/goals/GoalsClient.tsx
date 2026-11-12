@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, ChevronDown, ChevronRight, FolderKanban, Link2, Plus, Target, Trash2, X } from "lucide-react";
@@ -338,10 +339,13 @@ export function GoalsClient() {
       {loading && goals.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">Loading goals…</p>
       ) : roots.length === 0 ? (
-        <Card className="p-8 text-center">
-          <Target className="mx-auto mb-3 h-10 w-10 text-indigo-500" />
-          <p className="font-medium text-[var(--foreground)]">No goals yet</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Example: &quot;Launch the new website by 31 Dec&quot; — then link the website project and its progress shows here.</p>
+        <Card className="p-2">
+          <EmptyState
+            icon={Target}
+            title="No goals yet"
+            description={<>Example: &quot;Launch the new website by 31 Dec&quot; — then link the website project and its progress shows here.</>}
+            action={canEdit ? <Button size="sm" variant="secondary" onClick={() => setForm({ title: "", description: "", dueDate: "", ownerId: "", parentId: "" })}><Plus className="h-4 w-4" />Create your first goal</Button> : undefined}
+          />
         </Card>
       ) : (
         <div className="space-y-3">{roots.map((g) => renderGoal(g, 0))}</div>
