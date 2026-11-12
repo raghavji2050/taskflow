@@ -342,3 +342,20 @@ export async function testWebhook(u: McpUser, a: { workspaceId: string; webhookI
   const w = await import("@/lib/webhooks");
   return hooksWrap(w.sendTestPing(u.id, a.workspaceId, a.webhookId));
 }
+
+// ---- DB backup vault
+export async function listBackups(u: McpUser, a: { source?: string }) {
+  const { canViewBackups, normalizeSource, parseAdminEmails } = await import("@/lib/backup-rules");
+  const dbUser = await prisma.user.findUnique({ where: { id: u.id }, select: { email: true, role: true } });
+  if (!canViewBackups(dbUser, parseAdminEmails(process.env.BACKUP_ADMIN_EMAILS))) {
+    throw new McpToolError("Backups are only visible to allow-listed admins");
+  }
+  const { backupStorageAvailable } = await import("@/lib/backup-store");
+  if (!backupStorageAvailable()) return { backups: [], count: 0, totalBytes: 0 };
+  const { backupSummary } = await import("@/lib/backup-service");
+  const s = await backupSummary(a.source ? normalizeSource(a.source) : undefined);
+  return {
+    ...s,
+    backups: s.backups.map((b) => ({ ...b, downloadPath: `/api/backups/download?pathname=${encodeURIComponent(b.pathname)}` })),
+  };
+}
