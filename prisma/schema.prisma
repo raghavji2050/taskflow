@@ -71,22 +71,24 @@ enum DocumentType {
 }
 
 model User {
-  id                  String    @id @default(cuid())
-  name                String
-  email               String    @unique
-  password            String?
-  role                UserRole  @default(USER)
-  emailVerified       DateTime?
+  id                    String    @id @default(cuid())
+  name                  String
+  email                 String    @unique
+  password              String?
+  role                  UserRole  @default(USER)
+  emailVerified         DateTime?
   /// Bumped to revoke every existing session (password change/reset, sign out everywhere).
-  sessionVersion      Int       @default(0)
-  image               String?
-  lastSeenAt          DateTime?
+  sessionVersion        Int       @default(0)
+  image                 String?
+  lastSeenAt            DateTime?
   /// Daily digest email (pending/overdue/ready). Default on; user can opt out in Settings.
-  emailDigestEnabled  Boolean   @default(true)
+  emailDigestEnabled    Boolean   @default(true)
   /// Email when @mentioned in a task comment or chat. Default on.
-  emailMentionEnabled Boolean   @default(true)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  emailMentionEnabled   Boolean   @default(true)
+  onboardingDismissedAt DateTime?
+  onboardingUseCase     String?   @db.VarChar(16)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   tasks                          Task[]                    @relation("TaskOwner")
   taskAssignments                TaskAssignee[]

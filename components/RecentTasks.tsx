@@ -17,7 +17,7 @@ export function RecentTasks({ tasks, onSelect, showMeta = false }: RecentTasksPr
     <Card className="p-4">
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Recent</h2>
       {tasks.length === 0 ? (
-        <p className="py-6 text-center text-xs text-[var(--muted)]">No tasks yet</p>
+        <p className="py-6 text-center text-xs text-[var(--muted)]">Tasks you add show up here</p>
       ) : (
         <div className="space-y-1">
           {tasks.map((task) => (
