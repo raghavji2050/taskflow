@@ -28,6 +28,7 @@ import {
   Users,
   Trash2,
   PieChart as PieChartIcon,
+  Target,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { SidebarLink, SidebarMore, SidebarProjects, type NavItem } from "@/components/SidebarSections";
@@ -76,6 +77,13 @@ const insightsNavItem: NavItem = {
   label: "Insights",
   icon: PieChartIcon,
   match: (p) => p.startsWith("/dashboard/reports/insights"),
+};
+
+const goalsNavItem: NavItem = {
+  href: "/dashboard/goals",
+  label: "Goals",
+  icon: Target,
+  match: (p) => p.startsWith("/dashboard/goals"),
 };
 
 const timeReportsNavItem: NavItem = {
@@ -223,7 +231,7 @@ function SidebarContent({
   const { connected } = useRealtime();
   const { totalUnread } = useChatUnread();
   const { isPersonal } = useWorkspace();
-  const moreItems = isPersonal ? [insightsNavItem, timeReportsNavItem, trashNavItem] : [insightsNavItem, timeReportsNavItem, teamNavItem, trashNavItem];
+  const moreItems = isPersonal ? [insightsNavItem, goalsNavItem, timeReportsNavItem, trashNavItem] : [insightsNavItem, goalsNavItem, timeReportsNavItem, teamNavItem, trashNavItem];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
