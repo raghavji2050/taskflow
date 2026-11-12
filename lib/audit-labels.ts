@@ -5,6 +5,8 @@ export const AUDIT_ACTIONS = {
   "workspace.archived": "Archived workspace",
   "workspace.restored": "Restored workspace",
   "workspace.settings_changed": "Changed workspace settings",
+  "workspace.webhook_created": "Added webhook",
+  "workspace.webhook_deleted": "Removed webhook",
   "member.invited": "Invited member",
   "member.joined": "Joined workspace",
   "member.invite_link_created": "Created invite link",

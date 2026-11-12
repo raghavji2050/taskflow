@@ -1,248 +1,59 @@
-# API Documentation
+# TaskFlow REST API (v1)
 
-Base URL: `http://localhost:3000`
+Base URL: `https://taskflow-vault.vercel.app/api/v1`
 
-All task endpoints require authentication via NextAuth session cookie.
+## Auth
+Create a token in **Settings → API tokens** and send it on every request:
 
-## Authentication
-
-### Register User
-
-`POST /api/auth/register`
-
-**Request Body**
-```json
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "password123"
-}
+```
+Authorization: Bearer tf_xxxxxxxx
 ```
 
-**Success Response (201)**
-```json
-{
-  "message": "Account created successfully",
-  "user": {
-    "id": "clx...",
-    "name": "John Doe",
-    "email": "john@example.com",
-    "createdAt": "2026-06-11T10:00:00.000Z"
-  }
-}
+The same tokens work for the MCP server (`/api/mcp`). Rate limit: **120 requests / minute / token** (HTTP 429 with `Retry-After`). Errors are JSON: `{ "error": { "status": 404, "message": "Task not found" } }`.
+
+## Endpoints
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/` | Index of endpoints and webhook events |
+| GET | `/me` | The token's user |
+| GET | `/workspaces` | Workspaces you belong to (`?includeArchived=true`) |
+| GET | `/projects?workspaceId=` | Projects you can see |
+| GET | `/tasks` | Filters: `workspaceId`, `projectId`, `status` (PENDING/IN_PROGRESS/COMPLETED), `priority` (LOW/MEDIUM/HIGH), `search`, `dueBefore`, `assignedToMe`, `includeCompleted`, `limit` (≤100) |
+| POST | `/tasks` | `{ title, description?, workspaceId?, projectId?, priority?, status?, dueDate?, assigneeId? }` → 201 |
+| GET | `/tasks/:id` | Task with subtasks and comments |
+| PATCH | `/tasks/:id` | Any of `{ title, status, priority, dueDate, assigneeId, shiftDependents }` |
+| DELETE | `/tasks/:id` | Moves to Trash (restorable for 30 days) |
+| GET / POST | `/workspaces/:id/webhooks` | Owner/admin. POST `{ url, events? }` → returns `secret` **once** |
+| PATCH / DELETE | `/workspaces/:id/webhooks/:webhookId` | PATCH `{ active?, events? }` |
+| POST | `/workspaces/:id/webhooks/:webhookId/test` | Sends a signed `ping` |
+| GET | `/workspaces/:id/webhooks/:webhookId/deliveries` | Last 20 delivery results |
+
+```bash
+curl -H "Authorization: Bearer $TASKFLOW_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Call supplier","priority":"HIGH","dueDate":"2026-11-20"}' \
+  https://taskflow-vault.vercel.app/api/v1/tasks
 ```
 
-**Error Responses**
-- `400` - Validation error
-- `409` - Email already exists
-
----
-
-### Login User
-
-`POST /api/auth/login`
-
-**Request Body**
-```json
-{
-  "email": "john@example.com",
-  "password": "password123"
-}
-```
-
-**Success Response (200)**
-```json
-{
-  "message": "Login successful",
-  "user": {
-    "id": "clx...",
-    "name": "John Doe",
-    "email": "john@example.com"
-  }
-}
-```
-
-**Error Responses**
-- `400` - Validation error
-- `401` - Invalid credentials
-
----
-
-### NextAuth Session
-
-`GET/POST /api/auth/[...nextauth]`
-
-Handled by NextAuth.js for session management. After login, the client calls `signIn("credentials")` to create a session cookie.
-
----
-
-## Tasks
-
-### List Tasks
-
-`GET /api/tasks`
-
-**Query Parameters**
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| search | string | - | Search in title and description |
-| status | PENDING \| COMPLETED \| ALL | ALL | Filter by status |
-| priority | LOW \| MEDIUM \| HIGH \| ALL | ALL | Filter by priority |
-| sort | dueDate \| createdAt \| priority | dueDate | Sort field |
-| order | asc \| desc | asc | Sort order |
-
-**Success Response (200)**
-```json
-{
-  "tasks": [
-    {
-      "id": "clx...",
-      "title": "Complete project",
-      "description": "Finish the todo app",
-      "priority": "HIGH",
-      "status": "PENDING",
-      "dueDate": "2026-06-15T00:00:00.000Z",
-      "userId": "clx...",
-      "createdAt": "2026-06-11T10:00:00.000Z",
-      "updatedAt": "2026-06-11T10:00:00.000Z"
-    }
-  ],
-  "stats": {
-    "total": 10,
-    "completed": 4,
-    "pending": 6,
-    "highPriority": 2,
-    "completionPercentage": 40,
-    "breakdown": [],
-    "recentTasks": []
-  }
-}
-```
-
----
-
-### Create Task
-
-`POST /api/tasks`
-
-**Request Body**
-```json
-{
-  "title": "Complete project",
-  "description": "Finish the todo app",
-  "priority": "HIGH",
-  "status": "PENDING",
-  "dueDate": "2026-06-15"
-}
-```
-
-**Success Response (201)**
-```json
-{
-  "task": { "...": "..." }
-}
-```
-
----
-
-### Get Task by ID
-
-`GET /api/tasks/[id]`
-
-**Success Response (200)**
-```json
-{
-  "task": { "...": "..." }
-}
-```
-
-**Error Responses**
-- `404` - Task not found
-
----
-
-### Update Task
-
-`PUT /api/tasks/[id]`
-
-**Request Body** (same as create)
-
-**Success Response (200)**
-```json
-{
-  "task": { "...": "..." }
-}
-```
-
----
-
-### Delete Task
-
-`DELETE /api/tasks/[id]`
-
-**Success Response (200)**
-```json
-{
-  "message": "Task deleted successfully"
-}
-```
-
----
-
-## Error Format
-
-All errors follow this structure:
+## Webhooks
+Events: `task.created`, `task.updated`, `task.completed`, `task.deleted` (plus `ping` from the test button). URLs must be public `https`. Each delivery is a `POST` with JSON:
 
 ```json
-{
-  "error": "Error message"
-}
+{ "id": "<delivery uuid>", "event": "task.completed", "createdAt": "2026-11-12T08:00:00.000Z",
+  "data": { "task": { "id": "…", "title": "…", "status": "COMPLETED", "priority": "HIGH", "dueDate": null,
+                      "completedAt": "…", "projectId": null, "workspaceId": "…", "sectionId": null,
+                      "createdAt": "…", "updatedAt": "…" }, "actorId": "…" } }
 ```
 
-Common status codes:
-- `400` - Bad request / validation error
-- `401` - Unauthorized
-- `404` - Resource not found
-- `409` - Conflict
-- `429` - Rate limited
-- `500` - Internal server error
+Headers: `X-TaskFlow-Event`, `X-TaskFlow-Delivery`, `X-TaskFlow-Signature: t=<unix>,v1=<hex>`.
 
----
+Verify: `v1 == HMAC_SHA256(secret, "<t>.<raw body>")` and reject if `t` is older than 5 minutes.
 
-## Additional Endpoints (v2)
+```js
+import { createHmac, timingSafeEqual } from "crypto";
+const [t, v1] = header.split(",").map((p) => p.split("=")[1]);
+const ok = timingSafeEqual(Buffer.from(v1, "hex"), createHmac("sha256", secret).update(`${t}.${rawBody}`).digest()) && Date.now() / 1000 - Number(t) < 300;
+```
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/forgot-password` | Request password reset email |
-| POST | `/api/auth/reset-password` | Reset password with token |
-| GET | `/api/auth/verify-email?token=` | Verify email address |
-| PATCH | `/api/tasks/[id]` | Archive/unarchive task |
-| POST | `/api/tasks/bulk` | Bulk complete/archive/delete |
-| GET | `/api/tasks/export` | Export all tasks as JSON |
-| POST | `/api/tasks/import` | Import tasks from JSON |
-| PUT | `/api/tasks/reorder` | Reorder tasks by position |
-| GET/POST | `/api/categories` | List/create categories |
-| POST | `/api/categories/[id]` | Generate share link |
-| GET/POST | `/api/tags` | List/create tags |
-| GET/POST | `/api/tasks/[id]/subtasks` | Manage subtasks |
-| GET/POST | `/api/tasks/[id]/comments` | Manage comments |
-| POST | `/api/tasks/[id]/attachments` | Upload file attachment |
-| POST | `/api/tasks/[id]/reminders` | Set due date reminder |
-| GET/PUT | `/api/user/profile` | Get/update profile |
-| PUT | `/api/user/password` | Change password |
-| GET/PATCH | `/api/notifications` | Notification center |
-| POST | `/api/notifications/subscribe` | FCM device token subscribe |
-| POST | `/api/notifications/test` | Send test FCM push |
-| GET | `/api/notifications/firebase-config` | Public Firebase web config (for SW) |
-| GET/POST | `/api/workspaces` | Team workspaces |
-| POST | `/api/workspaces/[id]/members` | Invite member |
-| GET | `/api/events` | SSE real-time stream |
-| GET | `/api/share/[token]` | Public shared list |
-| GET | `/api/admin/users` | Admin user list |
-| GET | `/api/cron/reminders` | Daily maintenance (08:00 UTC): due reminders, archive stale completed tasks. Requires `Authorization: Bearer CRON_SECRET` |
-| GET/POST | `/api/trash` | Personal Trash: list, restore, or permanently delete |
-| GET/POST | `/api/workspaces/[id]/trash` | Workspace Trash: list, restore, or permanently delete |
-| GET | `/api/cron/trash` | Daily purge (03:30 UTC) of Trash older than 30 days. Requires `Authorization: Bearer CRON_SECRET` |
-| GET | `/api/openapi` | OpenAPI specification |
-
-Interactive docs: `http://localhost:3000/docs`
+Reply with any 2xx within 5 seconds. After 10 failures in a row the webhook is turned off (resume it from Team settings).

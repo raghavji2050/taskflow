@@ -95,6 +95,10 @@ Smart tools: `plan_my_day`, `find_blockers`, `weekly_report` compute prioritized
 | `list_project_templates` | Built-in + team-saved project templates. |
 | `create_project_from_template` | New project with the template's sections and starter tasks. |
 | `save_project_as_template` | Save a project's structure as a reusable template. |
+| `list_webhooks` | Outgoing webhooks for a workspace (owner/admin). |
+| `create_webhook` | Add a webhook for task events; returns the signing secret once. |
+| `delete_webhook` | Remove a webhook. |
+| `test_webhook` | Send a signed test ping. |
 
 ## 0. Claude mobile / claude.ai (OAuth — easiest)
 
