@@ -7,8 +7,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { del, get, head, list } from "@vercel/blob";
-import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
+import { del, get, head, issueSignedToken, list, parseStoreIdFromDelegationToken, presignUrl } from "@vercel/blob";
 import {
   BACKUP_CONTENT_TYPES,
   BACKUP_ROOT,
@@ -31,14 +30,13 @@ export type StoredBackup = {
 };
 
 export function isBlobBackupStore() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 }
 
 export function backupStorageAvailable() {
   return isBlobBackupStore() || process.env.VERCEL !== "1";
 }
 
-const BLOB_API_URL = "https://vercel.com/api/blob";
 const BLOB_API_VERSION = "12";
 
 function localRoot() {
@@ -97,22 +95,26 @@ export async function createUploadTicket(pathname: string, maxSizeBytes: number,
   let headers: Record<string, string>;
 
   if (isBlobBackupStore()) {
-    const token = process.env.BLOB_READ_WRITE_TOKEN!;
-    const clientToken = await generateClientTokenFromReadWriteToken({
-      token,
+    // Presigned PUT (works with the project's OIDC auth on Vercel, or a read-write token):
+    // the delegation is scoped to this one pathname, PUT only, gzip only, size-capped.
+    const signed = await issueSignedToken({
       pathname,
+      operations: ["put"],
+      validUntil,
       maximumSizeInBytes: maxSizeBytes,
       allowedContentTypes: [...BACKUP_CONTENT_TYPES],
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      validUntil,
     });
-    const storeId = token.split("_")[3] ?? "";
-    uploadUrl = `${BLOB_API_URL}/?${new URLSearchParams({ pathname }).toString()}`;
+    const { presignedUrl } = await presignUrl(signed, {
+      operation: "put",
+      pathname,
+      access: "private",
+      allowOverwrite: true,
+      addRandomSuffix: false,
+    });
+    uploadUrl = presignedUrl;
     headers = {
-      authorization: `Bearer ${clientToken}`,
       "x-api-version": BLOB_API_VERSION,
-      "x-vercel-blob-store-id": storeId,
+      "x-vercel-blob-store-id": parseStoreIdFromDelegationToken(signed.delegationToken),
       "x-vercel-blob-access": "private",
       "x-content-type": "application/gzip",
       "x-add-random-suffix": "0",
