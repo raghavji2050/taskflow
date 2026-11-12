@@ -183,6 +183,10 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   add("list_project_templates", "List project templates for a workspace: built-ins (sprint, marketing campaign, client onboarding, event planning) plus ones saved by the team.", { workspaceId: id }, P("listProjectTemplates"), true);
   add("create_project_from_template", "Create a project in a workspace from a template (sections + starter tasks with relative due dates).", { workspaceId: id, templateId: z.string().min(1), name: z.string().max(100).optional() }, P("createProjectFromTemplate"));
   add("save_project_as_template", "Save an existing project's sections and tasks as a reusable workspace template.", { projectId: id, name: z.string().max(100).optional() }, P("saveProjectAsTemplate"));
+  add("list_webhooks", "List a workspace's outgoing webhooks (owner/admin): URL, events, on/off, last status.", { workspaceId: id }, P("listWebhooks"), true);
+  add("create_webhook", "Add an outgoing webhook (https URL) for task.created / task.updated / task.completed / task.deleted. Returns the signing secret once.", { workspaceId: id, url: z.string().url().max(500), events: z.array(z.enum(["task.created", "task.updated", "task.completed", "task.deleted"])).min(1).optional() }, P("createWebhook"));
+  add("delete_webhook", "Remove an outgoing webhook.", { workspaceId: id, webhookId: id }, P("deleteWebhook"));
+  add("test_webhook", "Send a signed test ping to a webhook and report the HTTP result.", { workspaceId: id, webhookId: id }, P("testWebhook"));
   add("get_goal", "Get one goal with progress, status, sub-goal ids and linked projects/tasks.", { goalId: id }, P("getGoal"), true);
   add("create_goal", "Create a workspace goal (or a key result under parentId). Owner defaults to you.", { workspaceId: id, title: z.string().trim().min(1).max(200), ...goalFields }, P("createGoal"));
   add("update_goal", "Edit a goal: title, owner, dates, parent, status override, manual progress, or closed=true to close it.", { goalId: id, title: z.string().trim().min(1).max(200).optional(), closed: z.boolean().optional(), ...goalFields }, P("updateGoal"));

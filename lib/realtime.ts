@@ -328,6 +328,20 @@ export function broadcastPresenceSync() {
   getRealtimeHub().broadcastPresenceSync();
 }
 
+/** Outgoing webhooks ride on the same task events (after the response, never blocking it). */
+function queueTaskWebhooks(event: { type: string; workspaceId?: string | null; taskId?: string; actorId?: string | null }) {
+  if (process.env.NODE_ENV === "test" || !event.workspaceId || !event.taskId) return;
+  if (event.type !== "task:created" && event.type !== "task:updated" && event.type !== "task:deleted") return;
+  const { workspaceId, taskId, actorId } = event;
+  const type = event.type;
+  void import("@/lib/after-response").then(({ afterResponse }) =>
+    afterResponse(async () => {
+      const { dispatchTaskEvent } = await import("@/lib/webhooks");
+      await dispatchTaskEvent(type, workspaceId, taskId, actorId);
+    })
+  );
+}
+
 export function broadcastTaskEvent(
   event: Omit<TaskEvent, "at"> & { at?: string }
 ) {
@@ -335,6 +349,7 @@ export function broadcastTaskEvent(
     ...event,
     at: event.at ?? new Date().toISOString(),
   };
+  queueTaskWebhooks(event);
   if (event.workspaceId) {
     void triggerWorkspaceChannel(event.workspaceId, payload).then((sent) => {
       if (!sent) getRealtimeHub().publish(payload);

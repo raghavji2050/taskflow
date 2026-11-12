@@ -427,6 +427,7 @@ model Workspace {
   inviteLinks        WorkspaceInviteLink[]
 
   projectTemplates   ProjectTemplate[]
+  webhooks           Webhook[]
   @@index([archivedAt])
 }
 
@@ -1094,4 +1095,39 @@ model ProjectTemplate {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, createdAt])
+}
+
+/// Outgoing webhook: POSTs signed JSON for task events in a workspace.
+model Webhook {
+  id             String            @id @default(cuid())
+  workspaceId    String
+  url            String            @db.VarChar(500)
+  secret         String            @db.VarChar(80)
+  events         String            @db.VarChar(200)
+  description    String?           @db.VarChar(200)
+  active         Boolean           @default(true)
+  failureCount   Int               @default(0)
+  lastDeliveryAt DateTime?
+  lastStatus     Int?
+  disabledReason String?           @db.VarChar(200)
+  createdById    String?
+  createdAt      DateTime          @default(now())
+  workspace      Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries     WebhookDelivery[]
+
+  @@index([workspaceId, active])
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  webhookId  String
+  event      String   @db.VarChar(40)
+  status     Int?
+  ok         Boolean  @default(false)
+  durationMs Int?
+  error      String?  @db.VarChar(300)
+  createdAt  DateTime @default(now())
+  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
 }

@@ -317,3 +317,28 @@ export async function saveProjectAsTemplate(u: McpUser, a: { projectId: string; 
   const t = await import("@/lib/project-templates");
   return { template: await t.saveProjectAsTemplate(u.id, a.projectId, a) };
 }
+
+// ---- outgoing webhooks (Day 26)
+function hooksWrap<T>(p: Promise<T>) {
+  return p.catch(async (e: unknown) => {
+    const { WebhookError } = await import("@/lib/webhooks");
+    if (e instanceof WebhookError) throw new McpToolError(e.message);
+    throw e;
+  });
+}
+export async function listWebhooks(u: McpUser, a: { workspaceId: string }) {
+  const w = await import("@/lib/webhooks");
+  return hooksWrap(w.listWebhooks(u.id, a.workspaceId)).then((webhooks) => ({ webhooks }));
+}
+export async function createWebhook(u: McpUser, a: { workspaceId: string; url: string; events?: string[] }) {
+  const w = await import("@/lib/webhooks");
+  return hooksWrap(w.createWebhook(u.id, a.workspaceId, a));
+}
+export async function deleteWebhook(u: McpUser, a: { workspaceId: string; webhookId: string }) {
+  const w = await import("@/lib/webhooks");
+  return hooksWrap(w.deleteWebhook(u.id, a.workspaceId, a.webhookId));
+}
+export async function testWebhook(u: McpUser, a: { workspaceId: string; webhookId: string }) {
+  const w = await import("@/lib/webhooks");
+  return hooksWrap(w.sendTestPing(u.id, a.workspaceId, a.webhookId));
+}
