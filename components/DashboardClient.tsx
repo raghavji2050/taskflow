@@ -352,6 +352,19 @@ export function DashboardClient({ userName }: DashboardClientProps) {
 
   useOpenTaskListener((taskId) => { void openTaskById(taskId); });
 
+  // Deep link from global search: /dashboard?openTask=<id> opens the task once, then cleans the URL.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current) return;
+    const url = new URL(window.location.href);
+    const taskId = url.searchParams.get("openTask");
+    if (!taskId) return;
+    deepLinkHandled.current = true;
+    url.searchParams.delete("openTask");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    void openTaskById(taskId);
+  }, [openTaskById]);
+
   useTasksRefreshListener(refreshTasks);
 
   useTimeRealtime({

@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import {
   CheckSquare,
+  Search,
   LayoutList,
   Clock,
   LogOut,
@@ -31,6 +32,7 @@ import {
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { SidebarLink, SidebarMore, SidebarProjects, type NavItem } from "@/components/SidebarSections";
 import { NotificationBell } from "@/components/NotificationBell";
+import { openCommandPalette } from "@/lib/command-palette-event";
 import { useRealtime } from "@/components/RealtimeProvider";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { useChatUnread } from "@/lib/useChatUnread";
@@ -265,6 +267,24 @@ function SidebarContent({
       </div>
 
       <div className={cn("shrink-0 py-3", collapsed ? "px-2" : "px-3")}>
+        <button
+          type="button"
+          onClick={() => { onClose?.(); openCommandPalette(); }}
+          aria-label="Search everything"
+          title="Search (Ctrl/⌘ K)"
+          className={cn(
+            "mb-3 flex h-9 w-full items-center gap-2 rounded-lg border border-[var(--border)] text-sm text-[var(--muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]",
+            collapsed ? "justify-center" : "px-3"
+          )}
+        >
+          <Search className="h-4 w-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left">Search…</span>
+              <kbd className="rounded border border-[var(--border)] px-1 text-[10px]">Ctrl K</kbd>
+            </>
+          )}
+        </button>
         {!collapsed && <p className="sidebar-section-label mb-2">Workspace</p>}
         <WorkspaceSwitcher layout="sidebar" collapsed={collapsed} />
       </div>

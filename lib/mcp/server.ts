@@ -172,6 +172,7 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   add("get_task_custom_fields", "Show the custom fields of a task's project and this task's values.", { taskId: id }, P("getTaskCustomFields"), true);
   add("set_task_field_value", "Set a task's custom field value (number, YYYY-MM-DD date, dropdown option, or text). null or empty clears it.", { taskId: id, fieldId: id, value: z.union([z.string().max(500), z.number(), z.null()]) }, P("setTaskFieldValue"));
   // insights
+  add("global_search", "Search everything you can see in one call: tasks, projects, docs and chat messages (best matches first, private projects and other workspaces excluded). Query needs at least 2 characters.", { query: z.string().trim().min(2).max(100), limit: z.number().int().min(1).max(20).optional() }, P("globalSearch"), true);
   add("get_insights", "Dashboard numbers: open/overdue/due-this-week totals, tasks by status, open+overdue per assignee, per-project open/done, and completed vs created per week. Scope: projectId, workspaceId, or neither for personal tasks. tzOffsetMinutes uses JS getTimezoneOffset sign (IST = -330).", { workspaceId: id.optional(), projectId: id.optional(), tzOffsetMinutes: z.number().int().min(-840).max(840).optional(), weeks: z.number().int().min(1).max(26).optional() }, P("getInsights"), true);
   add("delete_subtask", "Delete a subtask.", { subtaskId: id }, P("deleteSubtask"));
   add("update_comment", "Edit one of your own task comments.", { commentId: id, body: z.string().trim().min(1).max(5000) }, P("updateComment"));

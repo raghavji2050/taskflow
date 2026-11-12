@@ -13,6 +13,7 @@ import { TimerReminderWatcher } from "@/components/TimerReminderWatcher";
 import { AmbientBackground } from "@/components/ui/AmbientBackground";
 import { MobileSidebarProvider } from "@/components/MobileSidebarProvider";
 import { TaskViewTabs } from "@/components/TaskViewTabs";
+import { CommandPalette } from "@/components/CommandPalette";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
@@ -20,6 +21,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <ActiveTimerProvider>
         <NotificationListener />
         <PushBootstrap />
+        <CommandPalette />
         <MobileSidebarProvider>
         <AmbientBackground>
           <div className="app-mesh-content flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden lg:flex-row">
