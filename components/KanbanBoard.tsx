@@ -47,6 +47,9 @@ function DraggableTask({
       style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined}
       {...(!readOnly ? listeners : {})}
       {...(!readOnly ? attributes : {})}
+      // The card holds its own buttons (timer), so it is a labelled group, not a button (axe nested-interactive).
+      role="group"
+      aria-label={task.title}
       data-testid="board-task-card"
       onClick={(e) => { if (shouldOpenFromClick(e)) onEdit(task); }}
       className={cn(

@@ -213,7 +213,7 @@ export function TaskEditModal({
             <MessageSquare className="h-4 w-4" />
             Collaboration
             {collabBadgeCount > 0 && (
-              <span className="ml-0.5 rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              <span className="ml-0.5 rounded-full bg-[var(--accent-solid)] px-1.5 py-0.5 text-[10px] font-bold text-white">
                 {collabBadgeCount}
               </span>
             )}

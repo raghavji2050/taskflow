@@ -1338,7 +1338,7 @@ function ActionItemRow({
                     )}
                   </div>
                 ) : (
-                  <select
+                  <select aria-label="Owner"
                     value={item.owner}
                     onChange={(e) => onChange({ ...item, owner: e.target.value })}
                     className={fieldClass}
@@ -1373,7 +1373,7 @@ function ActionItemRow({
                 <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
                   Priority
                 </label>
-                <select
+                <select aria-label="Priority"
                   value={item.priority}
                   onChange={(e) =>
                     onChange({
@@ -1393,7 +1393,7 @@ function ActionItemRow({
                 <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
                   Status
                 </label>
-                <select
+                <select aria-label="Status"
                   value={item.status}
                   onChange={(e) =>
                     onChange({

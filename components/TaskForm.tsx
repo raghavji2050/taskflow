@@ -574,7 +574,7 @@ export function TaskForm({
                     onClick={() => toggleTag(tag.id)}
                     className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                       selectedTags.includes(tag.id)
-                        ? "bg-[var(--accent)] text-white"
+                        ? "bg-[var(--accent-solid)] text-white"
                         : "bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--foreground)]"
                     }`}
                   >

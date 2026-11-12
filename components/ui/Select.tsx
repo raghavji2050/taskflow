@@ -1,4 +1,4 @@
-import { SelectHTMLAttributes, forwardRef } from "react";
+import { SelectHTMLAttributes, forwardRef, useId } from "react";
 import { cn } from "@/lib/utils";
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
@@ -10,7 +10,8 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, label, error, id, hideLabel, options, ...props }, ref) => {
-    const selectId = id || props.name;
+    const autoId = useId();
+    const selectId = id || props.name || autoId;
 
     return (
       <div className={cn(hideLabel ? "space-y-0" : "space-y-1.5")}>
@@ -25,6 +26,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         <select
           ref={ref}
           id={selectId}
+          aria-label={props["aria-label"] ?? (label && hideLabel ? label : undefined)}
           className={cn(
             "flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]",
             error && "border-red-500 focus:border-red-500 focus:ring-red-500/20",

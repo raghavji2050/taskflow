@@ -222,12 +222,12 @@ export function AutomationRulesPanel({
       <div className="space-y-2">
         <Input hideLabel placeholder="Rule name" value={name} onChange={(e) => setName(e.target.value)} className="h-8 text-xs" />
         <div className="grid gap-2 sm:grid-cols-2">
-          <Select hideLabel className="h-8 text-xs" value={trigger} onChange={(e) => setTrigger(e.target.value)} options={TRIGGER_OPTIONS} />
-          <Select hideLabel className="h-8 text-xs" value={action} onChange={(e) => setAction(e.target.value)} options={ACTION_OPTIONS} />
+          <Select aria-label="Trigger" hideLabel className="h-8 text-xs" value={trigger} onChange={(e) => setTrigger(e.target.value)} options={TRIGGER_OPTIONS} />
+          <Select aria-label="Action" hideLabel className="h-8 text-xs" value={action} onChange={(e) => setAction(e.target.value)} options={ACTION_OPTIONS} />
         </div>
         <Input hideLabel placeholder="Notification message (optional)" value={message} onChange={(e) => setMessage(e.target.value)} className="h-8 text-xs" />
         {action === "notify_user" && (
-          <Select
+          <Select aria-label="Assignee"
             hideLabel
             className="h-8 text-xs"
             value={userId}
@@ -239,7 +239,7 @@ export function AutomationRulesPanel({
           />
         )}
         {action === "set_status" && (
-          <Select
+          <Select aria-label="Status"
             hideLabel
             className="h-8 text-xs"
             value={status}
@@ -252,7 +252,7 @@ export function AutomationRulesPanel({
           />
         )}
         {action === "add_tag" && (
-          <Select
+          <Select aria-label="Tag"
             hideLabel
             className="h-8 text-xs"
             value={tagId}

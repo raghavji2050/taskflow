@@ -21,7 +21,7 @@ export function Navbar() {
     <header className="sticky top-0 z-40 safe-top border-b border-[var(--border)] bg-[var(--surface-1)]/95 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href={session ? "/dashboard" : "/"} className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-solid)] text-white">
             <CheckSquare className="h-4 w-4" strokeWidth={2.5} />
           </div>
           <span className="text-base font-semibold tracking-tight text-[var(--foreground)]">TaskFlow</span>
@@ -56,7 +56,7 @@ export function Navbar() {
                 </Link>
               )}
               <div className="hidden items-center gap-2 pl-1 sm:flex">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-semibold text-white">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-solid)] text-[11px] font-semibold text-white">
                   {getInitials(session.user?.name ?? "U")}
                 </div>
                 <span className="text-sm text-[var(--muted)]">{session.user?.name}</span>

@@ -79,7 +79,7 @@ function AddSuggestionInput({
         type="button"
         disabled={busy || !value.trim()}
         onClick={() => void submit()}
-        className="rounded-lg bg-[var(--accent)] px-2 py-1 text-[10px] font-medium text-white disabled:opacity-50"
+        className="rounded-lg bg-[var(--accent-solid)] px-2 py-1 text-[10px] font-medium text-white disabled:opacity-50"
       >
         Save
       </button>

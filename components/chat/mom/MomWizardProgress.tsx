@@ -44,7 +44,7 @@ export function MomWizardProgress({ step, onStepClick }: MomWizardProgressProps)
                 <span
                   className={cn(
                     "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all",
-                    done && "bg-[var(--accent)] text-white shadow-sm",
+                    done && "bg-[var(--accent-solid)] text-white shadow-sm",
                     current &&
                       !done &&
                       "border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] ring-4 ring-[var(--accent)]/15",

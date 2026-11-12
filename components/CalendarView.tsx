@@ -137,7 +137,7 @@ export function CalendarView({
                 <span
                   className={cn(
                     "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
-                    today && "bg-[var(--accent)] text-white",
+                    today && "bg-[var(--accent-solid)] text-white",
                     !today && inMonth && "text-[var(--foreground)]",
                     !inMonth && "text-[var(--muted)]"
                   )}
@@ -229,29 +229,28 @@ export function CalendarView({
           </h3>
           <div className="flex flex-wrap gap-2">
             {unscheduled.map((task) => (
-              <button
+              <div
                 key={task.id}
-                type="button"
-                onClick={() => onEdit(task)}
                 className={cn(
-                  "rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-opacity hover:opacity-80",
+                  "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium",
                   getPriorityColor(task.priority)
                 )}
               >
-                <span className="flex items-center gap-2">
-                  <span className="block truncate">{task.title}</span>
-                  {canEditTasks && (
-                    <TaskTimeControls
-                      taskId={task.id}
-                      taskStatus={task.status}
-                      activeEntry={activeEntry}
-                      elapsed={activeTimerElapsed}
-                      onRefresh={onTimerRefresh}
-                      variant="compact"
-                    />
-                  )}
-                </span>
-              </button>
+                {/* Title and timer are siblings: no button nested inside a button. */}
+                <button type="button" onClick={() => onEdit(task)} className="block truncate text-left transition-opacity hover:opacity-80">
+                  {task.title}
+                </button>
+                {canEditTasks && (
+                  <TaskTimeControls
+                    taskId={task.id}
+                    taskStatus={task.status}
+                    activeEntry={activeEntry}
+                    elapsed={activeTimerElapsed}
+                    onRefresh={onTimerRefresh}
+                    variant="compact"
+                  />
+                )}
+              </div>
             ))}
           </div>
         </Card>

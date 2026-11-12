@@ -56,7 +56,7 @@ export function TaskFilters({ filters, onChange, taskCount, searchRef, showAssig
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-          <Select
+          <Select aria-label="Show archived"
             hideLabel
             className={filterSelectClass}
             value={filters.archived}
@@ -68,7 +68,7 @@ export function TaskFilters({ filters, onChange, taskCount, searchRef, showAssig
             ]}
           />
 
-          <Select
+          <Select aria-label="Filter by status"
             hideLabel
             className={filterSelectClass}
             value={filters.status}
@@ -81,7 +81,7 @@ export function TaskFilters({ filters, onChange, taskCount, searchRef, showAssig
             ]}
           />
 
-          <Select
+          <Select aria-label="Filter by priority"
             hideLabel
             className={filterSelectClass}
             value={filters.priority}
@@ -95,7 +95,7 @@ export function TaskFilters({ filters, onChange, taskCount, searchRef, showAssig
           />
 
           {showAssigneeFilter && (
-            <Select
+            <Select aria-label="Filter by assignee"
               hideLabel
               className={filterSelectClass}
               value={filters.assignee}
@@ -108,7 +108,7 @@ export function TaskFilters({ filters, onChange, taskCount, searchRef, showAssig
             />
           )}
 
-          <Select
+          <Select aria-label="Sort tasks"
             hideLabel
             className={`${filterSelectClass} col-span-2 sm:col-span-1 sm:min-w-[8.5rem]`}
             value={`${filters.sort}-${filters.order}`}

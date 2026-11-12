@@ -633,7 +633,7 @@ export function MessageBubble({
                 (isDeleted
                   ? "rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-hover)]/50 italic text-[var(--muted)]"
                   : isOwn
-                    ? "rounded-tr-md bg-[var(--accent)] text-white"
+                    ? "rounded-tr-md bg-[var(--accent-solid)] text-white"
                     : "rounded-tl-md border border-[var(--border)] bg-[var(--surface-2)] text-[var(--foreground)]")
             )}
           >

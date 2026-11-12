@@ -47,6 +47,7 @@ export function TeamContextBar() {
         </div>
         <Link
           href="/dashboard/team"
+          aria-label="Team settings"
           className="inline-flex shrink-0 touch-target items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
         >
           <Settings className="h-3.5 w-3.5" />

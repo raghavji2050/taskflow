@@ -104,13 +104,13 @@ export function getPriorityClass(priority: string): string {
 export function getPriorityColor(priority: string): string {
   switch (priority) {
     case "HIGH":
-      return "bg-red-500/10 text-red-600 ring-1 ring-red-500/20 dark:bg-red-500/15 dark:text-red-400";
+      return "bg-red-500/10 text-red-700 ring-1 ring-red-500/20 dark:bg-red-500/15 dark:text-red-400";
     case "MEDIUM":
-      return "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400";
+      return "bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400";
     case "LOW":
-      return "bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400";
+      return "bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400";
     default:
-      return "bg-zinc-500/10 text-zinc-600 ring-1 ring-zinc-500/20 dark:text-zinc-400";
+      return "bg-zinc-500/10 text-zinc-700 ring-1 ring-zinc-500/20 dark:text-zinc-400";
   }
 }
 
@@ -121,7 +121,7 @@ export function getStatusColor(status: string): string {
     case "IN_PROGRESS":
       return "bg-violet-500/10 text-violet-600 ring-1 ring-violet-500/20 dark:bg-violet-500/15 dark:text-violet-400";
     default:
-      return "bg-sky-500/10 text-sky-600 ring-1 ring-sky-500/20 dark:bg-sky-500/15 dark:text-sky-400";
+      return "bg-sky-500/10 text-sky-700 ring-1 ring-sky-500/20 dark:bg-sky-500/15 dark:text-sky-400";
   }
 }
 

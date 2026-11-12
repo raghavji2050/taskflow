@@ -99,8 +99,8 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Mock dashboard preview */}
-          <div className="mx-auto mt-16 max-w-4xl animate-fade-up" style={{ animationDelay: "0.15s" }}>
+          {/* Mock dashboard preview (decorative illustration, hidden from screen readers) */}
+          <div aria-hidden="true" className="mx-auto mt-16 max-w-4xl animate-fade-up" style={{ animationDelay: "0.15s" }}>
             <div className="surface-panel overflow-hidden rounded-3xl shadow-[var(--shadow-md)]">
               <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-3)] px-4 py-3">
                 <div className="h-3 w-3 rounded-full bg-red-400" />

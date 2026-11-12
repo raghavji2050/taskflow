@@ -51,7 +51,7 @@ export function TimeEntryTagPicker({
             onClick={() => toggle(label.id)}
             className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
               selectedIds.includes(label.id)
-                ? "bg-[var(--accent)] text-white"
+                ? "bg-[var(--accent-solid)] text-white"
                 : "bg-[var(--surface-hover)] text-[var(--muted)] hover:text-[var(--foreground)]"
             }`}
           >
