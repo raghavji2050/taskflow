@@ -15,6 +15,7 @@ import { McpToolError, type McpUser } from "@/lib/mcp/tools";
 import * as deps from "@/lib/task-dependencies";
 import * as cf from "@/lib/custom-fields";
 import { loadInsights } from "@/lib/insights-data";
+import { globalSearch as runGlobalSearch } from "@/lib/global-search-data";
 import type { CustomFieldTypeName } from "@/lib/custom-field-rules";
 
 async function taskFor(user: McpUser, taskId: string, edit: boolean) {
@@ -223,3 +224,10 @@ export async function setTaskFieldValue(u: McpUser, a: { taskId: string; fieldId
 // ---- insights dashboard
 export const getInsights = (u: McpUser, a: { workspaceId?: string; projectId?: string; tzOffsetMinutes?: number; weeks?: number }) =>
   wrap(loadInsights(u.id, a));
+
+// ---- global search (same engine as the Cmd-K palette)
+export async function globalSearch(u: McpUser, a: { query: string; limit?: number }) {
+  const r = await runGlobalSearch(u.id, a.query, { limit: a.limit ?? 10 });
+  const strip = (hits: { id: string; title: string; subtitle?: string | null; href: string }[]) => hits.map(({ id, title, subtitle, href }) => ({ id, title, subtitle: subtitle ?? null, path: href }));
+  return { query: r.query, tasks: strip(r.tasks), projects: strip(r.projects), documents: strip(r.documents), messages: strip(r.messages) };
+}
