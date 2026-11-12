@@ -276,7 +276,7 @@ export function WorkspacePanel() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {canManageWorkspace && m.role !== "OWNER" && (
-                <Select
+                <Select aria-label={`Role for ${m.user.name ?? m.user.email}`}
                   hideLabel
                   className="h-7 w-24 text-[11px]"
                   value={m.role}

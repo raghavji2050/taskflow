@@ -12,10 +12,14 @@
   --border-strong: rgba(0, 0, 0, 0.12);
   --card: var(--surface-1);
   --card-border: var(--border);
-  --muted: #71717a;
-  --muted-foreground: #a1a1aa;
-  --accent: #5e6ad2;
-  --accent-hover: #4f5abf;
+  /* Day 23: darkened for WCAG AA (4.5:1) on light surfaces and accent-soft chips. */
+  --muted: #63636b;
+  --muted-foreground: #6e6e77;
+  --accent: #4f5abf;
+  --accent-hover: #434db0;
+  /* Filled buttons (white text) */
+  --accent-solid: var(--accent);
+  --accent-solid-hover: var(--accent-hover);
   --accent-soft: rgba(94, 106, 210, 0.1);
   --accent-muted: rgba(94, 106, 210, 0.06);
   --ring: rgba(94, 106, 210, 0.4);
@@ -72,9 +76,11 @@
   --card: var(--surface-1);
   --card-border: var(--border);
   --muted: #a1a1aa;
-  --muted-foreground: #71717a;
+  --muted-foreground: #8e8e98;
   --accent: #818cf8;
   --accent-hover: #6366f1;
+  --accent-solid: #4f46e5;
+  --accent-solid-hover: #4338ca;
   --accent-soft: rgba(129, 140, 248, 0.12);
   --accent-muted: rgba(129, 140, 248, 0.06);
   --ring: rgba(129, 140, 248, 0.45);

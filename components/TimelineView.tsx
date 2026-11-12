@@ -63,7 +63,7 @@ export function TimelineView({ tasks, onEdit }: TimelineViewProps) {
 
   return (
     <div className="space-y-4">
-      <div className="surface-panel overflow-x-auto rounded-2xl p-4">
+      <div className="surface-panel overflow-x-auto rounded-2xl p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]" tabIndex={0} role="region" aria-label="Timeline (scroll sideways)">
         <div className="mb-3 flex min-w-[640px] justify-between text-[10px] text-[var(--muted)]">
           <span>{format(rangeStart, "MMM d")}</span>
           <span>Today</span>

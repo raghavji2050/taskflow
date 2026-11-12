@@ -206,7 +206,7 @@ function SidebarUserMenu({ collapsed }: { collapsed?: boolean }) {
         aria-expanded={open}
         title={collapsed ? session?.user?.name ?? "Account" : undefined}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-semibold text-white">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent-solid)] text-[11px] font-semibold text-white">
           {getInitials(session?.user?.name ?? "U")}
         </div>
         {!collapsed && (
@@ -250,7 +250,7 @@ function SidebarContent({
           className={cn("flex min-w-0 items-center", collapsed ? "justify-center" : "flex-1 gap-2.5")}
           title={collapsed ? "TaskFlow" : undefined}
         >
-          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-solid)] text-white">
             <CheckSquare className="h-4 w-4" strokeWidth={2.5} />
             {connected && (
               <span
@@ -398,7 +398,7 @@ export function AppSidebar() {
           <Menu className="h-5 w-5" />
         </button>
         <Link href="/dashboard" className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-white">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent-solid)] text-white">
             <CheckSquare className="h-3.5 w-3.5" strokeWidth={2.5} />
           </div>
           <span className="truncate text-sm font-semibold">TaskFlow</span>

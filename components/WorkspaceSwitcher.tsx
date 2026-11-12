@@ -86,7 +86,7 @@ export function WorkspaceSwitcher({ layout = "default", collapsed = false }: Wor
       >
         <div className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
-          isPersonal ? "bg-[var(--sidebar-hover)] text-[var(--muted)]" : "bg-[var(--accent)] text-white"
+          isPersonal ? "bg-[var(--sidebar-hover)] text-[var(--muted)]" : "bg-[var(--accent-solid)] text-white"
         )}>
           {isPersonal ? (
             <User className="h-4 w-4" />

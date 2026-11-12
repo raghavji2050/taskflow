@@ -40,7 +40,7 @@ export function TaskViewFilters({
             onChange={(e) => update({ search: e.target.value })}
           />
         </div>
-        <Select
+        <Select aria-label="Filter by status"
           hideLabel
           className={selectClass}
           value={filters.status}
@@ -53,7 +53,7 @@ export function TaskViewFilters({
           ]}
         />
         {showAssigneeFilter && (
-          <Select
+          <Select aria-label="Filter by assignee"
             hideLabel
             className={selectClass}
             value={filters.assignee}

@@ -117,7 +117,7 @@ function ProjectTaskCard({
         className={cn(
           "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
           task.status === "COMPLETED"
-            ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+            ? "border-[var(--accent)] bg-[var(--accent-solid)] text-white"
             : "border-[var(--border)] text-transparent hover:border-[var(--accent)]"
         )}
         aria-label={task.status === "COMPLETED" ? "Mark incomplete" : "Mark complete"}

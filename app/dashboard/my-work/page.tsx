@@ -215,10 +215,10 @@ export default function MyWorkPage() {
       />
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <Card className="p-4"><p className="text-xs text-zinc-500">Total</p><p className="text-2xl font-bold">{counts.total}</p></Card>
-        <Card className="p-4"><p className="text-xs text-zinc-500">In progress</p><p className="text-2xl font-bold text-violet-500">{counts.inProgress}</p></Card>
-        <Card className="p-4"><p className="text-xs text-zinc-500">Pending</p><p className="text-2xl font-bold text-sky-500">{counts.pending}</p></Card>
-        <Card className="p-4"><p className="text-xs text-zinc-500">Overdue</p><p className="text-2xl font-bold text-red-500">{counts.overdue}</p></Card>
+        <Card className="p-4"><p className="text-xs text-[var(--muted)]">Total</p><p className="text-2xl font-bold">{counts.total}</p></Card>
+        <Card className="p-4"><p className="text-xs text-[var(--muted)]">In progress</p><p className="text-2xl font-bold text-violet-500">{counts.inProgress}</p></Card>
+        <Card className="p-4"><p className="text-xs text-[var(--muted)]">Pending</p><p className="text-2xl font-bold text-sky-500">{counts.pending}</p></Card>
+        <Card className="p-4"><p className="text-xs text-[var(--muted)]">Overdue</p><p className="text-2xl font-bold text-red-500">{counts.overdue}</p></Card>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

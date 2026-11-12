@@ -67,7 +67,7 @@ export function QuickAddTask({ onAdd, placeholder = "Add task… e.g. kal 5 baje
           <button
             type="submit"
             disabled={busy}
-            className="shrink-0 rounded-lg bg-[var(--accent)] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-60"
+            className="shrink-0 rounded-lg bg-[var(--accent-solid)] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-60"
           >
             Add
           </button>

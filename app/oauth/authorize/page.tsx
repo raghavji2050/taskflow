@@ -40,7 +40,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
             const v = k === "redirect_uri" ? p.redirectUri : q.get(k);
             return v ? <input key={k} type="hidden" name={k} value={v} /> : null;
           })}
-          <button name="decision" value="allow" className="flex-1 rounded-lg bg-[var(--accent)] px-4 py-2 font-medium text-white">
+          <button name="decision" value="allow" className="flex-1 rounded-lg bg-[var(--accent-solid)] px-4 py-2 font-medium text-white">
             Allow
           </button>
           <button name="decision" value="deny" className="flex-1 rounded-lg border border-[var(--border)] px-4 py-2">

@@ -461,7 +461,7 @@ export function TimeReportsClient() {
                     className={cn(
                       "rounded-md px-2.5 py-1 text-xs font-medium capitalize",
                       chartMode === mode
-                        ? "bg-[var(--accent)] text-white"
+                        ? "bg-[var(--accent-solid)] text-white"
                         : "text-[var(--muted)] hover:text-[var(--foreground)]"
                     )}
                   >

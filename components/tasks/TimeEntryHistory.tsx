@@ -195,7 +195,7 @@ export function TimeEntryHistory({
               className={cn(
                 "rounded-md px-2 py-1 text-xs font-medium",
                 range === r
-                  ? "bg-[var(--accent)] text-white"
+                  ? "bg-[var(--accent-solid)] text-white"
                   : "text-[var(--muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
               )}
             >

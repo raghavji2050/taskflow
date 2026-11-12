@@ -461,7 +461,7 @@ export function ChatComposer({
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleSend}
           disabled={!canSend}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] p-0 text-white shadow-sm transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9 md:h-10 md:w-10"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--accent-solid)] p-0 text-white shadow-sm transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9 md:h-10 md:w-10"
           aria-label={isEditing ? "Save changes" : "Send message"}
         >
           {isEditing ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}

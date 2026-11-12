@@ -39,7 +39,7 @@ export function TeamContextBar() {
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
             <Users className="h-3.5 w-3.5 text-[var(--accent)]" />
             <span className="font-medium text-[var(--foreground)]">{selectedWorkspace.name}</span>
-            <span>· {members.length} members</span>
+            <span>· {members.length} {members.length === 1 ? "member" : "members"}</span>
             <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--accent)]">
               {roleLabel}
             </span>
@@ -47,6 +47,7 @@ export function TeamContextBar() {
         </div>
         <Link
           href="/dashboard/team"
+          aria-label="Team settings"
           className="inline-flex shrink-0 touch-target items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
         >
           <Settings className="h-3.5 w-3.5" />

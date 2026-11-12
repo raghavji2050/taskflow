@@ -235,7 +235,7 @@ function ConversationRow({
           <>
             <div className="flex items-center gap-1">
               {hasUnread && (
-                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-bold leading-none tabular-nums text-white">
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent-solid)] px-1 text-[10px] font-bold leading-none tabular-nums text-white">
                   {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
                 </span>
               )}
@@ -272,7 +272,7 @@ function ConversationRow({
         ) : (
           <div className="flex items-center gap-1">
             {hasUnread && (
-              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-bold leading-none tabular-nums text-white">
+              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent-solid)] px-1 text-[10px] font-bold leading-none tabular-nums text-white">
                 {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
               </span>
             )}

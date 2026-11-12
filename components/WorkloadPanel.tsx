@@ -49,7 +49,7 @@ export function WorkloadPanel({ workspaceId }: { workspaceId: string }) {
         ))}
       </div>
       {unassigned > 0 && (
-        <p className="mt-2 text-xs text-amber-600">{unassigned} unassigned tasks</p>
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{unassigned} unassigned tasks</p>
       )}
     </Card>
   );
