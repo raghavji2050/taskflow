@@ -6,6 +6,7 @@ import { logTaskActivity } from "@/lib/activity";
 import { deleteAttachmentUrl, uploadAttachment } from "@/lib/blob-storage";
 import { isBlobUrl } from "@/lib/blob-url";
 import { cleanAttachmentFilename, isPathForTask, validateTaskAttachment } from "@/lib/task-attachment-rules";
+import { recordAudit } from "@/lib/audit";
 
 export class AttachmentError extends Error {
   constructor(message: string, public status = 400) {
@@ -40,9 +41,10 @@ export async function assertCanAddAttachment(userId: string, taskId: string, fil
   if (err) throw new AttachmentError(err);
 }
 
-async function record(userId: string, task: { id: string; workspaceId: string | null; userId: string }, data: { filename: string; url: string; mimeType: string; size: number }) {
+async function record(userId: string, task: { id: string; workspaceId: string | null; userId: string; title: string }, data: { filename: string; url: string; mimeType: string; size: number }) {
   const attachment = await prisma.attachment.create({ data: { ...data, taskId: task.id }, select: attachmentSelect });
   await logTaskActivity(task.id, "attachment_added", data.filename).catch(() => undefined);
+  if (task.workspaceId) await recordAudit({ workspaceId: task.workspaceId, actorId: userId, action: "file.attached", targetType: "task", targetId: task.id, targetLabel: task.title, details: { filename: data.filename, size: data.size } });
   touched(userId, task);
   return attachment;
 }
@@ -83,6 +85,7 @@ export async function deleteTaskAttachment(userId: string, taskId: string, attac
   await prisma.attachment.delete({ where: { id: att.id } });
   await deleteAttachmentUrl(att.url);
   await logTaskActivity(taskId, "attachment_removed", att.filename).catch(() => undefined);
+  if (task.workspaceId) await recordAudit({ workspaceId: task.workspaceId, actorId: userId, action: "file.removed", targetType: "task", targetId: taskId, targetLabel: task.title, details: { filename: att.filename } });
   touched(userId, task);
   return { ok: true };
 }

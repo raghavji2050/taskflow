@@ -66,6 +66,7 @@ export const PAGE_COMMANDS: PageCommand[] = [
   { id: "docs", title: "Docs", href: "/dashboard/docs", keywords: "documents notes wiki" },
   { id: "insights", title: "Insights", href: "/dashboard/reports/insights", keywords: "dashboard reports charts stats" },
   { id: "goals", title: "Goals", href: "/dashboard/goals", keywords: "okr objectives key results targets" },
+  { id: "activity", title: "Activity log", href: "/dashboard/activity", keywords: "audit trail history security log" },
   { id: "time", title: "Time Reports", href: "/dashboard/reports/time", keywords: "timesheet hours tracking" },
   { id: "team", title: "Team", href: "/dashboard/team", keywords: "members workspace people" },
   { id: "trash", title: "Trash", href: "/dashboard/trash", keywords: "deleted restore bin" },

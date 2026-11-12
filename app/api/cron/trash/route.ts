@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { purgeExpiredTrash } from "@/lib/trash";
+import { purgeOldAuditLogs } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +12,9 @@ export async function GET(request: Request) {
 
   try {
     const result = await purgeExpiredTrash();
-    console.info("[cron:trash]", result);
-    return NextResponse.json(result);
+    const auditPurged = await purgeOldAuditLogs().catch(() => 0);
+    console.info("[cron:trash]", { ...result, auditPurged });
+    return NextResponse.json({ ...result, auditPurged });
   } catch (error) {
     console.error("[cron:trash] failed", error);
     return NextResponse.json({ error: "Purge failed" }, { status: 500 });

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail, workspaceInviteEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { broadcastWorkspaceUpdate } from "@/lib/realtime";
+import { recordAudit } from "@/lib/audit";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -68,6 +69,7 @@ export async function sendWorkspaceInvite(params: {
   await prisma.notification.deleteMany({
     where: { inviteId: invitation.id, userId: invitee.id },
   });
+  await recordAudit({ workspaceId, actorId: inviterId, action: "member.invited", targetType: "member", targetId: invitee.id, targetLabel: invitee.name ?? invitee.email });
 
   await createNotification({
     userId: invitee.id,
@@ -151,6 +153,7 @@ export async function acceptInvitation(invitationId: string, userId: string) {
 
   const { addUserToDefaultProject } = await import("@/lib/projects");
   await addUserToDefaultProject(invitation.workspaceId, userId, "MEMBER");
+  await recordAudit({ workspaceId: invitation.workspaceId, actorId: userId, action: "member.joined", targetType: "member", targetId: userId, targetLabel: invitee?.name ?? null });
 
   await createNotification({
     userId: invitation.inviterId,

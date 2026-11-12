@@ -15,6 +15,7 @@ import { attachBlockedByIds } from "@/lib/dependency-shift";
 import { placementForNewTask, requireProjectAccess } from "@/lib/projects";
 import { visibleTaskWhere } from "@/lib/visible-records";
 import { followTask } from "@/lib/task-followers";
+import { recordAudit } from "@/lib/audit";
 
 function applyAssigneeFilter(
   where: Prisma.TaskWhereInput,
@@ -248,6 +249,7 @@ export async function POST(request: Request) {
 
     const fullTask = await getTaskWithAssignees(task.id);
     await logTaskActivity(task.id, "created", `Task "${task.title}" created`);
+    if (task.workspaceId) await recordAudit({ workspaceId: task.workspaceId, actorId: user.id, action: "task.created", targetType: "task", targetId: task.id, targetLabel: task.title });
     broadcastTaskEvent({
       type: "task:created",
       workspaceId: task.workspaceId,

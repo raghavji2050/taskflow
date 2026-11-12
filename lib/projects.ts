@@ -20,6 +20,7 @@ import {
   workspaceRoleToProjectRole,
   type ProjectRoleName,
 } from "@/lib/project-sections";
+import { recordAudit } from "@/lib/audit";
 
 const projectMemberInclude = {
   user: { select: { id: true, name: true, email: true } },
@@ -305,6 +306,7 @@ export async function createProject(input: {
       _count: { select: { members: true, sections: true, tasks: true } },
     },
   });
+  await recordAudit({ workspaceId: input.workspaceId, actorId: input.userId, action: "project.created", targetType: "project", targetId: project.id, targetLabel: project.name });
 
   return {
     ...project,
@@ -374,7 +376,7 @@ export async function updateProject(
   const access = await requireProjectAccess(userId, projectId);
   if (!access.canManage) throw new ProjectError("You do not have permission to manage this project", 403);
 
-  return prisma.project.update({
+  const updated = await prisma.project.update({
     where: { id: projectId },
     data: {
       ...(data.name !== undefined ? { name: data.name.trim() } : {}),
@@ -383,6 +385,8 @@ export async function updateProject(
       ...(data.archived !== undefined ? { archived: data.archived } : {}),
     },
   });
+  await recordAudit({ workspaceId: updated.workspaceId, actorId: userId, action: "project.updated", targetType: "project", targetId: projectId, targetLabel: updated.name, details: { changed: Object.keys(data) } });
+  return updated;
 }
 
 export async function deleteProject(userId: string, projectId: string) {
@@ -392,6 +396,7 @@ export async function deleteProject(userId: string, projectId: string) {
     where: { id: projectId },
     data: { deletedAt: new Date() },
   });
+  await recordAudit({ workspaceId: access.project.workspaceId, actorId: userId, action: "project.deleted", targetType: "project", targetId: projectId, targetLabel: access.project.name });
   broadcastTaskEvent({
     type: "task:bulk",
     workspaceId: access.project.workspaceId,
@@ -596,10 +601,12 @@ export async function addProjectMember(
   const check = validateMemberChange(members, { type: "add", userId, role });
   if (!check.ok) throw new ProjectError(check.error, 400);
 
-  return prisma.projectMember.create({
+  const created = await prisma.projectMember.create({
     data: { projectId, userId, role },
     include: projectMemberInclude,
   });
+  await recordAudit({ workspaceId: access.project.workspaceId, actorId, action: "project.member_added", targetType: "project", targetId: projectId, targetLabel: access.project.name, details: { userId, role } });
+  return created;
 }
 
 export async function updateProjectMember(
@@ -615,11 +622,13 @@ export async function updateProjectMember(
   const check = validateMemberChange(members, { type: "update", memberId, role });
   if (!check.ok) throw new ProjectError(check.error, check.error === "Member not found" ? 404 : 400);
 
-  return prisma.projectMember.update({
+  const updated = await prisma.projectMember.update({
     where: { id: memberId },
     data: { role },
     include: projectMemberInclude,
   });
+  await recordAudit({ workspaceId: access.project.workspaceId, actorId, action: "project.member_role_changed", targetType: "project", targetId: projectId, targetLabel: access.project.name, details: { userId: updated.userId, role } });
+  return updated;
 }
 
 export async function removeProjectMember(actorId: string, projectId: string, memberId: string) {
@@ -630,5 +639,6 @@ export async function removeProjectMember(actorId: string, projectId: string, me
   const check = validateMemberChange(members, { type: "remove", memberId });
   if (!check.ok) throw new ProjectError(check.error, check.error === "Member not found" ? 404 : 400);
 
-  await prisma.projectMember.delete({ where: { id: memberId } });
+  const removed = await prisma.projectMember.delete({ where: { id: memberId } });
+  await recordAudit({ workspaceId: access.project.workspaceId, actorId, action: "project.member_removed", targetType: "project", targetId: projectId, targetLabel: access.project.name, details: { userId: removed.userId } });
 }

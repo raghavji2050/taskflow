@@ -15,6 +15,7 @@ import {
 import { trashPurgeCutoff } from "@/lib/trash-policy";
 import { getWorkspaceMembership } from "@/lib/workspace";
 import { canEditWorkspaceTasks } from "@/lib/workspace-permissions";
+import { recordAudit } from "@/lib/audit";
 
 export class TrashError extends Error {
   status: number;
@@ -136,7 +137,12 @@ export async function listWorkspaceTrash(userId: string, workspaceId: string): P
   return [...projectItems, ...taskItems].sort((a, b) => (a.deletedAt < b.deletedAt ? 1 : -1));
 }
 
-export async function restoreTrashItem(input: {
+export async function restoreTrashItem(input: { userId: string; workspaceId: string | null; kind: TrashKind; id: string }) {
+  await restoreTrashItemInner(input);
+  await recordAudit({ workspaceId: input.workspaceId, actorId: input.userId, action: "trash.restored", targetType: input.kind, targetId: input.id });
+}
+
+async function restoreTrashItemInner(input: {
   userId: string;
   workspaceId: string | null;
   kind: TrashKind;
@@ -154,7 +160,12 @@ export async function restoreTrashItem(input: {
   await restoreWorkspaceTask(input.userId, input.workspaceId, input.id);
 }
 
-export async function purgeTrashItem(input: {
+export async function purgeTrashItem(input: { userId: string; workspaceId: string | null; kind: TrashKind; id: string }) {
+  await purgeTrashItemInner(input);
+  await recordAudit({ workspaceId: input.workspaceId, actorId: input.userId, action: "trash.purged", targetType: input.kind, targetId: input.id });
+}
+
+async function purgeTrashItemInner(input: {
   userId: string;
   workspaceId: string | null;
   kind: TrashKind;

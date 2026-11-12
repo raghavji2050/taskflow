@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { getWorkspaceMembershipIncludingArchived } from "@/lib/workspace";
 import { broadcastWorkspaceUpdate } from "@/lib/realtime";
+import { recordAudit } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -37,6 +38,8 @@ export async function PATCH(request: Request, context: RouteContext) {
         archivedAt: true,
       },
     });
+
+    await recordAudit({ workspaceId: id, actorId: user.id, action: archived ? "workspace.archived" : "workspace.restored", targetType: "workspace", targetId: id, targetLabel: workspace.name });
 
     broadcastWorkspaceUpdate({
       workspaceId: id,

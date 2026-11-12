@@ -15,6 +15,7 @@ import { visibleTaskWhere } from "@/lib/visible-records";
 import { notifyTaskFollowers, statusLabel } from "@/lib/task-followers";
 import { getOpenBlockers, notifyUnblocked } from "@/lib/task-dependencies";
 import { shiftDependentsAfterDueChange, type ShiftedTask } from "@/lib/dependency-shift";
+import { recordAudit } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -223,6 +224,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       where: { id },
       data: { deletedAt: new Date() },
     });
+    if (existing.workspaceId) await recordAudit({ workspaceId: existing.workspaceId, actorId: user.id, action: "task.deleted", targetType: "task", targetId: id, targetLabel: existing.title });
     broadcastTaskEvent({
       type: "task:deleted",
       workspaceId: existing.workspaceId,

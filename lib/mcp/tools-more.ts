@@ -16,6 +16,7 @@ import * as deps from "@/lib/task-dependencies";
 import * as cf from "@/lib/custom-fields";
 import { loadInsights } from "@/lib/insights-data";
 import { globalSearch as runGlobalSearch } from "@/lib/global-search-data";
+import { AuditAccessError, listAuditLog as loadAudit } from "@/lib/audit";
 import * as files from "@/lib/task-attachments-data";
 import { MAX_MCP_UPLOAD_BYTES } from "@/lib/task-attachment-rules";
 import { getAttachmentDownloadUrl } from "@/lib/blob-url";
@@ -267,3 +268,13 @@ export const updateGoal = (u: McpUser, a: goals.GoalInput & { goalId: string }) 
 export const deleteGoal = (u: McpUser, a: { goalId: string }) => goalsWrap(goals.deleteGoal(u.id, a.goalId));
 export const linkGoal = (u: McpUser, a: { goalId: string; projectId?: string; taskId?: string }) => goalsWrap(goals.addGoalLink(u.id, a.goalId, a)).then((goal) => ({ goal }));
 export const unlinkGoal = (u: McpUser, a: { goalId: string; linkId: string }) => goalsWrap(goals.removeGoalLink(u.id, a.goalId, a.linkId)).then((goal) => ({ goal }));
+
+// ---- audit trail
+export async function listAuditLog(u: McpUser, a: { workspaceId?: string; category?: string; actorId?: string; before?: string; limit?: number }) {
+  try {
+    return await loadAudit(u.id, a);
+  } catch (e) {
+    if (e instanceof AuditAccessError) throw new McpToolError(e.message);
+    throw e;
+  }
+}

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { passwordSchema } from "@/lib/validations";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { revokeAllOAuthGrants } from "@/lib/mcp/connected-apps";
+import { recordAudit } from "@/lib/audit";
 
 export async function PUT(request: Request) {
   try {
@@ -29,6 +30,7 @@ export async function PUT(request: Request) {
     // OAuth-connected apps (Claude connectors) must re-authorize too.
     await revokeAllOAuthGrants(user.id);
 
+    await recordAudit({ actorId: sessionUser.id, action: "account.password_changed", targetType: "account", targetId: sessionUser.id });
     return NextResponse.json({ message: "Password updated", signedOut: true });
   } catch (error) {
     return handleApiError(error);

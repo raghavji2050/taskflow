@@ -11,6 +11,7 @@ import { canManageWorkspace } from "@/lib/workspace-permissions";
 import { broadcastWorkspaceUpdate } from "@/lib/realtime";
 
 import { z } from "zod";
+import { recordAudit } from "@/lib/audit";
 
 
 
@@ -77,6 +78,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     });
 
 
+
+    await recordAudit({ workspaceId: id, actorId: user.id, action: "workspace.settings_changed", targetType: "workspace", targetId: id, targetLabel: workspace.name, details: { allowMemberInvites } });
 
     return NextResponse.json({ workspace });
 
