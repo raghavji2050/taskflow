@@ -47,9 +47,9 @@ test("timeline draws dependency arrows and moving a blocker later shifts its cha
   await block(page, ship.id, build.id);
 
   // Timeline: two arrows, Design -> Build -> Ship, no conflicts.
-  const listed = page.waitForResponse((r) => r.url().includes("/api/tasks?") && r.request().method() === "GET");
+  // Read the list API directly: a waitForResponse body can be evicted after navigation ("No resource with given identifier").
   await page.goto("/dashboard/timeline");
-  const list = await (await listed).json();
+  const list = await (await page.request.get("/api/tasks")).json();
   const buildRow = list.tasks.find((t: { id: string }) => t.id === build.id);
   expect(buildRow.blockedByIds).toEqual([design.id]);
   const arrows = page.getByTestId("timeline-dependency-arrow");
