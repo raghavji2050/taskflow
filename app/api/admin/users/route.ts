@@ -21,6 +21,7 @@ export async function GET() {
         _count: { select: { tasks: { where: visibleTaskWhere() } } },
       },
       orderBy: { createdAt: "desc" },
+      take: 1000, // newest 1000; keeps the admin list bounded
     });
 
     return NextResponse.json({ users });

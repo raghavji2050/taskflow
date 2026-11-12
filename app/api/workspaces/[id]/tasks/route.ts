@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { cachedJson } from "@/lib/http-cache";
+import { clampLimit } from "@/lib/http-cache-rules";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { canEditWorkspaceTasks, getWorkspaceMembership } from "@/lib/workspace";
@@ -11,7 +13,7 @@ import { visibleTaskWhere } from "@/lib/visible-records";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const user = await getAuthenticatedUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,14 +33,21 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
 
-    const tasksRaw = await prisma.task.findMany({
+    // Bounded: big workspaces page with ?limit=&offset= (default 500, max 1000).
+    const url = new URL(request.url);
+    const limit = clampLimit(url.searchParams.get("limit"), 500, 1000);
+    const offset = clampLimit(url.searchParams.get("offset"), 0, 1_000_000) || 0;
+    const rows = await prisma.task.findMany({
       where: visibleTaskWhere({ workspaceId: id, archived: false }),
-      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }, { id: "asc" }],
       include: taskListInclude,
+      skip: offset,
+      take: limit + 1,
     });
-    const tasks = await attachOpenBlockerCounts(tasksRaw);
+    const hasMore = rows.length > limit;
+    const tasks = await attachOpenBlockerCounts(hasMore ? rows.slice(0, limit) : rows);
 
-    return NextResponse.json({ workspace, tasks });
+    return cachedJson(request, { workspace, tasks, pagination: { limit, offset, hasMore, nextOffset: hasMore ? offset + limit : null } });
   } catch (error) {
     return handleApiError(error);
   }
