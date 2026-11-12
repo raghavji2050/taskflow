@@ -241,6 +241,8 @@ model Task {
   @@index([workspaceId, archived])
   @@index([status, archived, completedAt])
   @@index([archived, status, dueDate])
+  @@index([projectId, deletedAt, archived])
+  @@index([workspaceId, deletedAt, archived, dueDate])
 }
 
 model BoardColumn {
@@ -342,6 +344,7 @@ model Comment {
 
   @@index([taskId])
   @@index([parentId])
+  @@index([taskId, parentId, createdAt])
 }
 
 model TaskActivity {
@@ -353,6 +356,7 @@ model TaskActivity {
   createdAt DateTime @default(now())
 
   @@index([taskId])
+  @@index([taskId, createdAt])
 }
 
 model Reminder {
@@ -386,6 +390,7 @@ model Notification {
   @@index([inviteId])
   @@index([conversationId])
   @@index([userId, conversationId, type, read])
+  @@index([userId, createdAt])
 }
 
 model PushSubscription {

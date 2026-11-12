@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cachedJson } from "@/lib/http-cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { taskSchema, taskQuerySchema } from "@/lib/validations";
@@ -30,6 +31,7 @@ function applyAssigneeFilter(
 }
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   try {
     const user = await getAuthenticatedUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -133,7 +135,7 @@ export async function GET(request: Request) {
 
     const tasksWithCounts = await attachBlockedByIds(await attachOpenBlockerCounts(tasks));
 
-    return NextResponse.json({
+    return cachedJson(request, {
       tasks: tasksWithCounts,
       pagination: {
         page: query.page,
@@ -152,7 +154,7 @@ export async function GET(request: Request) {
         recentTasks,
         dailyUpdates,
       },
-    });
+    }, { startedAt });
   } catch (error) {
     return handleApiError(error);
   }
