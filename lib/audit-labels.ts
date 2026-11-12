@@ -14,6 +14,7 @@ export const AUDIT_ACTIONS = {
   "project.created": "Created project",
   "project.updated": "Updated project",
   "project.deleted": "Moved project to trash",
+  "project.template_saved": "Saved project as template",
   "project.member_added": "Added project member",
   "project.member_role_changed": "Changed project role",
   "project.member_removed": "Removed project member",
@@ -35,7 +36,7 @@ export type AuditAction = keyof typeof AUDIT_ACTIONS;
 
 export const AUDIT_CATEGORIES: Record<string, { label: string; prefixes: string[] }> = {
   members: { label: "Members & access", prefixes: ["member.", "project.member_"] },
-  projects: { label: "Projects", prefixes: ["project.created", "project.updated", "project.deleted"] },
+  projects: { label: "Projects", prefixes: ["project.created", "project.updated", "project.deleted", "project.template_"] },
   tasks: { label: "Tasks & files", prefixes: ["task.", "file.", "trash."] },
   workspace: { label: "Workspace", prefixes: ["workspace.", "goal."] },
   security: { label: "Security", prefixes: ["token.", "account."] },

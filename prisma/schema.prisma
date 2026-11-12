@@ -426,6 +426,7 @@ model Workspace {
   auditLogs          AuditLog[]
   inviteLinks        WorkspaceInviteLink[]
 
+  projectTemplates   ProjectTemplate[]
   @@index([archivedAt])
 }
 
@@ -1078,4 +1079,19 @@ model WorkspaceInviteLink {
   workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, revokedAt])
+}
+
+/// Workspace-saved project template: sections + task blueprints (relative due days).
+model ProjectTemplate {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String    @db.VarChar(100)
+  description String?   @db.VarChar(500)
+  color       String?   @db.VarChar(16)
+  data        Json
+  createdById String?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
 }

@@ -16,6 +16,8 @@ import { Modal } from "@/components/ui/Modal";
 import { PageLoader } from "@/components/ui/PageLoader";
 import { Textarea } from "@/components/ui/Textarea";
 import { PROJECT_COLORS } from "@/lib/project-sections";
+import { Select } from "@/components/ui/Select";
+import type { TemplateSummary } from "@/lib/project-template-rules";
 
 type ProjectSummary = {
   id: string;
@@ -39,6 +41,16 @@ export function ProjectsListClient() {
   const [description, setDescription] = useState("");
   const [color, setColor] = useState<string>(PROJECT_COLORS[0]);
   const [saving, setSaving] = useState(false);
+  const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+  const [templateId, setTemplateId] = useState("");
+
+  useEffect(() => {
+    if (!isOpen || !selectedWorkspaceId) return;
+    void fetch(`/api/workspaces/${selectedWorkspaceId}/project-templates`)
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((d) => setTemplates(d.templates ?? []))
+      .catch(() => setTemplates([]));
+  }, [isOpen, selectedWorkspaceId]);
 
   const load = useCallback(async () => {
     if (!selectedWorkspaceId) {
@@ -82,16 +94,23 @@ export function ProjectsListClient() {
     if (!selectedWorkspaceId || !name.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/workspaces/${selectedWorkspaceId}/projects`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() || null, color }),
-      });
+      const res = templateId
+        ? await fetch(`/api/workspaces/${selectedWorkspaceId}/projects/from-template`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ templateId, name: name.trim(), description: description.trim() || null, color }),
+          })
+        : await fetch(`/api/workspaces/${selectedWorkspaceId}/projects`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name.trim(), description: description.trim() || null, color }),
+          });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not create project");
       setIsOpen(false);
       setName("");
       setDescription("");
+      setTemplateId("");
       setColor(PROJECT_COLORS[0]);
       window.dispatchEvent(new Event(PROJECTS_CHANGED_EVENT));
       router.push(`/dashboard/projects/${data.project.id}`);
@@ -188,6 +207,22 @@ export function ProjectsListClient() {
         }
       >
         <div className="space-y-3">
+          <Select
+            id="project-template"
+            label="Start from"
+            value={templateId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setTemplateId(id);
+              const t = templates.find((x) => x.id === id);
+              if (t && !name.trim()) setName(t.name);
+              if (t && !description.trim() && t.description) setDescription(t.description);
+            }}
+            options={[
+              { value: "", label: "Blank project" },
+              ...templates.map((t) => ({ value: t.id, label: `${t.builtIn ? "" : "★ "}${t.name} · ${t.sectionCount} sections, ${t.taskCount} tasks` })),
+            ]}
+          />
           <Input label="Name" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} />
           <Textarea label="Description" value={description} onChange={(event) => setDescription(event.target.value)} rows={3} />
           <div>

@@ -91,6 +91,10 @@ Smart tools: `plan_my_day`, `find_blockers`, `weekly_report` compute prioritized
 | `add_task_attachment` | Attach a small file (max 3 MB, base64) to a task. |
 | `delete_task_attachment` | Remove a file from a task. |
 | `weekly_report` | Summary for the last `days` (default 7): completed, created, overdue now, hours logged, and per-member breakdown. Scope by workspaceId/projectId or all you can see. |
+| `export_report_csv` | Tasks or time entries as CSV text (personal, workspace or project; time range). |
+| `list_project_templates` | Built-in + team-saved project templates. |
+| `create_project_from_template` | New project with the template's sections and starter tasks. |
+| `save_project_as_template` | Save a project's structure as a reusable template. |
 
 ## 0. Claude mobile / claude.ai (OAuth — easiest)
 

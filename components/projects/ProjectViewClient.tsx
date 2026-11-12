@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Archive, ArchiveRestore, CalendarDays, Columns3, GanttChart, LayoutDashboard, LayoutList, Plus, Settings, SlidersHorizontal, Trash2, Users } from "lucide-react";
+import { Archive, ArchiveRestore, CalendarDays, Columns3, Copy, GanttChart, LayoutDashboard, LayoutList, Plus, Settings, SlidersHorizontal, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectBoard } from "@/components/projects/ProjectBoard";
 import { ProjectCalendar, ProjectOverview, ProjectTimeline } from "@/components/projects/ProjectExtraViews";
@@ -372,6 +372,23 @@ export function ProjectViewClient({ projectId }: { projectId: string }) {
               <SlidersHorizontal className="h-4 w-4" />
               Fields
             </Button>
+            {!readOnly && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={async () => {
+                  const name = window.prompt("Template name", `${project.name} template`);
+                  if (name === null) return;
+                  const res = await fetch(`/api/projects/${project.id}/save-as-template`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) return toast.error(data.error ?? "Could not save template");
+                  toast.success(`Saved “${data.template.name}” — pick it when creating a project`);
+                }}
+              >
+                <Copy className="h-4 w-4" />
+                Save as template
+              </Button>
+            )}
             {access.canManage && (
               <Button
                 variant="secondary"

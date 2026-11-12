@@ -1,5 +1,6 @@
 "use client";
 
+import { ExportButtons } from "@/components/reports/ExportButtons";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -132,7 +133,9 @@ export function InsightsClient() {
               : "Status, workload and throughput across the workspace."
         }
         actions={
-          !isPersonal && projects.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+          <ExportButtons type="tasks" workspaceId={isPersonal ? null : selectedWorkspaceId} projectId={projectId || null} />
+          {!isPersonal && projects.length > 0 ? (
             <div className="w-56">
               <Select
                 id="insights-project"
@@ -145,7 +148,8 @@ export function InsightsClient() {
                 options={[{ value: "", label: "All projects" }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
               />
             </div>
-          ) : null
+          ) : null}
+          </div>
         }
       />
 

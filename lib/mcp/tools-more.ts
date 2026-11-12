@@ -295,3 +295,25 @@ export async function listAuditLog(u: McpUser, a: { workspaceId?: string; catego
     throw e;
   }
 }
+
+// ---- reports export + project templates (Day 25)
+export async function exportReportCsv(u: McpUser, a: { type?: "tasks" | "time"; workspaceId?: string; projectId?: string; range?: "today" | "week" | "month" | "all" }) {
+  const { buildExport } = await import("@/lib/report-export");
+  const out = await buildExport(u.id, a.type ?? "tasks", "csv", { workspaceId: a.workspaceId, projectId: a.projectId, range: a.range ?? "all" });
+  const csv = String(out.body).replace(/^\uFEFF/, "");
+  const MAX = 200_000;
+  return { filename: out.filename, rows: out.rows, truncated: csv.length > MAX, csv: csv.slice(0, MAX) };
+}
+export async function listProjectTemplates(u: McpUser, a: { workspaceId: string }) {
+  const t = await import("@/lib/project-templates");
+  return { templates: await t.listProjectTemplates(u.id, a.workspaceId) };
+}
+export async function createProjectFromTemplate(u: McpUser, a: { workspaceId: string; templateId: string; name?: string }) {
+  const t = await import("@/lib/project-templates");
+  const r = await t.createProjectFromTemplate(u.id, a.workspaceId, a);
+  return { projectId: r.project.id, name: r.project.name, sectionsCreated: r.sectionsCreated, tasksCreated: r.tasksCreated };
+}
+export async function saveProjectAsTemplate(u: McpUser, a: { projectId: string; name?: string }) {
+  const t = await import("@/lib/project-templates");
+  return { template: await t.saveProjectAsTemplate(u.id, a.projectId, a) };
+}

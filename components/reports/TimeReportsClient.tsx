@@ -1,5 +1,6 @@
 "use client";
 
+import { ExportButtons } from "@/components/reports/ExportButtons";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -226,6 +227,7 @@ export function TimeReportsClient() {
             ? "Track your personal task hours."
             : "Track hours across your team and tasks."
         }
+        actions={<ExportButtons type="time" workspaceId={isPersonal ? null : selectedWorkspaceId} range={range} />}
       />
 
       <div className="flex flex-wrap items-end gap-3">
