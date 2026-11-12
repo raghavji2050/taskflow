@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { recordAudit } from "@/lib/audit";
 import { ProjectError } from "@/lib/project-sections";
 import { requireProjectAccess } from "@/lib/projects";
 import { canAccessTask, getWorkspaceMembership } from "@/lib/workspace";
@@ -223,6 +224,7 @@ export async function createGoal(userId: string, workspaceId: string, input: Goa
       manualProgress: input.manualProgress ?? null,
     },
   });
+  await recordAudit({ workspaceId, actorId: userId, action: "goal.created", targetType: "goal", targetId: goal.id, targetLabel: goal.title });
   return getGoal(userId, goal.id);
 }
 
@@ -249,8 +251,9 @@ export async function updateGoal(userId: string, goalId: string, input: GoalInpu
 }
 
 export async function deleteGoal(userId: string, goalId: string) {
-  await goalFor(userId, goalId, true);
+  const goal = await goalFor(userId, goalId, true);
   await prisma.goal.delete({ where: { id: goalId } });
+  await recordAudit({ workspaceId: goal.workspaceId, actorId: userId, action: "goal.deleted", targetType: "goal", targetId: goalId, targetLabel: goal.title });
   return { ok: true };
 }
 

@@ -112,6 +112,7 @@ model User {
   pinnedMessages                 Message[]                 @relation("PinnedMessages")
   documents                      Document[]
   goalsOwned                     Goal[]                    @relation("GoalOwner")
+  auditLogs                      AuditLog[]                @relation("AuditActor")
   documentVersions               DocumentVersion[]
   documentComments               DocumentComment[]
   documentAttachments            DocumentAttachment[]
@@ -415,6 +416,7 @@ model Workspace {
   conversation       Conversation?
   documents          Document[]
   goals              Goal[]
+  auditLogs          AuditLog[]
 
   @@index([archivedAt])
 }
@@ -1028,4 +1030,25 @@ model GoalLink {
   @@unique([goalId, taskId])
   @@index([projectId])
   @@index([taskId])
+}
+
+/// Workspace / account audit trail: who did what, when, from where. Kept 365 days.
+model AuditLog {
+  id          String     @id @default(cuid())
+  workspaceId String?
+  actorId     String?
+  action      String     @db.VarChar(64)
+  targetType  String     @db.VarChar(32)
+  targetId    String?    @db.VarChar(191)
+  targetLabel String?    @db.VarChar(200)
+  details     Json?
+  ip          String?    @db.VarChar(64)
+  userAgent   String?    @db.VarChar(300)
+  createdAt   DateTime   @default(now())
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor       User?      @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
 }

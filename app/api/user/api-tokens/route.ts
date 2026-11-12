@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 import { generateApiToken, MAX_ACTIVE_TOKENS } from "@/lib/api-tokens";
 import { rateLimit } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit";
 
 const createSchema = z.object({ name: z.string().trim().min(1).max(60) });
 const publicFields = { id: true, name: true, prefix: true, createdAt: true, lastUsedAt: true, revokedAt: true } as const;
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
       data: { name, tokenHash, prefix, userId: user.id },
       select: publicFields,
     });
+    await recordAudit({ actorId: user.id, action: "token.created", targetType: "token", targetId: record.id, targetLabel: name });
     // The plain token is returned exactly once.
     return NextResponse.json({ token, apiToken: record }, { status: 201 });
   } catch (error) {

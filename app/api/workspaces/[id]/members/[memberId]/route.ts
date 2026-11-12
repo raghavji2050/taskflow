@@ -6,6 +6,7 @@ import { canManageWorkspace } from "@/lib/workspace-permissions";
 import { removeWorkspaceMember } from "@/lib/workspace-members";
 import { broadcastWorkspaceUpdate } from "@/lib/realtime";
 import { z } from "zod";
+import { recordAudit } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string; memberId: string }> };
 
@@ -56,6 +57,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       notifyUserIds: [member.userId],
     });
 
+    await recordAudit({ workspaceId: id, actorId: user.id, action: "member.role_changed", targetType: "member", targetId: member.userId, targetLabel: member.user.name, details: { from: target.role, to: member.role, canInviteMembers: member.canInviteMembers } });
+
     return NextResponse.json({ member });
   } catch (error) {
     return handleApiError(error);
@@ -83,6 +86,8 @@ export async function DELETE(_request: Request, context: RouteContext) {
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
+
+    await recordAudit({ workspaceId: id, actorId: user.id, action: "member.removed", targetType: "member", targetId: memberId, targetLabel: "member" in result && result.member ? result.member.user.name : null });
 
     return NextResponse.json({ message: "Member removed" });
   } catch (error) {

@@ -9,6 +9,7 @@ import {
   DEFAULT_PROJECT_NAME,
   DEFAULT_SECTION_NAME,
 } from "@/lib/project-sections";
+import { recordAudit } from "@/lib/audit";
 
 export async function GET() {
   try {
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
     const { createWorkspaceChannelOnCreate } = await import("@/lib/conversations");
     await createWorkspaceChannelOnCreate(workspace.id, user.id);
 
+    await recordAudit({ workspaceId: workspace.id, actorId: user.id, action: "workspace.created", targetType: "workspace", targetId: workspace.id, targetLabel: workspace.name });
     return NextResponse.json({ workspace }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
