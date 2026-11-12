@@ -171,6 +171,10 @@ export function createTaskflowMcpServer(user: tools.McpUser) {
   add("delete_custom_field", "Delete a project custom field and all task values for it (needs project manage rights).", { projectId: id, fieldId: id }, P("deleteCustomField"));
   add("get_task_custom_fields", "Show the custom fields of a task's project and this task's values.", { taskId: id }, P("getTaskCustomFields"), true);
   add("set_task_field_value", "Set a task's custom field value (number, YYYY-MM-DD date, dropdown option, or text). null or empty clears it.", { taskId: id, fieldId: id, value: z.union([z.string().max(500), z.number(), z.null()]) }, P("setTaskFieldValue"));
+  // file attachments
+  add("list_task_attachments", "List files attached to a task (name, type, size, download link that needs a signed-in browser).", { taskId: id }, P("listTaskAttachments"), true);
+  add("add_task_attachment", "Attach a small file (max 3 MB) to a task from base64 content, e.g. a generated text, CSV or image.", { taskId: id, filename: z.string().trim().min(1).max(200), contentBase64: z.string().min(1).max(5_000_000), mimeType: z.string().max(100).optional() }, P("addTaskAttachment"));
+  add("delete_task_attachment", "Remove a file from a task (deletes the stored file).", { taskId: id, attachmentId: id }, P("deleteTaskAttachment"));
   // insights
   add("global_search", "Search everything you can see in one call: tasks, projects, docs and chat messages (best matches first, private projects and other workspaces excluded). Query needs at least 2 characters.", { query: z.string().trim().min(2).max(100), limit: z.number().int().min(1).max(20).optional() }, P("globalSearch"), true);
   add("get_insights", "Dashboard numbers: open/overdue/due-this-week totals, tasks by status, open+overdue per assignee, per-project open/done, and completed vs created per week. Scope: projectId, workspaceId, or neither for personal tasks. tzOffsetMinutes uses JS getTimezoneOffset sign (IST = -330).", { workspaceId: id.optional(), projectId: id.optional(), tzOffsetMinutes: z.number().int().min(-840).max(840).optional(), weeks: z.number().int().min(1).max(26).optional() }, P("getInsights"), true);

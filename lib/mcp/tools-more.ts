@@ -16,6 +16,9 @@ import * as deps from "@/lib/task-dependencies";
 import * as cf from "@/lib/custom-fields";
 import { loadInsights } from "@/lib/insights-data";
 import { globalSearch as runGlobalSearch } from "@/lib/global-search-data";
+import * as files from "@/lib/task-attachments-data";
+import { MAX_MCP_UPLOAD_BYTES } from "@/lib/task-attachment-rules";
+import { getAttachmentDownloadUrl } from "@/lib/blob-url";
 import type { CustomFieldTypeName } from "@/lib/custom-field-rules";
 
 async function taskFor(user: McpUser, taskId: string, edit: boolean) {
@@ -231,3 +234,23 @@ export async function globalSearch(u: McpUser, a: { query: string; limit?: numbe
   const strip = (hits: { id: string; title: string; subtitle?: string | null; href: string }[]) => hits.map(({ id, title, subtitle, href }) => ({ id, title, subtitle: subtitle ?? null, path: href }));
   return { query: r.query, tasks: strip(r.tasks), projects: strip(r.projects), documents: strip(r.documents), messages: strip(r.messages) };
 }
+
+// ---- file attachments
+const appBase = () => (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
+function fileOut(a: { id: string; filename: string; url: string; mimeType: string; size: number; createdAt: Date }) {
+  const path = getAttachmentDownloadUrl(a.url, a.filename);
+  return { id: a.id, filename: a.filename, mimeType: a.mimeType, size: a.size, createdAt: a.createdAt.toISOString(), downloadUrl: path.startsWith("/") ? `${appBase()}${path}` : path };
+}
+function filesWrap<T>(p: Promise<T>) {
+  return p.catch((e: unknown) => { if (e instanceof files.AttachmentError) throw new McpToolError(e.message === "Not found" ? "Task not found" : e.message); throw e; });
+}
+export async function listTaskAttachments(u: McpUser, a: { taskId: string }) {
+  return { attachments: (await filesWrap(files.listTaskAttachments(u.id, a.taskId))).map(fileOut) };
+}
+export async function addTaskAttachment(u: McpUser, a: { taskId: string; filename: string; contentBase64: string; mimeType?: string }) {
+  const data = Buffer.from(a.contentBase64.replace(/^data:[^;]+;base64,/, ""), "base64");
+  if (data.length === 0) throw new McpToolError("contentBase64 is empty or not base64");
+  if (data.length > MAX_MCP_UPLOAD_BYTES) throw new McpToolError(`MCP uploads are limited to ${MAX_MCP_UPLOAD_BYTES / (1024 * 1024)} MB; use the app for bigger files`);
+  return { attachment: fileOut(await filesWrap(files.addTaskAttachment(u.id, a.taskId, { filename: a.filename, mimeType: a.mimeType ?? "application/octet-stream", data }, MAX_MCP_UPLOAD_BYTES))) };
+}
+export const deleteTaskAttachment = (u: McpUser, a: { taskId: string; attachmentId: string }) => filesWrap(files.deleteTaskAttachment(u.id, a.taskId, a.attachmentId));
