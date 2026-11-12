@@ -11,6 +11,8 @@ const ACTION_LABELS: Record<string, string> = {
   time_manual_added: "Manual time logged",
   time_entry_edited: "Time entry edited",
   time_entry_deleted: "Time entry deleted",
+  attachment_added: "File attached",
+  attachment_removed: "File removed",
 };
 
 export function formatActivityAction(action: string) {

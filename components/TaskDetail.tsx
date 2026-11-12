@@ -18,7 +18,6 @@ import type { TaskEvent } from "@/lib/realtime";
 import { MentionInput } from "@/components/MentionInput";
 import { formatActivityAction } from "@/lib/activity-labels";
 import { formatRelativeDate } from "@/lib/utils";
-import { getAttachmentServeUrl } from "@/lib/blob-url";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -29,12 +28,12 @@ import { TimeEntryHistory } from "@/components/tasks/TimeEntryHistory";
 import { FollowTaskButton } from "@/components/tasks/FollowTaskButton";
 import { TaskDependencies } from "@/components/tasks/TaskDependencies";
 import { TaskCustomFields } from "@/components/tasks/TaskCustomFields";
+import { TaskAttachments, type TaskAttachmentItem } from "@/components/tasks/TaskAttachments";
 import { cn } from "@/lib/utils";
 
 interface Subtask { id: string; title: string; completed: boolean }
 interface Comment { id: string; body: string; user: { name: string }; createdAt: string; replies?: Comment[] }
 interface ActivityItem { id: string; action: string; details: string | null; createdAt: string }
-interface Attachment { id: string; filename: string; url: string }
 interface LinkedDoc { id: string; title: string; type: string; updatedAt: string }
 
 type CollabPanel = "work" | "time" | "comments" | "files" | "more";
@@ -98,7 +97,7 @@ export function TaskDetail({
 }: TaskDetailProps) {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachments, setAttachments] = useState<TaskAttachmentItem[]>([]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [linkedDocs, setLinkedDocs] = useState<LinkedDoc[]>([]);
   const [taskWorkspaceId, setTaskWorkspaceId] = useState<string | null>(null);
@@ -214,22 +213,6 @@ export function TaskDetail({
       setReplyBody("");
       setReplyingToId(null);
     }
-  };
-
-  const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const form = new FormData();
-    form.append("file", file);
-    const res = await fetch(`/api/tasks/${taskId}/attachments`, { method: "POST", body: form });
-    if (res.ok) {
-      toast.success("File uploaded");
-      await load();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      toast.error(data.error ?? "Upload failed");
-    }
-    e.target.value = "";
   };
 
   const setReminder = async () => {
@@ -404,30 +387,7 @@ export function TaskDetail({
     <div className="space-y-6">
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Attachments</p>
-        {attachments.length === 0 ? (
-          <p className="text-xs text-[var(--muted)]">No files attached</p>
-        ) : (
-          <div className="space-y-1.5">
-            {attachments.map((a) => (
-              <a
-                key={a.id}
-                href={getAttachmentServeUrl(a.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block truncate text-sm text-[var(--accent)] hover:underline"
-              >
-                {a.filename}
-              </a>
-            ))}
-          </div>
-        )}
-        {!readOnly && (
-          <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[var(--card-border)] px-3 py-2 text-xs text-[var(--muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]">
-            <Paperclip className="h-3.5 w-3.5" />
-            Upload file
-            <input type="file" onChange={uploadFile} className="hidden" />
-          </label>
-        )}
+        <TaskAttachments taskId={taskId} readOnly={readOnly} initial={attachments} onChanged={load} />
       </div>
 
       <div>
@@ -617,30 +577,7 @@ export function TaskDetail({
           </Section>
 
           <Section icon={Paperclip} title="Attachments">
-            {attachments.length === 0 ? (
-              <p className="text-xs text-[var(--muted)]">No files attached</p>
-            ) : (
-              <div className="space-y-1.5">
-                {attachments.map((a) => (
-                  <a
-                    key={a.id}
-                    href={getAttachmentServeUrl(a.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block truncate text-sm text-[var(--accent)] hover:underline"
-                  >
-                    {a.filename}
-                  </a>
-                ))}
-              </div>
-            )}
-            {!readOnly && (
-              <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[var(--card-border)] px-3 py-2 text-xs text-[var(--muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]">
-                <Paperclip className="h-3.5 w-3.5" />
-                Upload file
-                <input type="file" onChange={uploadFile} className="hidden" />
-              </label>
-            )}
+            <TaskAttachments taskId={taskId} readOnly={readOnly} initial={attachments} onChanged={load} />
           </Section>
 
           <Section icon={Activity} title="Activity">

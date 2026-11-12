@@ -1,55 +1,42 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser, handleApiError } from "@/lib/api";
-import { canAccessTask, canEditTask } from "@/lib/workspace";
-import { broadcastTaskEvent } from "@/lib/realtime";
-import { uploadAttachment } from "@/lib/blob-storage";
+import { getAuthenticatedUser } from "@/lib/api";
+import { isBlobStorageConfigured } from "@/lib/blob-storage";
+import { addTaskAttachment, listTaskAttachments } from "@/lib/task-attachments-data";
+import { attachmentErrorResponse } from "@/lib/task-attachments-http";
+import { MAX_SERVER_UPLOAD_BYTES, MAX_TASK_ATTACHMENT_BYTES } from "@/lib/task-attachment-rules";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+export async function GET(_request: Request, context: RouteContext) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { id } = await context.params;
+    const attachments = await listTaskAttachments(user.id, id);
+    return NextResponse.json({ attachments, directUpload: isBlobStorageConfigured(), maxBytes: MAX_TASK_ATTACHMENT_BYTES });
+  } catch (error) {
+    return attachmentErrorResponse(error);
+  }
+}
 
 export async function POST(request: Request, context: RouteContext) {
   try {
     const user = await getAuthenticatedUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const { id } = await context.params;
-    const task = await canAccessTask(user.id, id);
-    if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (!(await canEditTask(user.id, id))) {
-      return NextResponse.json({ error: "You do not have permission to edit this task" }, { status: 403 });
-    }
-
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-    if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
-
-    const saved = await uploadAttachment({
-      file,
-      filename: file.name,
-      mimeType: file.type || "application/octet-stream",
-      prefix: `tasks/${id}`,
-    });
-
-    const attachment = await prisma.attachment.create({
-      data: {
-        filename: file.name,
-        url: saved.url,
-        mimeType: file.type || "application/octet-stream",
-        size: saved.size,
-        taskId: id,
-      },
-    });
-
-    broadcastTaskEvent({
-      type: "task:updated",
-      workspaceId: task.workspaceId,
-      ownerId: task.userId,
-      actorId: user.id,
-      taskId: id,
-    });
-
+    const file = formData.get("file");
+    if (!(file instanceof File)) return NextResponse.json({ error: "No file" }, { status: 400 });
+    // On Vercel big bodies never reach us; locally (no Blob) allow the full limit.
+    const maxBytes = isBlobStorageConfigured() ? MAX_SERVER_UPLOAD_BYTES : MAX_TASK_ATTACHMENT_BYTES;
+    const attachment = await addTaskAttachment(
+      user.id,
+      id,
+      { filename: file.name, mimeType: file.type, data: Buffer.from(await file.arrayBuffer()) },
+      maxBytes
+    );
     return NextResponse.json({ attachment }, { status: 201 });
   } catch (error) {
-    return handleApiError(error);
+    return attachmentErrorResponse(error);
   }
 }
