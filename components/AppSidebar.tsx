@@ -30,6 +30,7 @@ import {
   PieChart as PieChartIcon,
   Target,
   History,
+  DatabaseBackup,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { SidebarLink, SidebarMore, SidebarProjects, type NavItem } from "@/components/SidebarSections";
@@ -107,6 +108,32 @@ const activityNavItem: NavItem = {
   icon: History,
   match: (p) => p.startsWith("/dashboard/activity"),
 };
+
+const backupsNavItem: NavItem = {
+  href: "/dashboard/backups",
+  label: "Backups",
+  icon: DatabaseBackup,
+  match: (p) => p.startsWith("/dashboard/backups"),
+};
+
+/** Backups link is only for allow-listed admins (BACKUP_ADMIN_EMAILS / ADMIN role). */
+function useCanViewBackups() {
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
+  const [allowed, setAllowed] = useState(false);
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    fetch("/api/backups/access", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { allowed: false }))
+      .then((d: { allowed?: boolean }) => alive && setAllowed(!!d.allowed))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+  return !!userId && allowed;
+}
 
 const trashNavItem: NavItem = {
   href: "/dashboard/trash",
@@ -239,7 +266,9 @@ function SidebarContent({
   const { connected } = useRealtime();
   const { totalUnread } = useChatUnread();
   const { isPersonal } = useWorkspace();
-  const moreItems = isPersonal ? [insightsNavItem, goalsNavItem, timeReportsNavItem, activityNavItem, trashNavItem] : [insightsNavItem, goalsNavItem, timeReportsNavItem, teamNavItem, activityNavItem, trashNavItem];
+  const canViewBackups = useCanViewBackups();
+  const baseMore = isPersonal ? [insightsNavItem, goalsNavItem, timeReportsNavItem, activityNavItem, trashNavItem] : [insightsNavItem, goalsNavItem, timeReportsNavItem, teamNavItem, activityNavItem, trashNavItem];
+  const moreItems = canViewBackups ? [...baseMore, backupsNavItem] : baseMore;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
