@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { WorkloadPanel } from "@/components/WorkloadPanel";
 import { AutomationRulesPanel } from "@/components/AutomationRulesPanel";
 import { Select } from "@/components/ui/Select";
+import { InviteLinksCard } from "@/components/InviteLinksCard";
+import { INVITE_ROLES, ROLE_HELP } from "@/lib/invite-link-rules";
 
 interface PendingInvitation {
   id: string;
@@ -79,6 +81,13 @@ export function WorkspacePanel() {
     currentMembership,
   } = useWorkspace();
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("MEMBER");
+  const [linksVersion, setLinksVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setLinksVersion((v) => v + 1);
+    window.addEventListener("taskflow:invite-links", bump);
+    return () => window.removeEventListener("taskflow:invite-links", bump);
+  }, []);
   const [isInviting, setIsInviting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
@@ -126,8 +135,19 @@ export function WorkspacePanel() {
   const handleInvite = async () => {
     if (!inviteEmail.trim() || !canInvite) return;
     setIsInviting(true);
-    const result = await inviteMember(inviteEmail.trim());
-    if (result.ok) {
+    const result = await inviteMember(inviteEmail.trim(), inviteRole);
+    if (result.ok && result.pendingSignup) {
+      toast.success(result.emailSent ? "No account yet — we emailed them a join link" : "No account yet — share the join link we created");
+      if (result.inviteUrl) {
+        try {
+          await navigator.clipboard.writeText(result.inviteUrl);
+        } catch {
+          /* clipboard blocked */
+        }
+      }
+      setInviteEmail("");
+      window.dispatchEvent(new Event("taskflow:invite-links"));
+    } else if (result.ok) {
       toast.success("Invitation sent — they can accept from notifications");
       setInviteEmail("");
       await fetchPending();
@@ -357,6 +377,18 @@ export function WorkspacePanel() {
               className="h-9 text-sm"
             />
           </div>
+          <div className="sm:w-32">
+            <Select
+              id="invite-role"
+              label="Role"
+              hideLabel
+              aria-label="Invite role"
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value)}
+              options={INVITE_ROLES.filter((r) => canManageWorkspace || r !== "ADMIN").map((r) => ({ value: r, label: ROLE_HELP[r].label }))}
+              className="h-9 text-sm"
+            />
+          </div>
           <Button size="sm" onClick={handleInvite} isLoading={isInviting} className="h-9 shrink-0 sm:px-4">
             Invite
           </Button>
@@ -366,6 +398,8 @@ export function WorkspacePanel() {
           Only the workspace owner can invite members. Ask the owner to grant you invite permission.
         </p>
       )}
+
+      {selectedWorkspaceId && canInvite && <InviteLinksCard key={`${selectedWorkspaceId}-${linksVersion}`} workspaceId={selectedWorkspaceId} canGrantAdmin={canManageWorkspace} />}
 
       {selectedWorkspace && canInvite && (
         <p className="mt-2.5 text-xs text-[var(--muted-foreground)]">

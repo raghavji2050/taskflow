@@ -11,8 +11,10 @@ export async function sendWorkspaceInvite(params: {
   workspaceId: string;
   inviterId: string;
   inviteeEmail: string;
+  role?: "ADMIN" | "MEMBER" | "VIEWER";
 }) {
   const { workspaceId, inviterId, inviteeEmail } = params;
+  const role = params.role ?? "MEMBER";
   const email = inviteeEmail.trim().toLowerCase();
 
   const [workspace, inviter, invitee] = await Promise.all([
@@ -51,11 +53,13 @@ export async function sendWorkspaceInvite(params: {
       inviteeId: invitee.id,
       inviterId,
       status: InvitationStatus.PENDING,
+      role,
       expiresAt,
     },
     update: {
       inviterId,
       status: InvitationStatus.PENDING,
+      role,
       expiresAt,
       createdAt: new Date(),
     },
@@ -132,7 +136,7 @@ export async function acceptInvitation(invitationId: string, userId: string) {
     ? []
     : [
         prisma.workspaceMember.create({
-          data: { workspaceId: invitation.workspaceId, userId, role: "MEMBER" },
+          data: { workspaceId: invitation.workspaceId, userId, role: invitation.role === "OWNER" ? "MEMBER" : invitation.role },
         }),
       ];
 
@@ -152,7 +156,7 @@ export async function acceptInvitation(invitationId: string, userId: string) {
   await addUserToWorkspaceChannel(invitation.workspaceId, userId);
 
   const { addUserToDefaultProject } = await import("@/lib/projects");
-  await addUserToDefaultProject(invitation.workspaceId, userId, "MEMBER");
+  await addUserToDefaultProject(invitation.workspaceId, userId, invitation.role === "OWNER" ? "MEMBER" : invitation.role);
   await recordAudit({ workspaceId: invitation.workspaceId, actorId: userId, action: "member.joined", targetType: "member", targetId: userId, targetLabel: invitee?.name ?? null });
 
   await createNotification({

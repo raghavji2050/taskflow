@@ -17,6 +17,8 @@ import * as cf from "@/lib/custom-fields";
 import { loadInsights } from "@/lib/insights-data";
 import { globalSearch as runGlobalSearch } from "@/lib/global-search-data";
 import { AuditAccessError, listAuditLog as loadAudit } from "@/lib/audit";
+import * as inviteLinks from "@/lib/invite-links";
+import { canGrantRole } from "@/lib/invite-link-rules";
 import * as files from "@/lib/task-attachments-data";
 import { MAX_MCP_UPLOAD_BYTES } from "@/lib/task-attachment-rules";
 import { getAttachmentDownloadUrl } from "@/lib/blob-url";
@@ -192,13 +194,28 @@ export async function startDirectChat(u: McpUser, a: { userId: string }) {
 }
 
 // ---- workspace
-export async function inviteMember(u: McpUser, a: { workspaceId: string; email: string }) {
+export async function inviteMember(u: McpUser, a: { workspaceId: string; email: string; role?: "ADMIN" | "MEMBER" | "VIEWER" }) {
   const m = await getInviteMembership(u.id, a.workspaceId);
   if (!m || !canInviteMembers(m, m.workspace)) throw new McpToolError("You do not have permission to invite members");
-  const r = (await sendWorkspaceInvite({ workspaceId: a.workspaceId, inviterId: u.id, inviteeEmail: a.email })) as { error?: string };
-  if (r && r.error) throw new McpToolError(r.error);
-  return { ok: true, invited: a.email };
+  const role = a.role ?? "MEMBER";
+  if (!canGrantRole(m.role, role)) throw new McpToolError("Only owners and admins can invite admins");
+  const r = (await sendWorkspaceInvite({ workspaceId: a.workspaceId, inviterId: u.id, inviteeEmail: a.email, role })) as { error?: string; status?: number };
+  if (r && r.error) {
+    if (r.status === 404 && r.error.startsWith("No account")) {
+      const sent = await inviteLinks.inviteByEmailWithoutAccount(u.id, a.workspaceId, a.email, role);
+      return { ok: true, invited: a.email, role, pendingSignup: true, emailSent: sent.emailSent, joinUrl: sent.url };
+    }
+    throw new McpToolError(r.error);
+  }
+  return { ok: true, invited: a.email, role };
 }
+function linksWrap<T>(p: Promise<T>) {
+  return p.catch((e: unknown) => { if (e instanceof inviteLinks.InviteLinkError) throw new McpToolError(e.message); throw e; });
+}
+export const createInviteLink = (u: McpUser, a: { workspaceId: string; role?: "ADMIN" | "MEMBER" | "VIEWER"; expiresInDays?: number; maxUses?: number }) =>
+  linksWrap(inviteLinks.createInviteLink(u.id, a.workspaceId, a)).then(({ link, url }) => ({ link, joinUrl: url }));
+export const listInviteLinks = (u: McpUser, a: { workspaceId: string }) => linksWrap(inviteLinks.listInviteLinks(u.id, a.workspaceId)).then((links) => ({ links }));
+export const revokeInviteLink = (u: McpUser, a: { workspaceId: string; linkId: string }) => linksWrap(inviteLinks.revokeInviteLink(u.id, a.workspaceId, a.linkId));
 
 // ---- task dependencies (blocked by / blocking)
 export async function listTaskDependencies(u: McpUser, a: { taskId: string }) {

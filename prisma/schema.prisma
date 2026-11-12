@@ -417,6 +417,7 @@ model Workspace {
   documents          Document[]
   goals              Goal[]
   auditLogs          AuditLog[]
+  inviteLinks        WorkspaceInviteLink[]
 
   @@index([archivedAt])
 }
@@ -442,6 +443,7 @@ model WorkspaceInvitation {
   inviteeId     String
   inviterId     String
   status        InvitationStatus @default(PENDING)
+  role          WorkspaceRole    @default(MEMBER)
   createdAt     DateTime         @default(now())
   expiresAt     DateTime
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1051,4 +1053,22 @@ model AuditLog {
   @@index([workspaceId, createdAt])
   @@index([actorId, createdAt])
   @@index([createdAt])
+}
+
+/// Shareable join link (or a personal email invite when `email` is set) for people without an account yet.
+model WorkspaceInviteLink {
+  id          String        @id @default(cuid())
+  workspaceId String
+  tokenHash   String        @unique @db.VarChar(64)
+  role        WorkspaceRole @default(MEMBER)
+  email       String?       @db.VarChar(191)
+  createdById String
+  maxUses     Int?
+  uses        Int           @default(0)
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, revokedAt])
 }

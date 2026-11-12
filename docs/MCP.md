@@ -81,7 +81,10 @@ Smart tools: `plan_my_day`, `find_blockers`, `weekly_report` compute prioritized
 | `mark_conversation_read` | Mark a conversation as read. |
 | `search_messages` | Search your chat messages. |
 | `start_direct_chat` | Open (or find) a direct chat with a user; returns conversationId. |
-| `invite_member` | Invite someone to a workspace by email (owner/admin only). |
+| `invite_member` | Invite someone by email with a role (ADMIN/MEMBER/VIEWER). No account yet → single-use join link emailed and returned. |
+| `create_invite_link` | Create a shareable join link with a role and 1–30 day expiry. |
+| `list_invite_links` | List active invite links (role, uses, expiry). |
+| `revoke_invite_link` | Turn off an invite link. |
 | `plan_my_day` | Your prioritized plan for today: overdue first, then due today, then high-priority / in-progress, plus your active timer. tzOffsetMinutes defaults to IST (330). |
 | `find_blockers` | Find stuck work: overdue tasks, in-progress tasks with open subtasks, and tasks with no activity for staleDays (default 7), counted per assignee. Scope by workspaceId/projectId or all you can see. |
 | `list_task_attachments` | List files on a task with size, type and a download link. |

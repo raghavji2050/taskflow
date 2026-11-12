@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, handleApiError } from "@/lib/api";
 
 import { sendWorkspaceInvite } from "@/lib/invitations";
+import { inviteByEmailWithoutAccount } from "@/lib/invite-links";
+import { canGrantRole } from "@/lib/invite-link-rules";
 
 import { getWorkspaceMembership } from "@/lib/workspace-membership";
 
@@ -18,7 +20,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 
 
-const inviteSchema = z.object({ email: z.string().email() });
+const inviteSchema = z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MEMBER", "VIEWER"]).optional() });
 
 
 
@@ -158,36 +160,23 @@ export async function POST(request: Request, context: RouteContext) {
 
 
 
-    const { email } = inviteSchema.parse(await request.json());
-
-    const result = await sendWorkspaceInvite({
-
-      workspaceId: id,
-
-      inviterId: user.id,
-
-      inviteeEmail: email,
-
-    });
-
-
-
-    if ("error" in result) {
-
-      return NextResponse.json({ error: result.error }, { status: result.status });
-
+    const { email, role = "MEMBER" } = inviteSchema.parse(await request.json());
+    if (!canGrantRole(membership.role, role)) {
+      return NextResponse.json({ error: "Only owners and admins can invite admins" }, { status: 403 });
     }
-
-
-
-    return NextResponse.json(
-
-      { message: "Invitation sent", invitation: result.invitation },
-
-      { status: result.status }
-
-    );
-
+    const result = await sendWorkspaceInvite({ workspaceId: id, inviterId: user.id, inviteeEmail: email, role });
+    if ("error" in result) {
+      // No account yet: send a single-use join link to that email instead of failing.
+      if (result.status === 404 && result.error.startsWith("No account")) {
+        const sent = await inviteByEmailWithoutAccount(user.id, id, email, role);
+        return NextResponse.json(
+          { message: sent.emailSent ? "Invite email sent" : "Invite link created", pendingSignup: true, emailSent: sent.emailSent, inviteUrl: sent.url, link: sent.link },
+          { status: 201 }
+        );
+      }
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+    return NextResponse.json({ message: "Invitation sent", invitation: result.invitation }, { status: result.status });
   } catch (error) {
 
     return handleApiError(error);

@@ -7,6 +7,8 @@ export const AUDIT_ACTIONS = {
   "workspace.settings_changed": "Changed workspace settings",
   "member.invited": "Invited member",
   "member.joined": "Joined workspace",
+  "member.invite_link_created": "Created invite link",
+  "member.invite_link_revoked": "Turned off invite link",
   "member.role_changed": "Changed member role",
   "member.removed": "Removed member",
   "project.created": "Created project",
