@@ -7,6 +7,8 @@ export const AUDIT_ACTIONS = {
   "workspace.settings_changed": "Changed workspace settings",
   "workspace.webhook_created": "Added webhook",
   "workspace.webhook_deleted": "Removed webhook",
+  "workspace.billing_checkout": "Started plan upgrade",
+  "workspace.plan_changed": "Workspace plan changed",
   "member.invited": "Invited member",
   "member.joined": "Joined workspace",
   "member.invite_link_created": "Created invite link",

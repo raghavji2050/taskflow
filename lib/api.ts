@@ -1,3 +1,5 @@
+import { BillingLimitError } from "@/lib/billing";
+import { StripeConfigError } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { auth } from "@/lib/auth";
@@ -11,7 +13,7 @@ export function jsonError(message: string, status = 400) {
 }
 
 export function handleApiError(error: unknown) {
-  if (error instanceof ProjectError || error instanceof TrashError || error instanceof CustomFieldError) {
+  if (error instanceof ProjectError || error instanceof TrashError || error instanceof CustomFieldError || error instanceof BillingLimitError || error instanceof StripeConfigError) {
     return jsonError(error.message, error.status);
   }
 
