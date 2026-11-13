@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { createPageMetadata, SITE_DESCRIPTION } from "@/lib/metadata";
+import { createPageMetadata, HOME_TITLE_ABSOLUTE, SITE_DESCRIPTION } from "@/lib/metadata";
 import {
   ArrowRight,
   BarChart3,
@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/Card";
 
 export const metadata: Metadata = createPageMetadata({
   title: "Task & team management",
+  absoluteTitle: HOME_TITLE_ABSOLUTE,
   description: SITE_DESCRIPTION,
 });
 
