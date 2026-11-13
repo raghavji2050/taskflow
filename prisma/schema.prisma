@@ -428,7 +428,19 @@ model Workspace {
 
   projectTemplates   ProjectTemplate[]
   webhooks           Webhook[]
+  /// Billing (Stripe). FREE until a verified Stripe webhook says otherwise.
+  plan                 WorkspacePlan @default(FREE)
+  planStatus           String?       @db.VarChar(32)
+  planPeriodEnd        DateTime?
+  stripeCustomerId     String?       @unique @db.VarChar(255)
+  stripeSubscriptionId String?       @unique @db.VarChar(255)
   @@index([archivedAt])
+}
+
+enum WorkspacePlan {
+  FREE
+  PRO
+  BUSINESS
 }
 
 model AutomationRule {

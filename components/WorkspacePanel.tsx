@@ -13,6 +13,7 @@ import { AutomationRulesPanel } from "@/components/AutomationRulesPanel";
 import { Select } from "@/components/ui/Select";
 import { InviteLinksCard } from "@/components/InviteLinksCard";
 import { WebhooksCard } from "@/components/WebhooksCard";
+import { BillingCard } from "@/components/BillingCard";
 import { INVITE_ROLES, ROLE_HELP } from "@/lib/invite-link-rules";
 
 interface PendingInvitation {
@@ -400,6 +401,7 @@ export function WorkspacePanel() {
         </p>
       )}
 
+      {selectedWorkspaceId && <BillingCard workspaceId={selectedWorkspaceId} />}
       {selectedWorkspaceId && canManageWorkspace && <WebhooksCard workspaceId={selectedWorkspaceId} />}
       {selectedWorkspaceId && canInvite && <InviteLinksCard key={`${selectedWorkspaceId}-${linksVersion}`} workspaceId={selectedWorkspaceId} canGrantAdmin={canManageWorkspace} />}
 

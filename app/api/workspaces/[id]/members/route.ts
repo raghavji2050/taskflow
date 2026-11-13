@@ -1,3 +1,4 @@
+import { assertWithinPlan } from "@/lib/billing";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -164,6 +165,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (!canGrantRole(membership.role, role)) {
       return NextResponse.json({ error: "Only owners and admins can invite admins" }, { status: 403 });
     }
+    await assertWithinPlan(id, "members");
     const result = await sendWorkspaceInvite({ workspaceId: id, inviterId: user.id, inviteeEmail: email, role });
     if ("error" in result) {
       // No account yet: send a single-use join link to that email instead of failing.

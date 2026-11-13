@@ -53,6 +53,10 @@ jobs:
       # Throwaway values for the backup-vault e2e (local folder storage, no Blob token in CI).
       TASKFLOW_BACKUP_TOKEN: ci-backup-token-0123456789abcdef0123456789abcdef
       BACKUP_ADMIN_EMAILS: backup-admin-e2e@example.com,backup-admin-mobile@example.com
+      # Throwaway Stripe webhook values for the billing e2e (no secret key, so no real Stripe calls).
+      STRIPE_WEBHOOK_SECRET: whsec_ci_billing_e2e
+      STRIPE_PRICE_PRO: price_ci_pro
+      STRIPE_PRICE_BUSINESS: price_ci_business
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -63,7 +67,7 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npx playwright install --with-deps chromium
       - run: npm run build
-      - run: npx playwright test e2e/auth.spec.ts e2e/core-flows.spec.ts e2e/session-revocation.spec.ts e2e/mobile.spec.ts e2e/timezone.spec.ts e2e/messages.mobile.spec.ts e2e/simpler-navigation.spec.ts e2e/simpler-navigation.mobile.spec.ts e2e/project-sections.spec.ts e2e/project-sections.mobile.spec.ts e2e/project-views.spec.ts e2e/project-views.mobile.spec.ts e2e/task-followers.spec.ts e2e/task-dependencies.spec.ts e2e/ready-to-start.spec.ts e2e/email-notifications.spec.ts e2e/timeline-dependencies.spec.ts e2e/custom-fields.spec.ts e2e/insights.spec.ts e2e/global-search.spec.ts e2e/task-attachments.spec.ts e2e/audit-log.spec.ts e2e/goals.spec.ts e2e/invite-links.spec.ts e2e/performance.spec.ts e2e/accessibility.spec.ts e2e/onboarding.spec.ts e2e/reports-export.spec.ts e2e/public-api.spec.ts e2e/backups.spec.ts e2e/backups.mobile.spec.ts
+      - run: npx playwright test e2e/auth.spec.ts e2e/core-flows.spec.ts e2e/session-revocation.spec.ts e2e/mobile.spec.ts e2e/timezone.spec.ts e2e/messages.mobile.spec.ts e2e/simpler-navigation.spec.ts e2e/simpler-navigation.mobile.spec.ts e2e/project-sections.spec.ts e2e/project-sections.mobile.spec.ts e2e/project-views.spec.ts e2e/project-views.mobile.spec.ts e2e/task-followers.spec.ts e2e/task-dependencies.spec.ts e2e/ready-to-start.spec.ts e2e/email-notifications.spec.ts e2e/timeline-dependencies.spec.ts e2e/custom-fields.spec.ts e2e/insights.spec.ts e2e/global-search.spec.ts e2e/task-attachments.spec.ts e2e/audit-log.spec.ts e2e/goals.spec.ts e2e/invite-links.spec.ts e2e/performance.spec.ts e2e/accessibility.spec.ts e2e/onboarding.spec.ts e2e/reports-export.spec.ts e2e/public-api.spec.ts e2e/backups.spec.ts e2e/backups.mobile.spec.ts e2e/billing.spec.ts
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

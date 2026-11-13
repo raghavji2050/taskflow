@@ -1,3 +1,4 @@
+import { assertWithinPlan } from "@/lib/billing";
 import type { ProjectRole, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { broadcastTaskEvent } from "@/lib/realtime";
@@ -292,6 +293,7 @@ export async function createProject(input: {
   if (!canCreateProject(membership.role)) {
     throw new ProjectError("Viewers cannot create projects", 403);
   }
+  await assertWithinPlan(input.workspaceId, "projects");
 
   const project = await prisma.project.create({
     data: {
