@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { FAQ, pricingCards } from "@/lib/marketing";
 
 export const metadata: Metadata = createPageMetadata({
   title: "Task & team management",
@@ -83,8 +84,10 @@ export default async function HomePage() {
             </h1>
             <p className="mt-6 text-lg leading-relaxed text-[var(--muted)]">
               Plan, track, and deliver work — from personal to-do lists to full team projects.
-              Built for teams who want Asana-level clarity without the complexity.
+              Built for small teams and agencies who want clarity without the complexity, with
+              simple INR pricing.
             </p>
+            <p className="mt-3 text-sm text-[var(--muted)]">Free for up to 5 members · No card required</p>
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link href="/register">
                 <Button size="lg" variant="primary" className="min-w-[160px]">
@@ -149,6 +152,59 @@ export default async function HomePage() {
         </div>
       </section>
 
+
+      {/* Pricing */}
+      <section id="pricing" aria-labelledby="pricing-heading" className="border-t border-[var(--border)]">
+        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mb-12 text-center">
+            <h2 id="pricing-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">Simple pricing</h2>
+            <p className="mt-3 text-[var(--muted)]">Start free. Upgrade a workspace only when your team grows.</p>
+          </div>
+          <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
+            {pricingCards().map((plan) => (
+              <div key={plan.id} data-testid={`pricing-${plan.id.toLowerCase()}`} className="flex">
+              <Card className={`flex w-full flex-col p-6 ${plan.highlighted ? "ring-2 ring-[var(--accent)]" : ""}`}>
+                <h3 className="text-lg font-semibold text-[var(--foreground)]">{plan.name}</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">{plan.tagline}</p>
+                <p className="mt-4">
+                  <span className="text-3xl font-bold text-[var(--foreground)]">{plan.price}</span>{" "}
+                  <span className="text-sm text-[var(--muted)]">{plan.period}</span>
+                </p>
+                <ul className="mt-5 flex-1 space-y-2 text-sm">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent)]" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href="/register" className="mt-6 block">
+                  <Button variant={plan.highlighted ? "primary" : "secondary"} className="w-full">{plan.cta}</Button>
+                </Link>
+              </Card>
+              </div>
+            ))}
+          </div>
+          <p className="mt-6 text-center text-xs text-[var(--muted)]">Prices in INR. Paid plans are billed monthly through Stripe; cancel anytime.</p>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section aria-labelledby="faq-heading" className="mx-auto max-w-3xl px-4 pb-20 sm:px-6 lg:px-8">
+        <h2 id="faq-heading" className="mb-6 text-center text-2xl font-bold tracking-tight">Questions</h2>
+        <div className="space-y-3">
+          {FAQ.map((item) => (
+            <details key={item.q} className="surface-panel rounded-xl p-4">
+              <summary className="cursor-pointer font-medium text-[var(--foreground)]">{item.q}</summary>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{item.a}</p>
+            </details>
+          ))}
+        </div>
+        <p className="mt-6 text-center text-sm text-[var(--muted)]">
+          More answers in the <Link href="/help" className="text-[var(--accent)] underline">help center</Link>.
+        </p>
+      </section>
+
       {/* CTA */}
       <section className="surface-panel border-t border-[var(--border)] rounded-none">
         <div className="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 lg:px-8">
@@ -159,6 +215,18 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+
+      <footer className="border-t border-[var(--border)]">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-8 text-sm text-[var(--muted)] sm:flex-row sm:px-6 lg:px-8">
+          <span>© {new Date().getFullYear()} TaskFlow</span>
+          <nav aria-label="Footer" className="flex gap-5">
+            <a href="#pricing" className="hover:text-[var(--foreground)]">Pricing</a>
+            <Link href="/help" className="hover:text-[var(--foreground)]">Help center</Link>
+            <Link href="/docs" className="hover:text-[var(--foreground)]">API docs</Link>
+            <Link href="/login" className="hover:text-[var(--foreground)]">Sign in</Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }
