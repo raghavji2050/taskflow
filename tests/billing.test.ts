@@ -3,6 +3,7 @@ import {
   billingEnv, billingUpdateFromEvent, checkoutAvailable, effectivePlan, limitMessage, parsePlan, planForPrice,
   signStripePayload, usageSummary, verifyStripeSignature, wouldExceed,
 } from "@/lib/billing-plans";
+import { checkoutSessionParams } from "@/lib/stripe";
 
 const env = billingEnv({ STRIPE_SECRET_KEY: "sk_test_x", STRIPE_WEBHOOK_SECRET: "whsec_t", STRIPE_PRICE_PRO: "price_pro", STRIPE_PRICE_BUSINESS: "price_biz" });
 
@@ -74,5 +75,31 @@ describe("stripe event mapping", () => {
   it("ignores unrelated events", () => {
     expect(billingUpdateFromEvent({ type: "invoice.paid", data: { object: { id: "in_1" } } }, env)).toBeNull();
     expect(billingUpdateFromEvent({}, env)).toBeNull();
+  });
+});
+
+describe("checkout session params", () => {
+  const base = { workspaceId: "ws1", plan: "PRO", priceId: "price_pro", origin: "https://taskflow-vault.vercel.app" };
+
+  it("always requires a billing address and uses customer_email for new customers", () => {
+    const p = checkoutSessionParams({ ...base, email: "owner@example.com" });
+    expect(p.billing_address_collection).toBe("required");
+    expect(p.customer).toBeUndefined();
+    expect(p.customer_email).toBe("owner@example.com");
+    expect(p["customer_update[address]"]).toBeUndefined();
+    expect(p["customer_update[name]"]).toBeUndefined();
+    expect(p.mode).toBe("subscription");
+    expect(p["line_items[0][price]"]).toBe("price_pro");
+    expect(p.client_reference_id).toBe("ws1");
+    expect(p.success_url).toContain("billing=success&workspace=ws1");
+  });
+
+  it("saves address and name onto an existing Stripe customer", () => {
+    const p = checkoutSessionParams({ ...base, customerId: "cus_1", email: "owner@example.com" });
+    expect(p.billing_address_collection).toBe("required");
+    expect(p.customer).toBe("cus_1");
+    expect(p.customer_email).toBeUndefined();
+    expect(p["customer_update[address]"]).toBe("auto");
+    expect(p["customer_update[name]"]).toBe("auto");
   });
 });
