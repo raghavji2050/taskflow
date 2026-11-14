@@ -10,7 +10,14 @@
 
 type Header = { key: string; value: string };
 
-export function buildContentSecurityPolicy({ dev = false }: { dev?: boolean } = {}): string {
+type CspOptions = {
+  dev?: boolean;
+  /** Vercel preview deployments inject the Vercel Toolbar from vercel.live. */
+  vercelToolbar?: boolean;
+};
+
+export function buildContentSecurityPolicy({ dev = false, vercelToolbar = false }: CspOptions = {}): string {
+  const toolbar = (...values: string[]) => (vercelToolbar ? values : []);
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
     "base-uri": ["'self'"],
@@ -24,13 +31,19 @@ export function buildContentSecurityPolicy({ dev = false }: { dev?: boolean } = 
       "https://va.vercel-scripts.com",
       // Firebase compat scripts imported by the FCM service worker.
       "https://www.gstatic.com",
+      ...toolbar("https://vercel.live"),
     ],
-    "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-    "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
+    "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", ...toolbar("https://vercel.live")],
+    "font-src": [
+      "'self'",
+      "data:",
+      "https://fonts.gstatic.com",
+      ...toolbar("https://vercel.live", "https://assets.vercel.com"),
+    ],
     // Avatars, link-preview images, GIFs, emoji sprites and Blob attachments.
     "img-src": ["'self'", "data:", "blob:", "https:"],
     "media-src": ["'self'", "blob:", "https://*.blob.vercel-storage.com"],
-    "frame-src": ["'self'", "blob:", "https://*.blob.vercel-storage.com"],
+    "frame-src": ["'self'", "blob:", "https://*.blob.vercel-storage.com", ...toolbar("https://vercel.live")],
     "worker-src": ["'self'", "blob:"],
     "manifest-src": ["'self'"],
     "connect-src": [
@@ -48,6 +61,7 @@ export function buildContentSecurityPolicy({ dev = false }: { dev?: boolean } = 
       // Vercel Analytics / Speed Insights.
       "https://vitals.vercel-insights.com",
       "https://va.vercel-scripts.com",
+      ...toolbar("https://vercel.live"),
       ...(dev ? ["ws:", "wss:"] : []),
     ],
   };
@@ -57,9 +71,9 @@ export function buildContentSecurityPolicy({ dev = false }: { dev?: boolean } = 
     .join("; ");
 }
 
-export function buildSecurityHeaders({ dev = false }: { dev?: boolean } = {}): Header[] {
+export function buildSecurityHeaders(options: CspOptions = {}): Header[] {
   return [
-    { key: "Content-Security-Policy", value: buildContentSecurityPolicy({ dev }) },
+    { key: "Content-Security-Policy", value: buildContentSecurityPolicy(options) },
     { key: "X-Frame-Options", value: "DENY" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -71,11 +85,11 @@ export function buildSecurityHeaders({ dev = false }: { dev?: boolean } = {}): H
  * Attachment previews (PDF iframes) load same-origin files from the blob proxy
  * and local uploads, so those paths may be framed by the app itself only.
  */
-export function buildSameOriginFrameHeaders({ dev = false }: { dev?: boolean } = {}): Header[] {
+export function buildSameOriginFrameHeaders(options: CspOptions = {}): Header[] {
   return [
     {
       key: "Content-Security-Policy",
-      value: buildContentSecurityPolicy({ dev }).replace(
+      value: buildContentSecurityPolicy(options).replace(
         "frame-ancestors 'none'",
         "frame-ancestors 'self'"
       ),

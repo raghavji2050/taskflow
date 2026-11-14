@@ -34,6 +34,13 @@ describe("security headers", () => {
     expect(buildContentSecurityPolicy({ dev: true })).toContain("'unsafe-eval'");
   });
 
+  it("allows the Vercel Toolbar only when asked (previews)", () => {
+    expect(buildContentSecurityPolicy()).not.toContain("vercel.live");
+    const csp = buildContentSecurityPolicy({ vercelToolbar: true });
+    expect(csp).toMatch(/script-src [^;]*https:\/\/vercel\.live/);
+    expect(csp).toMatch(/frame-src [^;]*https:\/\/vercel\.live/);
+  });
+
   it("lets the app frame its own attachment previews", () => {
     const h = toMap(buildSameOriginFrameHeaders());
     expect(h["X-Frame-Options"]).toBe("SAMEORIGIN");
