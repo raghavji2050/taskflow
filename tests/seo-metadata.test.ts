@@ -67,14 +67,17 @@ describe("robots.txt", () => {
 });
 
 describe("sitemap.xml", () => {
-  it("lists only the public home page", () => {
+  it("lists the public home page and help center", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://taskflow-vault.vercel.app");
     const entries = sitemap();
-    expect(entries).toHaveLength(1);
+    expect(entries).toHaveLength(2);
     expect(entries[0].url).toBe("https://taskflow-vault.vercel.app/");
     expect(entries[0].changeFrequency).toBe("weekly");
     expect(entries[0].priority).toBe(1);
     expect(entries[0].lastModified).toBeInstanceOf(Date);
+    expect(entries[1].url).toBe("https://taskflow-vault.vercel.app/help");
+    expect(entries[1].changeFrequency).toBe("monthly");
+    expect(entries[1].priority).toBe(0.7);
     const urls = entries.map((e) => e.url);
     expect(urls.some((url) => url.includes("/register"))).toBe(false);
     expect(urls.some((url) => url.includes("/login"))).toBe(false);
