@@ -127,8 +127,24 @@ export function splitMessageBody(
 
   return parts;
 }
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+export function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+}
+
+/**
+ * Comment body → HTML for dangerouslySetInnerHTML. The body is HTML-escaped
+ * first (comments are plain text), then @mentions are highlighted.
+ */
 export function renderCommentBody(body: string) {
-  return body.replace(
+  return escapeHtml(body).replace(
     /@([A-Za-z][A-Za-z0-9 _.-]{0,48})/g,
     '<span class="font-semibold text-indigo-500">@$1</span>'
   );
