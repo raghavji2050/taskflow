@@ -27,9 +27,11 @@ async function stripePost<T>(path: string, params: Record<string, string | undef
   return data;
 }
 
-export async function createCheckoutSession(opts: { workspaceId: string; plan: string; priceId: string; customerId?: string | null; email?: string | null; origin: string }) {
+/** Form body for POST /v1/checkout/sessions. Pure so unit tests can assert INR address collection. */
+export function checkoutSessionParams(opts: { workspaceId: string; plan: string; priceId: string; customerId?: string | null; email?: string | null; origin: string }): Record<string, string | undefined> {
   const back = `${opts.origin}/dashboard/team?billing=`;
-  return stripePost<{ id: string; url: string }>("/checkout/sessions", {
+  const hasCustomer = Boolean(opts.customerId);
+  return {
     mode: "subscription",
     "line_items[0][price]": opts.priceId,
     "line_items[0][quantity]": "1",
@@ -38,12 +40,21 @@ export async function createCheckoutSession(opts: { workspaceId: string; plan: s
     "metadata[plan]": opts.plan,
     "subscription_data[metadata][workspaceId]": opts.workspaceId,
     "subscription_data[metadata][plan]": opts.plan,
-    customer: opts.customerId ?? undefined,
-    customer_email: opts.customerId ? undefined : opts.email ?? undefined,
+    customer: hasCustomer ? opts.customerId! : undefined,
+    customer_email: hasCustomer ? undefined : opts.email ?? undefined,
+    // INR charges on an Indian Stripe account need a name + address (RBI).
+    billing_address_collection: "required",
+    ...(hasCustomer
+      ? { "customer_update[address]": "auto", "customer_update[name]": "auto" }
+      : {}),
     allow_promotion_codes: "true",
     success_url: `${back}success&workspace=${opts.workspaceId}`,
     cancel_url: `${back}cancelled&workspace=${opts.workspaceId}`,
-  });
+  };
+}
+
+export async function createCheckoutSession(opts: { workspaceId: string; plan: string; priceId: string; customerId?: string | null; email?: string | null; origin: string }) {
+  return stripePost<{ id: string; url: string }>("/checkout/sessions", checkoutSessionParams(opts));
 }
 
 export async function createPortalSession(customerId: string, origin: string) {
