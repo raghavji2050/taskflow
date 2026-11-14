@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { ConditionalNavbar } from "@/components/ConditionalNavbar";
 import { Providers } from "@/components/providers";
 import { rootMetadata } from "@/lib/metadata";
@@ -48,6 +49,7 @@ export default function RootLayout({
           <ConditionalNavbar />
           <main className="flex-1">{children}</main>
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
