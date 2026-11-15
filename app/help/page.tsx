@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 export const metadata: Metadata = createPageMetadata({
   title: "Help center",
   description: "Guides for getting started with TaskFlow: workspaces, team invites, views, billing, API and security.",
+  path: "/help",
 });
 
 export default function HelpPage() {
