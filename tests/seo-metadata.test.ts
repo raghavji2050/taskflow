@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  absolutePageUrl,
+  appPageMetadata,
   createPageMetadata,
   getAppUrl,
   getSiteVerification,
@@ -87,11 +89,13 @@ describe("sitemap.xml", () => {
 
 describe("home metadata", () => {
   it("uses an absolute branded title and keeps the site description", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://taskflow-vault.vercel.app");
     const metadata = createPageMetadata({
       title: "Task & team management",
       absoluteTitle: HOME_TITLE_ABSOLUTE,
       description:
         "Plan work, collaborate with your team, and stay on top of tasks with list, board, calendar, timeline, chat, and docs in one place.",
+      path: "/",
     });
     expect(metadata.title).toEqual({ absolute: HOME_TITLE_ABSOLUTE });
     expect(HOME_TITLE_ABSOLUTE).toBe(
@@ -101,6 +105,55 @@ describe("home metadata", () => {
     expect(metadata.robots).toEqual({ index: true, follow: true });
     expect(metadata.openGraph?.title).toBe(HOME_TITLE_ABSOLUTE);
     expect(metadata.twitter?.title).toBe(HOME_TITLE_ABSOLUTE);
+    expect(metadata.alternates?.canonical).toBe("https://taskflow-vault.vercel.app/");
+    expect(metadata.openGraph?.url).toBe("https://taskflow-vault.vercel.app/");
+  });
+});
+
+describe("help metadata", () => {
+  it("uses a self-canonical and og:url pointing at /help, not the homepage", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://taskflow-vault.vercel.app");
+    const description =
+      "Guides for getting started with TaskFlow: workspaces, team invites, views, billing, API and security.";
+    const metadata = createPageMetadata({
+      title: "Help center",
+      description,
+      path: "/help",
+    });
+    expect(metadata.title).toBe("Help center");
+    expect(metadata.description).toBe(description);
+    expect(metadata.robots).toEqual({ index: true, follow: true });
+    expect(metadata.openGraph?.title).toBe("Help center · TaskFlow");
+    expect(metadata.openGraph?.description).toBe(description);
+    expect(metadata.alternates?.canonical).toBe("https://taskflow-vault.vercel.app/help");
+    expect(metadata.openGraph?.url).toBe("https://taskflow-vault.vercel.app/help");
+    expect(metadata.openGraph?.url).not.toBe("https://taskflow-vault.vercel.app/");
+    expect(metadata.openGraph?.url).not.toBe("https://taskflow-vault.vercel.app");
+  });
+});
+
+describe("absolutePageUrl", () => {
+  it("builds home and help URLs without a trailing slash on inner paths", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://taskflow-vault.vercel.app");
+    expect(absolutePageUrl("/")).toBe("https://taskflow-vault.vercel.app/");
+    expect(absolutePageUrl("/help")).toBe("https://taskflow-vault.vercel.app/help");
+    expect(absolutePageUrl("help")).toBe("https://taskflow-vault.vercel.app/help");
+  });
+});
+
+describe("login and register noindex", () => {
+  it("keeps robots noindex and does not add a canonical", () => {
+    const login = appPageMetadata("Sign in", "Sign in to your TaskFlow account.");
+    const register = appPageMetadata(
+      "Create account",
+      "Register for a new TaskFlow account.",
+    );
+    expect(login.robots).toEqual({ index: false, follow: false });
+    expect(register.robots).toEqual({ index: false, follow: false });
+    expect(login.alternates?.canonical).toBeUndefined();
+    expect(register.alternates?.canonical).toBeUndefined();
+    expect(login.description).toBe("Sign in to your TaskFlow account.");
+    expect(register.description).toBe("Register for a new TaskFlow account.");
   });
 });
 

@@ -20,6 +20,7 @@ export const metadata: Metadata = createPageMetadata({
   title: "Task & team management",
   absoluteTitle: HOME_TITLE_ABSOLUTE,
   description: SITE_DESCRIPTION,
+  path: "/",
 });
 
 const features = [

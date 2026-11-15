@@ -38,15 +38,27 @@ type PageMetadataOptions = {
   noIndex?: boolean;
   /** When set, used as the document title without the "%s · TaskFlow" template. */
   absoluteTitle?: string;
+  /** Public path for the self-canonical and openGraph.url, e.g. "/" or "/help". */
+  path?: string;
 };
+
+/** Absolute URL for a public page, used as canonical and og:url. */
+export function absolutePageUrl(path: string): string {
+  const origin = getAppUrl();
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  if (normalized === "/") return `${origin}/`;
+  return `${origin}${normalized.replace(/\/$/, "")}`;
+}
 
 export function createPageMetadata({
   title,
   description = SITE_DESCRIPTION,
   noIndex = false,
   absoluteTitle,
+  path,
 }: PageMetadataOptions): Metadata {
   const fullTitle = absoluteTitle ?? `${title} · ${SITE_NAME}`;
+  const pageUrl = path !== undefined ? absolutePageUrl(path) : getAppUrl();
 
   return {
     title: absoluteTitle ? { absolute: absoluteTitle } : title,
@@ -54,12 +66,13 @@ export function createPageMetadata({
     ...(noIndex
       ? { robots: { index: false, follow: false } }
       : { robots: { index: true, follow: true } }),
+    ...(path !== undefined ? { alternates: { canonical: pageUrl } } : {}),
     openGraph: {
       title: fullTitle,
       description,
       siteName: SITE_NAME,
       type: "website",
-      url: getAppUrl(),
+      url: pageUrl,
     },
     twitter: {
       card: "summary_large_image",
