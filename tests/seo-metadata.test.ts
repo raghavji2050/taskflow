@@ -6,6 +6,7 @@ import {
   getAppUrl,
   getSiteVerification,
   HOME_TITLE_ABSOLUTE,
+  OG_IMAGE,
   PRODUCTION_APP_URL,
   ROBOTS_DISALLOW,
 } from "@/lib/metadata";
@@ -107,6 +108,14 @@ describe("home metadata", () => {
     expect(metadata.twitter?.title).toBe(HOME_TITLE_ABSOLUTE);
     expect(metadata.alternates?.canonical).toBe("https://taskflow-vault.vercel.app/");
     expect(metadata.openGraph?.url).toBe("https://taskflow-vault.vercel.app/");
+    expect(metadata.openGraph?.images).toEqual([OG_IMAGE]);
+    expect(metadata.twitter?.images).toEqual([OG_IMAGE]);
+    expect(OG_IMAGE).toEqual({
+      url: "/og.png",
+      width: 1200,
+      height: 630,
+      alt: HOME_TITLE_ABSOLUTE,
+    });
   });
 });
 
@@ -129,6 +138,9 @@ describe("help metadata", () => {
     expect(metadata.openGraph?.url).toBe("https://taskflow-vault.vercel.app/help");
     expect(metadata.openGraph?.url).not.toBe("https://taskflow-vault.vercel.app/");
     expect(metadata.openGraph?.url).not.toBe("https://taskflow-vault.vercel.app");
+    expect(metadata.alternates?.canonical).not.toBe("https://taskflow-vault.vercel.app/");
+    expect(metadata.openGraph?.images).toEqual([OG_IMAGE]);
+    expect(metadata.twitter?.images).toEqual([OG_IMAGE]);
   });
 });
 

@@ -11,6 +11,14 @@ export const HOME_TITLE_ABSOLUTE =
 
 export const PRODUCTION_APP_URL = "https://taskflow-vault.vercel.app";
 
+/** Default social preview. Relative path is resolved against metadataBase. */
+export const OG_IMAGE = {
+  url: "/og.png",
+  width: 1200,
+  height: 630,
+  alt: HOME_TITLE_ABSOLUTE,
+} as const;
+
 const LOCAL_APP_URL = "http://localhost:3000";
 
 /**
@@ -73,11 +81,13 @@ export function createPageMetadata({
       siteName: SITE_NAME,
       type: "website",
       url: pageUrl,
+      images: [OG_IMAGE],
     },
     twitter: {
       card: "summary_large_image",
       title: fullTitle,
       description,
+      images: [OG_IMAGE],
     },
   };
 }
@@ -121,11 +131,13 @@ export const rootMetadata: Metadata = {
     siteName: SITE_NAME,
     type: "website",
     url: appUrl,
+    images: [OG_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_NAME,
     description: SITE_DESCRIPTION,
+    images: [OG_IMAGE],
   },
   robots: { index: true, follow: true },
   verification: getSiteVerification(),
