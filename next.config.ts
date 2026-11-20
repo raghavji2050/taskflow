@@ -18,6 +18,13 @@ const nextConfig: NextConfig = {
       { source: "/uploads/:path*", headers: buildSameOriginFrameHeaders(cspOptions) },
     ];
   },
+  async redirects() {
+    return [
+      // Common alias; query strings (e.g. ?next=) are preserved by Next.
+      { source: "/signup", destination: "/register", permanent: true },
+      { source: "/sign-up", destination: "/register", permanent: true },
+    ];
+  },
   async rewrites() {
     return [
       // Standard FCM SW path (browsers + Firebase expect this at site root).
