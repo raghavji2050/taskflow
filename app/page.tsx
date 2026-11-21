@@ -223,6 +223,7 @@ export default async function HomePage() {
           <nav aria-label="Footer" className="flex gap-5">
             <a href="#pricing" className="hover:text-[var(--foreground)]">Pricing</a>
             <Link href="/help" className="hover:text-[var(--foreground)]">Help center</Link>
+            <Link href="/compare/trello" className="hover:text-[var(--foreground)]">Compare</Link>
             <Link href="/docs" className="hover:text-[var(--foreground)]">API docs</Link>
             <Link href="/login" className="hover:text-[var(--foreground)]">Sign in</Link>
           </nav>
