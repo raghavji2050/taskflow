@@ -46,6 +46,7 @@ export default function HelpPage() {
         <Link href="/compare/trello" className="text-[var(--accent)] underline">TaskFlow vs Trello</Link>
         <Link href="/compare/asana" className="text-[var(--accent)] underline">vs Asana</Link>
         <Link href="/compare/todoist" className="text-[var(--accent)] underline">vs Todoist</Link>
+        <Link href="/templates" className="text-[var(--accent)] underline">Templates</Link>
         <Link href="/" className="text-[var(--accent)] underline">Home</Link>
       </div>
     </div>
