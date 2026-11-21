@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getAppUrl } from "@/lib/metadata";
+import { TEMPLATE_GUIDES } from "@/lib/templates";
 
 /**
  * Public indexable routes only.
@@ -23,6 +24,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     ...["trello", "asana", "todoist"].map((slug) => ({
       url: `${origin}/compare/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    })),
+    {
+      url: `${origin}/templates`,
+      lastModified: new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    },
+    ...TEMPLATE_GUIDES.map((g) => ({
+      url: `${origin}/templates/${g.slug}`,
       lastModified: new Date(),
       changeFrequency: "monthly" as const,
       priority: 0.6,
