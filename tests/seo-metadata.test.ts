@@ -70,10 +70,10 @@ describe("robots.txt", () => {
 });
 
 describe("sitemap.xml", () => {
-  it("lists the public home page and help center", () => {
+  it("lists the public home page, help center and compare pages", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://taskflow-vault.vercel.app");
     const entries = sitemap();
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(5);
     expect(entries[0].url).toBe("https://taskflow-vault.vercel.app/");
     expect(entries[0].changeFrequency).toBe("weekly");
     expect(entries[0].priority).toBe(1);
@@ -82,6 +82,9 @@ describe("sitemap.xml", () => {
     expect(entries[1].changeFrequency).toBe("monthly");
     expect(entries[1].priority).toBe(0.7);
     const urls = entries.map((e) => e.url);
+    for (const slug of ["trello", "asana", "todoist"]) {
+      expect(urls).toContain(`https://taskflow-vault.vercel.app/compare/${slug}`);
+    }
     expect(urls.some((url) => url.includes("/register"))).toBe(false);
     expect(urls.some((url) => url.includes("/login"))).toBe(false);
     expect(urls.some((url) => url.includes("/docs"))).toBe(false);

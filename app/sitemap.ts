@@ -21,5 +21,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.7,
     },
+    ...["trello", "asana", "todoist"].map((slug) => ({
+      url: `${origin}/compare/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    })),
   ];
 }

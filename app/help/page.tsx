@@ -43,6 +43,9 @@ export default function HelpPage() {
       <div className="mt-10 flex flex-wrap gap-4 text-sm">
         <Link href="/register" className="font-medium text-[var(--accent)] underline">Create a free account</Link>
         <Link href="/docs" className="text-[var(--accent)] underline">API reference</Link>
+        <Link href="/compare/trello" className="text-[var(--accent)] underline">TaskFlow vs Trello</Link>
+        <Link href="/compare/asana" className="text-[var(--accent)] underline">vs Asana</Link>
+        <Link href="/compare/todoist" className="text-[var(--accent)] underline">vs Todoist</Link>
         <Link href="/" className="text-[var(--accent)] underline">Home</Link>
       </div>
     </div>
