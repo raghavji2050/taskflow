@@ -116,8 +116,40 @@ export type DigestEmailOptions = {
   mentions?: number;
   /** Up to ~5 overdue / ready titles to preview */
   taskTitles?: string[];
+  /** Active PM: "your top 3 today" (overdue first, then due soon, then priority). */
+  topTasks?: { title: string; reason: string }[];
+  /** Active PM: assigned tasks with no update for a few days. */
+  stale?: number;
   myWorkUrl?: string;
 };
+
+const STALE_DAYS_LABEL = 3;
+
+export type WeeklySummaryEmailOptions = {
+  name: string;
+  workspaceName: string;
+  done: number;
+  overdue: number;
+  stale: number;
+  myWorkUrl?: string;
+};
+
+/** Active PM weekly summary (Pro/Business workspaces, Mondays). */
+export function weeklySummaryEmail(opts: WeeklySummaryEmailOptions) {
+  const myWorkUrl = opts.myWorkUrl ?? `${appBaseUrl()}/dashboard/my-work`;
+  return emailLayout(
+    "Your TaskFlow Weekly Summary",
+    `<p>Hi ${escapeHtml(opts.name)},</p>
+      <p>Last 7 days in <strong>${escapeHtml(opts.workspaceName)}</strong>:</p>
+      <ul style="margin:0;padding-left:20px">
+        <li><strong>${opts.done}</strong> done</li>
+        <li><strong>${opts.overdue}</strong> overdue</li>
+        <li><strong>${opts.stale}</strong> stale (no update in ${STALE_DAYS_LABEL} days)</li>
+      </ul>`,
+    myWorkUrl,
+    "Open My Work"
+  );
+}
 
 export function digestEmail(
   nameOrOpts: string | DigestEmailOptions,
@@ -144,6 +176,16 @@ export function digestEmail(
   if (typeof opts.mentions === "number" && opts.mentions > 0) {
     extras.push(`<li><strong>${opts.mentions}</strong> unread @mention${opts.mentions === 1 ? "" : "s"}</li>`);
   }
+  if (typeof opts.stale === "number" && opts.stale > 0) {
+    extras.push(`<li><strong>${opts.stale}</strong> stale (no update in ${STALE_DAYS_LABEL} days)</li>`);
+  }
+  const top = (opts.topTasks ?? []).slice(0, 3);
+  const topHtml =
+    top.length > 0
+      ? `<p style="margin:16px 0 8px;font-weight:600">Your top 3 today:</p><ol style="margin:0;padding-left:20px">${top
+          .map((t) => `<li>${escapeHtml(t.title)} <span style="color:#71717a">(${escapeHtml(t.reason)})</span></li>`)
+          .join("")}</ol>`
+      : "";
   const listHtml =
     titles.length > 0
       ? `<p style="margin:16px 0 8px;font-weight:600">To look at:</p><ul style="margin:0;padding-left:20px">${titles
@@ -160,6 +202,7 @@ export function digestEmail(
         <li><strong>${opts.overdue}</strong> overdue</li>
         ${extras.join("")}
       </ul>
+      ${topHtml}
       ${listHtml}`,
     myWorkUrl,
     "Open My Work"

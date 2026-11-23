@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { digestEmail, sendEmail } from "@/lib/email";
 import { attachOpenBlockerCounts, isReadyToStart } from "@/lib/task-dependencies";
 import { visibleTaskSql, visibleTaskWhere } from "@/lib/visible-records";
+import { isStale, pickTopTasks } from "@/lib/active-pm";
 
 export type DigestUser = {
   id: string;
@@ -28,7 +29,7 @@ export async function sendDailyDigests(now = new Date()): Promise<number> {
 
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  const [users, overdueCounts, overdueRows, mentionCounts, assignedRows] = await Promise.all([
+  const [users, overdueCounts, overdueRows, mentionCounts, assignedRows, openRows] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: userIds }, emailDigestEnabled: true },
       select: { id: true, name: true, email: true, emailDigestEnabled: true },
@@ -82,6 +83,24 @@ export async function sendDailyDigests(now = new Date()): Promise<number> {
       },
       take: 5000,
     }),
+    // Active PM: open tasks the user owns or is assigned, for "top 3 today" + stale count.
+    prisma.task.findMany({
+      where: visibleTaskWhere({
+        archived: false,
+        status: { not: "COMPLETED" },
+        OR: [{ userId: { in: userIds } }, { assignees: { some: { userId: { in: userIds } } } }],
+      }),
+      select: {
+        id: true,
+        title: true,
+        dueDate: true,
+        priority: true,
+        updatedAt: true,
+        userId: true,
+        assignees: { select: { userId: true } },
+      },
+      take: 5000,
+    }),
   ]);
 
   const overdueByUser = new Map(overdueCounts.map((row) => [row.userId, row._count._all]));
@@ -107,6 +126,30 @@ export async function sendDailyDigests(now = new Date()): Promise<number> {
     }
   }
 
+  type OpenRow = {
+    id: string;
+    title: string;
+    dueDate?: Date | null;
+    priority?: string | null;
+    updatedAt?: Date | null;
+    userId?: string;
+    assignees?: { userId: string }[];
+  };
+  const openByUser = new Map<string, OpenRow[]>();
+  const staleByUser = new Map<string, number>();
+  for (const task of (openRows ?? []) as OpenRow[]) {
+    const assigneeIds = (task.assignees ?? []).map((a) => a.userId);
+    const owners = new Set([...(task.userId ? [task.userId] : []), ...assigneeIds]);
+    for (const uid of owners) {
+      const list = openByUser.get(uid) ?? [];
+      list.push(task);
+      openByUser.set(uid, list);
+    }
+    if (isStale(task.updatedAt, now)) {
+      for (const uid of new Set(assigneeIds)) staleByUser.set(uid, (staleByUser.get(uid) ?? 0) + 1);
+    }
+  }
+
   let digestsSent = 0;
   for (const user of users) {
     const pending = pendingByUser.get(user.id) ?? 0;
@@ -129,6 +172,8 @@ export async function sendDailyDigests(now = new Date()): Promise<number> {
         ready: ready?.count ?? 0,
         mentions,
         taskTitles: titles,
+        topTasks: pickTopTasks(openByUser.get(user.id) ?? [], now, 3),
+        stale: staleByUser.get(user.id) ?? 0,
       })
     );
     digestsSent += 1;
