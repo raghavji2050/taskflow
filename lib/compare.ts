@@ -42,6 +42,7 @@ export const COMPARISONS: CompareData[] = [
       { feature: "Mobile", taskflow: "Installable web app (PWA), no native apps", other: "Native iOS and Android apps" },
       { feature: "Free plan", taskflow: TF_FREE, other: "Up to 10 collaborators and 10 boards per workspace" },
       { feature: "Paid pricing", taskflow: TF_PAID, other: "Standard $5 and Premium $10 per user per month, billed annually" },
+      { feature: "Seats and billing", taskflow: "Per workspace, not per user", other: "Every Workspace member is a billable user on paid plans; guests on more than one board are billed as members (trello.com/pricing, as of Nov 2026)" },
     ],
     pickTaskflow: [
       "You want tasks, chat and docs in one app instead of boards plus Power-Ups",
@@ -71,6 +72,7 @@ export const COMPARISONS: CompareData[] = [
       { feature: "Mobile", taskflow: "Installable web app (PWA), no native apps", other: "Native iOS and Android apps" },
       { feature: "Free plan", taskflow: TF_FREE, other: "Personal plan, limited to 2 users" },
       { feature: "Paid pricing", taskflow: TF_PAID, other: "Starter $10.99 and Advanced $24.99 per user per month, billed annually" },
+      { feature: "Seats and billing", taskflow: "Per workspace, not per user", other: "Free Personal plan is limited to 2 users; paid plans are billed per user (asana.com/pricing, as of Nov 2026)" },
     ],
     pickTaskflow: [
       "You are a small team that outgrew a to-do list and wants a free plan above 2 users",
@@ -100,6 +102,7 @@ export const COMPARISONS: CompareData[] = [
       { feature: "Mobile and desktop", taskflow: "Installable web app (PWA), no native apps", other: "Native mobile and desktop apps" },
       { feature: "Free plan", taskflow: TF_FREE, other: "Beginner plan: 5 personal projects" },
       { feature: "Paid pricing", taskflow: TF_PAID, other: "Pro $7 per month; Business $10 per user per month (monthly billing)" },
+      { feature: "Seats and billing", taskflow: "Per workspace, not per user", other: "Business is billed per team member; the free plan allows 5 team projects (todoist.com/pricing, as of Nov 2026)" },
     ],
     pickTaskflow: [
       "You work in a small team and need timeline, dependencies, chat and docs, not just a list",

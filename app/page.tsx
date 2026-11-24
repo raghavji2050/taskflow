@@ -80,13 +80,13 @@ export default async function HomePage() {
               Professional project management
             </div>
             <h1 className="text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl lg:text-6xl">
-              Work smarter with{" "}
-              <span className="text-[var(--accent)]">TaskFlow</span>
+              A task tool that{" "}
+              <span className="text-[var(--accent)]">keeps nudging</span> until it&apos;s done
             </h1>
             <p className="mt-6 text-lg leading-relaxed text-[var(--muted)]">
-              Plan, track, and deliver work — from personal to-do lists to full team projects.
-              Built for small teams and agencies who want clarity without the complexity, with
-              simple INR pricing.
+              TaskFlow sends a daily digest of what you own and reminds you before tasks are due,
+              so work doesn&apos;t sit untouched. Built for small teams and agencies who want
+              clarity without the complexity, with simple INR pricing.
             </p>
             <p className="mt-3 text-sm text-[var(--muted)]">Free for up to 5 members · No card required</p>
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
