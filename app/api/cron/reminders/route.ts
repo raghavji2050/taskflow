@@ -6,6 +6,7 @@ import { runOverdueAutomations, runDueDateApproachingAutomations } from "@/lib/a
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { visibleTaskWhere } from "@/lib/visible-records";
 import { sendDailyDigests } from "@/lib/email-digest";
+import { runActivePm } from "@/lib/active-pm";
 
 export const dynamic = "force-dynamic";
 
@@ -68,11 +69,14 @@ export async function GET(request: Request) {
     }
 
     const digestsSent = await sendDailyDigests(now);
+    // Active PM: overdue alerts, stale-task nudges, Monday weekly summary (never throws).
+    const activePm = await runActivePm(now);
 
     const result = {
       processed,
       archivedCompleted: archivedCount,
       digestsSent,
+      activePm,
       truncated,
     };
     console.info("[cron:reminders]", result);
