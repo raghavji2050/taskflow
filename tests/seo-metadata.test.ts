@@ -129,7 +129,7 @@ describe("help metadata", () => {
   it("uses a self-canonical and og:url pointing at /help, not the homepage", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://taskflow-vault.vercel.app");
     const description =
-      "Guides for getting started with TaskFlow: workspaces, team invites, views, billing, API and security.";
+      "Guides for getting started with TaskFlow: set up workspaces, invite your team, use list and board views, manage billing, and connect the API securely.";
     const metadata = createPageMetadata({
       title: "Help center",
       description,
