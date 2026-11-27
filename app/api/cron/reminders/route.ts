@@ -7,6 +7,7 @@ import { isCronAuthorized } from "@/lib/cron-auth";
 import { visibleTaskWhere } from "@/lib/visible-records";
 import { sendDailyDigests } from "@/lib/email-digest";
 import { runActivePm } from "@/lib/active-pm";
+import { sendTelegramDigests } from "@/lib/telegram-nudges";
 
 export const dynamic = "force-dynamic";
 
@@ -71,12 +72,20 @@ export async function GET(request: Request) {
     const digestsSent = await sendDailyDigests(now);
     // Active PM: overdue alerts, stale-task nudges, Monday weekly summary (never throws).
     const activePm = await runActivePm(now);
+    // Telegram numbered digest + reply-to-update (no-op unless TELEGRAM_BOT_TOKEN is set; never throws).
+    let telegramDigests = 0;
+    try {
+      telegramDigests = await sendTelegramDigests(now);
+    } catch (error) {
+      console.error("[cron:reminders] telegram digests failed", error);
+    }
 
     const result = {
       processed,
       archivedCompleted: archivedCount,
       digestsSent,
       activePm,
+      telegramDigests,
       truncated,
     };
     console.info("[cron:reminders]", result);
