@@ -87,6 +87,11 @@ model User {
   emailMentionEnabled   Boolean   @default(true)
   /// Active PM nudges: stale-task + overdue in-app alerts and the weekly summary. Default on.
   activeNudgesEnabled   Boolean   @default(true)
+  /// Telegram daily digest + reply-to-update. chatId is set once the user links via /start <token>.
+  telegramChatId        String?   @unique @db.VarChar(64)
+  telegramLinkToken     String?   @unique @db.VarChar(64)
+  telegramLinkedAt      DateTime?
+  telegramDigestEnabled Boolean   @default(true)
   onboardingDismissedAt DateTime?
   onboardingUseCase     String?   @db.VarChar(16)
   createdAt             DateTime  @default(now())
@@ -129,6 +134,7 @@ model User {
   conversationActivitiesAsTarget ConversationActivity[]    @relation("ConversationActivityTarget")
   apiTokens                      ApiToken[]
   oauthGrants                    OAuthGrant[]
+  telegramDigestLogs             TelegramDigestLog[]
 }
 
 model Account {
@@ -204,6 +210,9 @@ model Task {
   workspaceId      String?
   projectId        String?
   sectionId        String?
+  /// Active PM: set when an assignee reports "blocked <reason>" (e.g. from a Telegram reply).
+  blockerNote      String?    @db.Text
+  blockedAt        DateTime?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
@@ -1144,4 +1153,19 @@ model WebhookDelivery {
   webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
   @@index([webhookId, createdAt])
+}
+
+/// One Telegram daily digest sent to a user: maps "1 done" / reply-to-message back to exact task ids.
+model TelegramDigestLog {
+  id                String   @id @default(cuid())
+  userId            String
+  chatId            String   @db.VarChar(64)
+  telegramMessageId String?  @db.VarChar(32)
+  /// JSON array of task ids in the order they were numbered in the message.
+  taskIdsJson       String   @db.Text
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([chatId, telegramMessageId])
 }

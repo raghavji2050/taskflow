@@ -18,6 +18,7 @@ import { ApiTokensCard } from "@/components/ApiTokensCard";
 import { ConnectedAppsCard } from "@/components/ConnectedAppsCard";
 import { EmailNotificationsCard } from "@/components/EmailNotificationsCard";
 import { ActiveNudgesCard } from "@/components/ActiveNudgesCard";
+import { TelegramNudgesCard } from "@/components/TelegramNudgesCard";
 import { z } from "zod";
 
 type ProfileInput = z.infer<typeof profileSchema>;
@@ -144,6 +145,7 @@ export default function SettingsPage() {
       <EmailNotificationsCard />
 
       <ActiveNudgesCard />
+      <TelegramNudgesCard />
 
       <TimeTrackingSettingsCard />
 
